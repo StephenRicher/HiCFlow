@@ -1,0 +1,11 @@
+TO DO
+
+Review MultiQC update for HiCExplorer module update - see MultiQC v1.9
+## Manual fixes ##
+
+hicup_deduplicate
+hicup_filter
+multiqc - hicup module
+multiqc - hicexplorer module
+
+

@@ -1,0 +1,8 @@
+channels :
+  - bioconda
+dependencies :
+  - bowtie2
+  - samtools
+  - pip
+  - pip:
+    - pyHiCTools>=2.1.0

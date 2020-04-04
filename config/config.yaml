@@ -1,0 +1,24 @@
+
+build : GRCh38
+genome : /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
+re1 : Mbo1
+re1_seq : '^GATC'
+threads : 6
+
+workdir: /media/stephen/Data/HiC-subsample/analysis/
+
+
+fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
+
+binsize : [5000, 10000]
+
+regions : /media/stephen/Data/HiC-subsample/config/capture_regions.bed
+
+samples : /media/stephen/Data/HiC-subsample/config/samples.csv
+
+ctcf : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
+        /home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
+
+ctcf_orientation: [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/ctcf/MCF-7_CTCF-merged.bed]
+
+genes: /media/stephen/Data/genomes/GRCh38/gene.bed

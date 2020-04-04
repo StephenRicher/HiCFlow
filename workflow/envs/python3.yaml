@@ -1,0 +1,6 @@
+channels :
+  - conda-forge
+dependencies :
+  - python=3
+  - pip:
+    - pyCommonTools>=2.1.0

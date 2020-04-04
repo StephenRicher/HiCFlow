@@ -1,0 +1,8 @@
+channels :
+  - bioconda
+  - conda-forge
+dependencies :
+  - hicup = 0.7.2
+  - python = 3
+  - pip:
+    - pyCommonTools>=2.1.0

@@ -1,0 +1,12 @@
+channels:
+  - r
+  - conda-forge
+dependencies:
+  - r
+  - r-base
+  - r-stringi
+  - r-ggplot2
+  - r-ggpubr
+  - r-rcolorbrewer
+  - r-dplyr
+  - r-readr

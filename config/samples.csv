@@ -1,0 +1,13 @@
+group,rep,read,path
+HB2_WT,1,R1,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_WT-1-R1.sub.fastq.gz
+HB2_WT,1,R2,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_WT-1-R2.sub.fastq.gz
+HB2_WT,2,R1,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_WT-2-R1.sub.fastq.gz
+HB2_WT,2,R2,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_WT-2-R2.sub.fastq.gz
+HB2_TSS_KO,1,R1,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_TSS_KO-1-R1.fastq.gz
+HB2_TSS_KO,1,R2,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_TSS_KO-1-R2.fastq.gz
+HB2_TSS_KO,2,R1,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_TSS_KO-2-R1.fastq.gz
+HB2_TSS_KO,2,R2,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/HB2_TSS_KO-2-R2.fastq.gz
+MCF7,1,R1,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/MCF7-1-R1.fastq.gz
+MCF7,1,R2,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/MCF7-1-R2.fastq.gz
+MCF7,2,R1,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/MCF7-2-R1.fastq.gz
+MCF7,2,R2,/media/stephen/Data/HiC-subsample/analysis/fastq/raw/MCF7-2-R2.fastq.gz

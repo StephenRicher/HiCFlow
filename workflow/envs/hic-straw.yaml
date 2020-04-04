@@ -1,0 +1,6 @@
+channels :
+  - bioconda
+dependencies :
+  - pip
+  - pip:
+    - hic-straw

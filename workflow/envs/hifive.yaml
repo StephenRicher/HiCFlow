@@ -1,0 +1,10 @@
+channels :
+  - bioconda
+  - anaconda
+dependencies :
+  - python = 2.7
+  - pysam
+  - pip
+  - pip:
+    - hifive
+    - Pillow
