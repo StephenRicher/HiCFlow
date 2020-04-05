@@ -12,7 +12,7 @@ fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
 
 binsize : [5000, 10000]
 
-regions : /media/stephen/Data/HiC-subsample/config/capture_regions.bed
+regions : /media/stephen/Data/HiC-subsample/config/regions.bed
 
 samples : /media/stephen/Data/HiC-subsample/config/samples.csv
 
