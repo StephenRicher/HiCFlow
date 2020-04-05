@@ -277,6 +277,8 @@ rule hicup_map:
     output:
         mapped = 'mapped/{sample}.pair.bam',
         summary = 'qc/hicup/{sample}-map-summary.txt'
+    params:
+        basename = f'genome/index/{BUILD}'
     threads:
         12
     log:
@@ -287,7 +289,7 @@ rule hicup_map:
         '{SCRIPTS}/hicup/hicup_mapper.py '
             '--output {output.mapped} '
             '--summary {output.summary} '
-            '--index {input.bt2_index} '
+            '--index {params.basename} '
             '--threads 1 {input.reads} '
         '&> {log}'
 
