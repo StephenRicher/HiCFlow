@@ -991,21 +991,6 @@ rule merge_replicate_bams:
         'samtools merge -@ {threads} {output} {input} 2> {log}'
 
 
-rule index:
-    input:
-        rules.merge_replicate_bams.output
-    output:
-        f'{rules.merge_replicate_bams.output}.bai'
-    log:
-        'logs/index_split_bam/{group}-{region}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools index -@ {threads} {input} 2> {log}'
-
-
 rule bam_to_pre:
     input:
         'matrices/{region}/{all}-{{region}}.bam'
@@ -1186,10 +1171,43 @@ rule plot_tads:
         '--dpi {params.dpi} &> {log}'
 
 
+rule sort:
+    input:
+        rules.merge_replicate_bams.output
+    output:
+        'matrices/{region}/{group}-{region}.sort.bam'
+    params:
+        mem = '1G'
+    threads:
+        THREADS
+    log:
+        'logs/sort/{group}-{region}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools sort -@ {threads} -m {params.mem} {input} '
+        '> {output} 2> {log}'
+
+
+rule index:
+    input:
+        rules.sort.output
+    output:
+        f'{rules.sort.output}.bai'
+    log:
+        'logs/index/{group}-{region}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools index -@ {threads} {input} 2> {log}'
+
+
 rule mpileup:
     input:
         bam_index = rules.index.output,
-        merged_bam = rules.merge_replicate_bams.output,
+        merged_bam = rules.sort.output,
         genome = rules.bgzip_genome.output,
         genome_index = rules.index_genome.output
     output:
