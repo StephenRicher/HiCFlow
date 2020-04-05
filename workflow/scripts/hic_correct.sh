@@ -3,10 +3,12 @@
 main() {
     threads=1
     iternum=1000
-    while getopts ':p:o:i:@:' flag; do
+    upper_threshold=5
+    while getopts ':p:o:u:i:@:' flag; do
         case "${flag}" in
             p) readonly diagnostic_plot="${OPTARG}" ;;
             o) readonly corrected_matrix="${OPTARG}" ;;
+            u) upper_threshold="${OPTARG}" ;;
             i) iternum="${OPTARG}" ;;
             @) threads="${OPTARG}" ;;
             *) usage ;;
@@ -14,6 +16,7 @@ main() {
     done
     readonly threads
     readonly iternum
+    readonly upper_threshold
     shift "$((OPTIND-1))"
 
     local input="${1}"
@@ -27,8 +30,8 @@ main() {
     fi
 
     hicCorrectMatrix correct \
-        --matrix "${input}" --correctionMethod ICE \
-        --iterNum "${iternum}" --filterThreshold "${lower_threshold}" 5 \
+        --matrix "${input}" --correctionMethod ICE --iterNum "${iternum}" \
+        --filterThreshold "${lower_threshold}" "${upper_threshold}" \
         --outFileName "${corrected_matrix}"
 }
 
