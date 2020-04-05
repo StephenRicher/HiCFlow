@@ -8,4 +8,5 @@ hicup_filter
 multiqc - hicup module
 multiqc - hicexplorer module
 
-
+# Generate rulegraph
+snakemake --rulegraph | dot | display
