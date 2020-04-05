@@ -7,7 +7,6 @@ threads : 6
 
 workdir: /media/stephen/Data/HiC-subsample/analysis/
 
-
 fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
 
 binsize : [5000, 10000]
@@ -21,4 +20,4 @@ ctcf : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTf
 
 ctcf_orientation: [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/ctcf/MCF-7_CTCF-merged.bed]
 
-genes: /media/stephen/Data/genomes/GRCh38/gene.bed
+genes: /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
