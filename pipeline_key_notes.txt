@@ -10,3 +10,12 @@ multiqc - hicexplorer module
 
 # Generate rulegraph
 snakemake --rulegraph | dot | display
+
+Have the hapcompass output as None in config.
+If not None: start allele specific pipeline
+  - Generate sample specific bowtie2 indexes
+  - Save output to allele sub folder (directly append path to workdir?)
+  - Don't run hapcompass pipeline
+If None:
+  - Generate normal bowtie2 index
+  - Don't run snpsplit
