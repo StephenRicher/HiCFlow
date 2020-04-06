@@ -4,8 +4,10 @@ import pandas as pd
 from snake_setup import set_config, load_samples, get_grouping, load_regions
 
 wildcard_constraints:
+    cell_type = r'[^-\/]+',
     group = r'[^-\/g]+',
     sample = r'[^-\/g]+-\d+',
+    region = r'[^-\/]+',
     group_AS = r'[^-\/]+_g\d+',
     sample_AS = r'[^-\/]+_g\d+-\d+',
     rep = r'\d+',
@@ -57,14 +59,17 @@ BASE_BIN = BINS[0]
 samples = load_samples(config['samples'])
 
 # Extract groups and replicates.
-SAMPLES, GROUPS = get_grouping(samples)
+SAMPLES, GROUPS, CELL_TYPES = get_grouping(samples)
 
+# NEED TO CHECK REGION NAME REGEX AGAINST WILDCARD CONSTRAINT
 REGIONS = load_regions(config['regions'])
 
 rule all:
     input:
         ['qc/multiqc', 'qc/multibamqc',
         'qc/filter_qc/insert_size_frequency.png',
+         expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
+                region=REGIONS.index, cell_type=list(CELL_TYPES)),
          expand('matrices/{region}/{bin}/plots/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
         expand('matrices/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
@@ -75,8 +80,8 @@ rule all:
         expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
                region=REGIONS.index, bin=BINS,
                group1 = list(GROUPS), group2 = list(GROUPS)),
-        expand('allele/vcfs/{region}/{group}-{region}-filt.bcf',
-               region=REGIONS.index, group=list(GROUPS))
+        expand('allele/hapcompass/{cell_type}-{region}-best.txt.vcf',
+            region=REGIONS.index, cell_type=list(CELL_TYPES))
         ]
 
 
@@ -150,7 +155,7 @@ rule bowtie2Build:
 
 rule fastqc:
     input:
-        lambda wc: samples.xs(wc.single, level=2)['path']
+        lambda wc: samples.xs(wc.single, level=3)['path']
     output:
         html = 'qc/fastqc/{single}.raw_fastqc.html',
         zip = 'qc/fastqc/unmod/{single}.raw.fastqc.zip'
@@ -176,7 +181,7 @@ rule modify_fastqc:
 
 rule hicup_truncate:
     input:
-        lambda wc: samples.xs(wc.sample, level=1)['path']
+        lambda wc: samples.xs(wc.sample, level=2)['path']
     output:
         truncated = ['fastq/truncated/{sample}-R1.trunc.fastq.gz',
                      'fastq/truncated/{sample}-R2.trunc.fastq.gz'],
@@ -974,7 +979,7 @@ rule generate_config:
         '-d {params.depth} > {output} 2> {log}'
 
 
-rule merge_replicate_bams:
+rule merge_bam_replicate:
     input:
         lambda wildcards: expand(
             'matrices/{{region}}/{group}-{rep}-{{region}}.bam',
@@ -982,7 +987,7 @@ rule merge_replicate_bams:
     output:
         'matrices/{region}/{group}-{region}.bam'
     log:
-        'logs/merge_replicate_bams/{group}-{region}.log'
+        'logs/merge_bam_replicate/{group}-{region}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
@@ -1171,55 +1176,50 @@ rule plot_tads:
         '--dpi {params.dpi} &> {log}'
 
 
+rule merge_bam_cell_type:
+    input:
+        lambda wildcards: expand(
+            'matrices/{{region}}/{sample}-{{region}}.bam',
+            sample = CELL_TYPES[wildcards.cell_type]),
+    output:
+        'matrices/{region}/merged_by_cell/{cell_type}-{region}.bam'
+    log:
+        'logs/merge_bam_cell_type/{cell_type}-{region}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools merge -@ {threads} {output} {input} 2> {log}'
+
+
 rule sort:
     input:
-        rules.merge_replicate_bams.output
+        rules.merge_bam_cell_type.output
     output:
-        'matrices/{region}/{group}-{region}.sort.bam'
+        'matrices/{region}/merged_by_cell/{cell_type}-{region}.sort.bam'
     params:
         mem = '1G'
     threads:
         THREADS
     log:
-        'logs/sort/{group}-{region}.log'
+        'logs/sort/{cell_type}-{region}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools sort -@ {threads} -m {params.mem} {input} '
-        '> {output} 2> {log}'
-
-
-rule index:
-    input:
-        rules.sort.output
-    output:
-        f'{rules.sort.output}.bai'
-    log:
-        'logs/index/{group}-{region}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools index -@ {threads} {input} 2> {log}'
+        'samtools sort -@ {threads} -m {params.mem} {input} > {output} 2> {log}'
 
 
 rule mpileup:
     input:
-        bam_index = rules.index.output,
-        merged_bam = rules.sort.output,
+        bam = rules.sort.output,
         genome = rules.bgzip_genome.output,
-        genome_index = rules.index_genome.output
     output:
-        pipe('allele/vcfs/{region}/{group}-{region}-mpileup.bcf')
-    params:
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-        start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
-        end = lambda wildcards: REGIONS['end'][wildcards.region]
+        pipe('allele/vcfs/{region}/{cell_type}-{region}-mpileup.bcf')
     group:
         'variant_calling'
     log:
-        'logs/mpileup/{group}-{region}.log'
+        'logs/mpileup/{cell_type}-{region}.log'
     threads:
         (THREADS - 4) * 0.5
     conda:
@@ -1227,19 +1227,18 @@ rule mpileup:
     shell:
         'bcftools mpileup -q 15 --ignore-RG --count-orphans '
         '--max-depth 100000 --output-type u -f {input.genome} '
-        '--regions {params.chr}:{params.start}-{params.end} '
-        '--threads {threads} {input.merged_bam} > {output} 2> {log} '
+        '--threads {threads} {input.bam} > {output} 2> {log} '
 
 
 rule call_variants:
     input:
         rules.mpileup.output
     output:
-        'allele/vcfs/{region}/{group}-{region}-calls.bcf'
+        pipe('allele/vcfs/{region}/{cell_type}-{region}-calls.bcf')
     group:
         'variant_calling'
     log:
-        'logs/call_variants/{group}-{region}.log'
+        'logs/call_variants/{cell_type}-{region}.log'
     threads:
         (THREADS - 4) * 0.5
     conda:
@@ -1254,16 +1253,97 @@ rule filter_variants:
     input:
         rules.call_variants.output
     output:
-        'allele/vcfs/{region}/{group}-{region}-filt.bcf'
+        'allele/vcfs/{region}/{cell_type}-{region}-filt.bcf'
     group:
         'variant_calling'
     log:
-        'logs/filter_variants/{group}-{region}.log'
+        'logs/filter_variants/{cell_type}-{region}.log'
     conda:
         f'{ENVS}/bcftools.yaml'
     shell:
         'bcftools view -i "%QUAL>=20" --output-type u '
         '{input} > {output} 2> {log}'
+
+
+rule bcftools_stats:
+    input:
+        rules.filter_variants.output
+    output:
+        'qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt'
+    group:
+        'variant_calling'
+    log:
+        'logs/bcftools_stats/{cell_type}-{region}.log'
+    conda:
+        f'{ENVS}/bcftools.yaml'
+    shell:
+        'bcftools stats {input} > {output} 2> {log}'
+
+
+rule sort_vcf:
+    input:
+        rules.filter_variants.output
+    output:
+        'allele/vcfs/{region}/{cell_type}-{region}.sorted.vcf'
+    group:
+        'variant_calling'
+    log:
+        'logs/sort_vcf/{cell_type}-{region}.log'
+    conda:
+        f'{ENVS}/bcftools.yaml'
+    shell:
+        'bcftools sort --output-type v {input} > {output} 2> {log}'
+
+
+rule run_hapcompass:
+    input:
+        vcf = rules.sort_vcf.output,
+        bam = rules.sort.output
+    output:
+        expand(
+            'allele/hapcompass/{{cell_type}}-{{region}}_{ext}',
+            ext = ['MWER_solution.txt', 'reduced_representation.vcf',
+                   'reduced_representation.sam', 'frags.txt',
+                   'phasedSolution.txt', 'reads.sam',])
+    params:
+        dir = 'allele/hapcompass'
+    log:
+        'logs/run_hapcompass/{cell_type}-{region}.log'
+    conda:
+        f'{ENVS}/openjdk.yaml'
+    resources:
+        mem_mb = 120000
+    shell:
+        'java -Xmx120g -jar {SCRIPTS}/hapcompass.jar '
+        '--bam {input.bam} --vcf {input.vcf} --debug '
+        '--output {params.dir}/{wildcards.cell_type}-{wildcards.region} '
+        '&> {log} || touch {output} '
+
+
+rule extract_best_hapcompass_phasing:
+    input:
+        'allele/hapcompass/{cell_type}-{region}_MWER_solution.txt'
+    output:
+        'allele/hapcompass/{cell_type}-{region}-best.txt'
+    log:
+        'logs/extract_best_hapcompass_phasing/{cell_type}-{region}.log'
+    shell:
+        '{SCRIPTS}/extract_best_hapcompass.sh {input} > {output} 2> {log}'
+
+
+rule reformat_hapcompass:
+    input:
+        mwer = rules.extract_best_hapcompass_phasing.output,
+        vcf = rules.sort_vcf.output
+    output:
+        'allele/hapcompass/{cell_type}-{region}-best.txt.vcf'
+    log:
+        'logs/reformat_vcf/{cell_type}-{region}.log'
+    conda:
+        f'{ENVS}/openjdk.yaml'
+    shell:
+        'java -jar {SCRIPTS}/hc2vcf.jar {input.mwer} {input.vcf} 2 true '
+        '2> {log} || touch {output}'
 
 
 multiqc_input = (
