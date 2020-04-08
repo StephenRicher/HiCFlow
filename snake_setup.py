@@ -2,7 +2,7 @@
 
 import sys
 import pandas as pd
-
+from collections import defaultdict
 
 class ConfigurationError(Exception):
     pass
@@ -61,6 +61,10 @@ def load_samples(samples_file):
         .apply(lambda x: '-'.join(x), axis = 1))
     samples['sample'] = (samples[['group', 'rep']]
         .apply(lambda x: '-'.join(x), axis = 1))
+    # Ensure no duplicate names
+    if samples['single'].duplicated().all():
+        sys.exit(f'Duplicate sample name definitions in {samples_file}.\n')
+
     samples = samples.set_index(
         ['cell_type', 'group', 'sample', 'single'], drop = False)
 
@@ -97,3 +101,35 @@ def load_regions(regions_file):
             'Region names must not contain the following characters: - /')
 
     return regions
+
+
+def load_vcf_paths(phased_vcfs, samples):
+
+    vcfs = pd.read_table(
+        phased_vcfs, squeeze=True,
+        names=['cell_type', 'path'],
+        index_col='cell_type',sep = ',')
+
+    if not vcfs.index.str.match(r'[^-\/]+').all():
+        sys.exit(f'Invalid cell_type definition in {phased_vcfs}.\n'
+            'Cell types must not contain the following characters: - /')
+
+    if len(vcfs.index.difference(samples.index.get_level_values('cell_type'))):
+        sys.exit(f'Differing cell types given in {phased_vcfs} compared '
+                 'to samples file.')
+
+    return vcfs
+
+
+def get_allele_groupings(samples):
+
+    allele_groups = defaultdict(list)
+    allele_samples = []
+    for sample in samples:
+        sample = sample.split('-')
+        group = sample[0]
+        rep = sample[1]
+        allele_samples.extend([f'{group}_g1-{rep}', f'{group}_g2-{rep}'])
+        allele_groups[f'{group}_g1'].append(rep)
+
+    return allele_groups, allele_samples
