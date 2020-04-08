@@ -1,18 +1,7 @@
 #!/usr/bin/env python3
 
 import pandas as pd
-from snake_setup import set_config, load_samples, get_grouping, load_regions
-
-wildcard_constraints:
-    cell_type = r'[^-\/]+',
-    group = r'[^-\/g]+',
-    sample = r'[^-\/g]+-\d+',
-    region = r'[^-\/]+',
-    group_AS = r'[^-\/]+_g\d+',
-    sample_AS = r'[^-\/]+_g\d+-\d+',
-    rep = r'\d+',
-    read = r'R[12]',
-    bin = r'\d+'
+from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, get_allele_groupings
 
 BASE = workflow.basedir
 
@@ -27,6 +16,7 @@ configfile: f'{BASE}/config/config.yaml'
 default_config = {
     'workdir':      workflow.basedir,
     'samples':      '',
+    'phased_vcf':   None,
     'build':        'genome',
     'genome':       '',
     'fastq_screen': None,
@@ -59,30 +49,87 @@ BASE_BIN = BINS[0]
 samples = load_samples(config['samples'])
 
 # Extract groups and replicates.
-SAMPLES, GROUPS, CELL_TYPES = get_grouping(samples)
+ORIGINAL_SAMPLES, ORIGINAL_GROUPS, CELL_TYPES = get_grouping(samples)
 
-# NEED TO CHECK REGION NAME REGEX AGAINST WILDCARD CONSTRAINT
 REGIONS = load_regions(config['regions'])
+
+if config['phased_vcf']:
+    PHASED_VCFS = load_vcf_paths(config['phased_vcf'], samples)
+    workdir: config['workdir'] + 'allele_specific'
+    GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
+    ALLELE_SPECIFIC = True
+else:
+    SAMPLES = ORIGINAL_SAMPLES
+    GROUPS = ORIGINAL_GROUPS
+    ALLELE_SPECIFIC = False
+
+wildcard_constraints:
+    cell_type = r'[^-\/]+',
+    pre_group = r'[^-\/g]+',
+    pre_sample = r'[^-\/g]+-\d+',
+    region = r'[^-\/]+',
+    allele = r'[12]',
+    rep = r'\d+',
+    read = r'R[12]',
+    bin = r'\d+'
+
+if ALLELE_SPECIFIC:
+    wildcard_constraints:
+        group = r'[^-\/]+_g\d+',
+        sample = r'[^-\/]+_g\d+-\d+'
+else:
+    wildcard_constraints:
+        group = r'[^-\/g]+',
+        sample = r'[^-\/g]+-\d+'
+
 
 rule all:
     input:
         ['qc/multiqc', 'qc/multibamqc',
-        'qc/filter_qc/insert_size_frequency.png',
-         expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
-                region=REGIONS.index, cell_type=list(CELL_TYPES)),
+         'qc/filter_qc/insert_size_frequency.png',
          expand('matrices/{region}/{bin}/plots/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
-        expand('matrices/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
-               region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS),
-               method=['norm', 'ice'], ext=['h5', 'gz',]),
-        expand('qc/hicrep/{region}-{bin}-hicrep.png',
-               region=REGIONS.index, bin=BINS),
-        expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
-               region=REGIONS.index, bin=BINS,
-               group1 = list(GROUPS), group2 = list(GROUPS)),
-        expand('allele/hapcompass/{cell_type}-{region}-best.txt.vcf',
-            region=REGIONS.index, cell_type=list(CELL_TYPES))
-        ]
+         expand('matrices/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
+                region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS),
+                method=['norm', 'ice'], ext=['h5', 'gz',]),
+         expand('qc/hicrep/{region}-{bin}-hicrep.png',
+                region=REGIONS.index, bin=BINS),
+         expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
+                region=REGIONS.index, bin=BINS,
+                group1 = list(GROUPS), group2 = list(GROUPS))],
+         [expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
+                region=REGIONS.index, cell_type=list(CELL_TYPES)),
+         expand('allele/hapcompass/{cell_type}-phased.vcf.gz',
+                cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
+
+
+rule mask_genome:
+    input:
+        genome = config['genome'],
+        vcf = lambda wc: PHASED_VCFS[wc.cell_type]
+    output:
+        f'allele/genome/masked/{BUILD}-{{cell_type}}.fa'
+    log:
+        'logs/mask_genome/{cell_type}.log'
+    conda:
+        f'{ENVS}/bedtools.yaml'
+    shell:
+        'bedtools maskfasta -fullHeader '
+        '-fi <(zcat -f {input.genome}) '
+        '-bed {input.vcf} -fo {output} 2> {log}'
+
+
+rule reformat_SNPsplit:
+    input:
+        vcf = lambda wc: PHASED_VCFS[wc.cell_type]
+    output:
+        'allele/snpsplit/{cell_type}-snpsplit.txt'
+    log:
+        'logs/reformat_SNPsplit/{cell_type}.log'
+    conda:
+        f'{ENVS}/gawk.yaml'
+    shell:
+        '{SCRIPTS}/reformat_snpsplit.sh {input} > {output} 2> {log}'
 
 
 rule bgzip_genome:
@@ -122,6 +169,41 @@ rule get_chrom_sizes:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
+if ALLELE_SPECIFIC:
+    rule bowtie2Build:
+        input:
+            rules.mask_genome.output
+        output:
+            expand('genome/index/{build}-{{cell_type}}.{n}.bt2',
+                   build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+        params:
+            basename = f'genome/index/{BUILD}'
+        log:
+            f'logs/bowtie2Build/{BUILD}-{{cell_type}}.log'
+        conda:
+            f'{ENVS}/bowtie2.yaml'
+        threads:
+            THREADS
+        shell:
+            'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
+else:
+    rule bowtie2Build:
+        input:
+            rules.bgzip_genome.output
+        output:
+            expand('genome/index/{build}.{n}.bt2',
+                   build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+        params:
+            basename = f'genome/index/{BUILD}'
+        log:
+            f'logs/bowtie2Build/{BUILD}.log'
+        conda:
+            f'{ENVS}/bowtie2.yaml'
+        threads:
+            THREADS
+        shell:
+            'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
+
 rule process_gff3:
     input:
         config['genes']
@@ -133,24 +215,6 @@ rule process_gff3:
         f'{ENVS}/python3.yaml'
     shell:
         'zcat -f {input} | {SCRIPTS}/process_gff3.py > {output} 2> {log}'
-
-
-rule bowtie2Build:
-    input:
-        rules.bgzip_genome.output
-    output:
-        expand('genome/index/{build}.{n}.bt2',
-               build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
-    params:
-        basename = f'genome/index/{BUILD}'
-    log:
-        f'logs/bowtie2Build/{BUILD}.log'
-    conda:
-        f'{ENVS}/bowtie2.yaml'
-    threads:
-        THREADS
-    shell:
-        'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
 
 
 rule fastqc:
@@ -181,17 +245,17 @@ rule modify_fastqc:
 
 rule hicup_truncate:
     input:
-        lambda wc: samples.xs(wc.sample, level=2)['path']
+        lambda wc: samples.xs(wc.pre_sample, level=2)['path']
     output:
-        truncated = ['fastq/truncated/{sample}-R1.trunc.fastq.gz',
-                     'fastq/truncated/{sample}-R2.trunc.fastq.gz'],
-        summary = 'qc/hicup/{sample}-truncate-summary.txt'
+        truncated = ['fastq/truncated/{pre_sample}-R1.trunc.fastq.gz',
+                     'fastq/truncated/{pre_sample}-R2.trunc.fastq.gz'],
+        summary = 'qc/hicup/{pre_sample}-truncate-summary.txt'
     params:
         re1_seq = RE1_SEQ
     threads:
         2 if THREADS > 2 else THREADS
     log:
-        'logs/hicup_truncate/{sample}.log'
+        'logs/hicup_truncate/{pre_sample}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
@@ -206,16 +270,16 @@ rule cutadapt:
     input:
         rules.hicup_truncate.output.truncated
     output:
-        trimmed = ['fastq/trimmed/{sample}-R1.trim.fastq.gz',
-                   'fastq/trimmed/{sample}-R2.trim.fastq.gz'],
-        qc = 'qc/cutadapt/unmod/{sample}.cutadapt.txt'
+        trimmed = ['fastq/trimmed/{pre_sample}-R1.trim.fastq.gz',
+                   'fastq/trimmed/{pre_sample}-R2.trim.fastq.gz'],
+        qc = 'qc/cutadapt/unmod/{pre_sample}.cutadapt.txt'
     group:
         'cutadapt'
     params:
         others = '--minimum-length 20 --quality-cutoff 20 --discard-trimmed '
         '--gc-content 46 --overlap 6 --error-rate 0.1'
     log:
-        'logs/cutadapt/{sample}.log'
+        'logs/cutadapt/{pre_sample}.log'
     conda:
         f'{ENVS}/cutadapt.yaml'
     threads:
@@ -233,15 +297,15 @@ rule modify_cutadapt:
     input:
         rules.cutadapt.output.qc
     output:
-        'qc/cutadapt/{sample}.cutadapt.txt'
+        'qc/cutadapt/{pre_sample}.cutadapt.txt'
     group:
         'cutadapt'
     log:
-        'logs/modify_cutadapt/{sample}.log'
+        'logs/modify_cutadapt/{pre_sample}.log'
     conda:
         f'{ENVS}/coreutils.yaml'
     shell:
-        'awk -v sample={wildcards.sample} -f {SCRIPTS}/modify_cutadapt.awk '
+        'awk -v sample={wildcards.pre_sample} -f {SCRIPTS}/modify_cutadapt.awk '
         '{input} > {output} 2> {log}'
 
 
@@ -299,19 +363,35 @@ rule hicup_digest:
         '{params.arima} {params.re2_seq} {params.re2} {input} &> {log}'
 
 
+def hicup_map_index(wildcards):
+    """ Retrieve cell type associated with sample. """
+
+    if ALLELE_SPECIFIC:
+        for cell_type, samples in CELL_TYPES.items():
+            if wildcards.pre_sample in samples:
+                type = cell_type
+
+        return expand('genome/index/{build}-{cell_type}.{n}.bt2',
+            build=BUILD, cell_type=type,
+            n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+    else:
+        return expand('genome/index/{build}.{n}.bt2',
+            build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+
+
 rule hicup_map:
     input:
         reads = rules.cutadapt.output.trimmed,
-        bt2_index = rules.bowtie2Build.output
+        bt2_index = hicup_map_index
     output:
-        mapped = 'mapped/{sample}.pair.bam',
-        summary = 'qc/hicup/{sample}-map-summary.txt'
+        mapped = 'mapped/{pre_sample}.pair.bam',
+        summary = 'qc/hicup/{pre_sample}-map-summary.txt'
     params:
         basename = f'genome/index/{BUILD}'
     threads:
         12
     log:
-        'logs/hicup_mapper/{sample}.log'
+        'logs/hicup_mapper/{pre_sample}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
@@ -326,11 +406,11 @@ rule fixmate:
     input:
         rules.hicup_map.output.mapped
     output:
-        'mapped/{sample}.fixed.bam'
+        'mapped/{pre_sample}.fixed.bam'
     threads:
         THREADS
     log:
-        'logs/fixmate/{sample}.log'
+        'logs/fixmate/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -357,14 +437,14 @@ rule subsample_reads:
     input:
         rules.fixmate.output
     output:
-        pipe('mapped/subsampled/{sample}-subsample.bam')
+        pipe('mapped/subsampled/{pre_sample}-subsample.bam')
     group:
         'filter_qc'
     params:
         seed = '42',
         frac = '20'
     log:
-        'logs/subsample_reads/{sample}.log'
+        'logs/subsample_reads/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -377,11 +457,11 @@ rule pyHiCTools_process:
         dedup_nmsort = rules.subsample_reads.output,
         digest = rules.digest.output
     output:
-        pipe('mapped/subsampled/{sample}.processed.sam')
+        pipe('mapped/subsampled/{pre_sample}.processed.sam')
     group:
         'filter_qc'
     log:
-        'logs/process/{sample}.log'
+        'logs/process/{pre_sample}.log'
     conda:
         f'{ENVS}/pyHiCTools.yaml'
     shell:
@@ -393,22 +473,22 @@ rule extract_hic_stats:
     input:
         rules.pyHiCTools_process.output
     output:
-        'mapped/subsampled/{sample}-processed.txt'
+        'mapped/subsampled/{pre_sample}-processed.txt'
     group:
         'filter_qc'
     log:
-        'logs/extract_hic_stats/{sample}.log'
+        'logs/extract_hic_stats/{pre_sample}.log'
     conda:
         f'{ENVS}/pyHiCTools.yaml'
     shell:
         'pyHiCTools extract '
-        '--sample {wildcards.sample} {input} '
+        '--sample {wildcards.pre_sample} {input} '
         '> {output} 2> {log}'
 
 
 rule plot_filter_QC:
     input:
-        expand('mapped/subsampled/{sample}-processed.txt', sample=SAMPLES)
+        expand('mapped/subsampled/{pre_sample}-processed.txt', pre_sample=ORIGINAL_SAMPLES)
     output:
         expand('qc/filter_qc/{fig}',
                fig=['trans_stats.csv', 'insert_size_frequency.png',
@@ -428,14 +508,14 @@ rule hicup_filter:
         bam = rules.fixmate.output,
         digest = rules.hicup_digest.output
     output:
-        filtered = 'mapped/{sample}.filt.bam',
-        summary = 'qc/hicup/{sample}-filter-summary.txt',
-        rejects = directory('qc/hicup/{sample}-ditag_rejects')
+        filtered = 'mapped/{pre_sample}.filt.bam',
+        summary = 'qc/hicup/{pre_sample}-filter-summary.txt',
+        rejects = directory('qc/hicup/{pre_sample}-ditag_rejects')
     params:
         shortest = 150,
         longest = 800
     log:
-        'logs/hicup_filter/{sample}.log'
+        'logs/hicup_filter/{pre_sample}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
@@ -452,10 +532,10 @@ rule hicup_deduplicate:
     input:
         rules.hicup_filter.output.filtered
     output:
-        deduped = 'mapped/{sample}.dedup.bam',
-        summary = 'qc/hicup/{sample}-deduplicate-summary.txt',
+        deduped = 'mapped/{pre_sample}.dedup.bam',
+        summary = 'qc/hicup/{pre_sample}-deduplicate-summary.txt',
     log:
-        'logs/hicup_deduplicate/{sample}.log'
+        'logs/hicup_deduplicate/{pre_sample}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
@@ -471,9 +551,9 @@ rule merge_hicup_summary:
         filter = rules.hicup_filter.output.summary,
         deduplicator = rules.hicup_deduplicate.output.summary
     output:
-        'qc/hicup/HiCUP_summary_report-{sample}.txt'
+        'qc/hicup/HiCUP_summary_report-{pre_sample}.txt'
     log:
-        'logs/merge_hicup_summary/{sample}.log'
+        'logs/merge_hicup_summary/{pre_sample}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
@@ -500,17 +580,61 @@ rule remove_PG_header:
         "{input} > {output} 2> {log}"
 
 
+def SNPsplit_input(wildcards):
+    """ Retrieve cell type associated with sample. """
+
+    for cell_type, samples in CELL_TYPES.items():
+        if wildcards.pre_sample in samples:
+            type = cell_type
+
+    return f'allele/snpsplit/{type}-snpsplit.txt'
+
+
+rule SNPsplit:
+    input:
+        bam = rules.hicup_deduplicate.output.deduped,
+        snps = SNPsplit_input
+    output:
+        expand('allele/snpsplit/{{pre_sample}}.matepairs.{ext}',
+            ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
+                   'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
+                   'UA_UA.bam', 'allele_flagged.bam'])
+    params:
+        outdir = 'allele/snpsplit/'
+    log:
+        'logs/SNPsplit/SNPsplit-{pre_sample}.log'
+    conda:
+        f'{ENVS}/snpsplit.yaml'
+    shell:
+        'SNPsplit {input.bam} --snp_file {input.snps} '
+        '--hic --output_dir {params.outdir} &> {log}'
+
+
+rule merge_SNPsplit:
+    input:
+        'allele/snpsplit/{pre_group}-{rep}.matepairs.G{allele}_G{allele}.bam',
+        'allele/snpsplit/{pre_group}-{rep}.matepairs.G{allele}_UA.bam'
+    output:
+        'allele/snpsplit/merged/{pre_group}_g{allele}-{rep}.matepairs.bam'
+    log:
+        'logs/allele/merge_SNPsplit/{pre_group}_g{allele}-{rep}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools merge -n {output} {input} &> {log}'
+
+
 rule coordinate_sort:
     input:
         rules.hicup_deduplicate.output.deduped
     output:
-        'mapped/{sample}.sort.bam'
+        'mapped/{pre_sample}.sort.bam'
     params:
         mem = '1G'
     threads:
         THREADS
     log:
-        'logs/coordinate_sort/{sample}.log'
+        'logs/coordinate_sort/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -526,7 +650,7 @@ rule index_bam:
     threads:
         THREADS
     log:
-        'logs/index_bam/{sample}.log'
+        'logs/index_bam/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -537,11 +661,11 @@ rule samtools_stats:
     input:
         rules.coordinate_sort.output
     output:
-        'qc/samtools/stats/{sample}.stats.txt'
+        'qc/samtools/stats/{pre_sample}.stats.txt'
     group:
         'samtools_qc'
     log:
-        'logs/samtools_stats/{sample}.log'
+        'logs/samtools_stats/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -553,11 +677,11 @@ rule samtools_idxstats:
         bam = rules.coordinate_sort.output,
         index = rules.index_bam.output
     output:
-        'qc/samtools/idxstats/{sample}.idxstats.txt'
+        'qc/samtools/idxstats/{pre_sample}.idxstats.txt'
     group:
         'samtools_qc'
     log:
-        'logs/samtools_idxstats/{sample}.log'
+        'logs/samtools_idxstats/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -568,11 +692,11 @@ rule samtools_flagstat:
     input:
         rules.coordinate_sort.output
     output:
-        'qc/samtools/flagstat/{sample}.flagstat.txt'
+        'qc/samtools/flagstat/{pre_sample}.flagstat.txt'
     group:
         'samtools_qc'
     log:
-        'logs/samtools_flagstat/{sample}.log'
+        'logs/samtools_flagstat/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -584,11 +708,11 @@ rule bamqc:
         bam = rules.coordinate_sort.output,
         regions = '/home/stephen/phd/scripts/capture_regions.bed'
     output:
-        directory('qc/bamqc/{sample}')
+        directory('qc/bamqc/{pre_sample}')
     resources:
         mem_mb = 3000
     log:
-        'logs/bamqc/{sample}.log'
+        'logs/bamqc/{pre_sample}.log'
     conda:
         f'{ENVS}/qualimap.yaml'
     threads:
@@ -602,7 +726,7 @@ rule bamqc:
 
 rule multibamqc_config:
     input:
-        expand('qc/bamqc/{sample}', sample=SAMPLES)
+        expand('qc/bamqc/{pre_sample}', pre_sample=ORIGINAL_SAMPLES)
     output:
         'qc/bamqc/multibamqc.config'
     group:
@@ -628,9 +752,16 @@ rule multibamqc:
         'qualimap multi-bamqc --data {input} -outdir {output} &> {log}'
 
 
+def split_input(wildcards):
+    if ALLELE_SPECIFIC:
+        return 'allele/snpsplit/merged/{sample}.matepairs.bam'
+    else:
+        return f'mapped/{wildcards.sample}.dedup.bam'
+
+
 rule split_paired_bam:
     input:
-        rules.hicup_deduplicate.output.deduped
+        split_input
     output:
         'mapped/split/{sample}-{read}.hic.bam'
     params:
@@ -998,7 +1129,7 @@ rule merge_bam_replicate:
 
 rule bam_to_pre:
     input:
-        'matrices/{region}/{all}-{{region}}.bam'
+        'matrices/{region}/{all}-{region}.bam'
     output:
         'matrices/{region}/base/raw/{all}-{region}.pre.tsv'
     log:
@@ -1176,212 +1307,237 @@ rule plot_tads:
         '--dpi {params.dpi} &> {log}'
 
 
-rule merge_bam_cell_type:
-    input:
-        lambda wildcards: expand(
-            'matrices/{{region}}/{sample}-{{region}}.bam',
-            sample = CELL_TYPES[wildcards.cell_type]),
-    output:
-        'matrices/{region}/merged_by_cell/{cell_type}-{region}.bam'
-    log:
-        'logs/merge_bam_cell_type/{cell_type}-{region}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools merge -@ {threads} {output} {input} 2> {log}'
+if not ALLELE_SPECIFIC:
+    rule merge_bam_cell_type:
+        input:
+            lambda wildcards: expand(
+                'matrices/{{region}}/{sample}-{{region}}.bam',
+                sample = CELL_TYPES[wildcards.cell_type]),
+        output:
+            'matrices/{region}/merged_by_cell/{cell_type}-{region}.bam'
+        log:
+            'logs/merge_bam_cell_type/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        threads:
+            THREADS
+        shell:
+            'samtools merge -@ {threads} {output} {input} 2> {log}'
 
 
-rule sort:
-    input:
-        rules.merge_bam_cell_type.output
-    output:
-        'matrices/{region}/merged_by_cell/{cell_type}-{region}.sort.bam'
-    params:
-        mem = '1G'
-    threads:
-        THREADS
-    log:
-        'logs/sort/{cell_type}-{region}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools sort -@ {threads} -m {params.mem} {input} > {output} 2> {log}'
+    rule sort:
+        input:
+            rules.merge_bam_cell_type.output
+        output:
+            'matrices/{region}/merged_by_cell/{cell_type}-{region}.sort.bam'
+        params:
+            mem = '1G'
+        threads:
+            THREADS
+        log:
+            'logs/sort/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools sort -@ {threads} -m {params.mem} {input} > {output} 2> {log}'
 
 
-rule mpileup:
-    input:
-        bam = rules.sort.output,
-        genome = rules.bgzip_genome.output,
-    output:
-        pipe('allele/vcfs/{region}/{cell_type}-{region}-mpileup.bcf')
-    group:
-        'variant_calling'
-    log:
-        'logs/mpileup/{cell_type}-{region}.log'
-    threads:
-        (THREADS - 4) * 0.5
-    conda:
-        f'{ENVS}/bcftools.yaml'
-    shell:
-        'bcftools mpileup -q 15 --ignore-RG --count-orphans '
-        '--max-depth 100000 --output-type u -f {input.genome} '
-        '--threads {threads} {input.bam} > {output} 2> {log} '
+    rule mpileup:
+        input:
+            bam = rules.sort.output,
+            genome = rules.bgzip_genome.output,
+        output:
+            pipe('allele/vcfs/{region}/{cell_type}-{region}-mpileup.bcf')
+        group:
+            'variant_calling'
+        log:
+            'logs/mpileup/{cell_type}-{region}.log'
+        threads:
+            (THREADS - 4) * 0.5
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools mpileup -q 15 --ignore-RG --count-orphans '
+            '--max-depth 100000 --output-type u -f {input.genome} '
+            '--threads {threads} {input.bam} > {output} 2> {log} '
 
 
-rule call_variants:
-    input:
-        rules.mpileup.output
-    output:
-        pipe('allele/vcfs/{region}/{cell_type}-{region}-calls.bcf')
-    group:
-        'variant_calling'
-    log:
-        'logs/call_variants/{cell_type}-{region}.log'
-    threads:
-        (THREADS - 4) * 0.5
-    conda:
-        f'{ENVS}/bcftools.yaml'
-    shell:
-        'bcftools call --multiallelic-caller --variants-only '
-        '--output-type u --threads {threads} '
-        '{input} > {output} 2> {log}'
+    rule call_variants:
+        input:
+            rules.mpileup.output
+        output:
+            pipe('allele/vcfs/{region}/{cell_type}-{region}-calls.bcf')
+        group:
+            'variant_calling'
+        log:
+            'logs/call_variants/{cell_type}-{region}.log'
+        threads:
+            (THREADS - 4) * 0.5
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools call --multiallelic-caller --variants-only '
+            '--output-type u --threads {threads} '
+            '{input} > {output} 2> {log}'
 
 
-rule filter_variants:
-    input:
-        rules.call_variants.output
-    output:
-        'allele/vcfs/{region}/{cell_type}-{region}-filt.bcf'
-    group:
-        'variant_calling'
-    log:
-        'logs/filter_variants/{cell_type}-{region}.log'
-    conda:
-        f'{ENVS}/bcftools.yaml'
-    shell:
-        'bcftools view -i "%QUAL>=20" --output-type u '
-        '{input} > {output} 2> {log}'
+    rule filter_variants:
+        input:
+            rules.call_variants.output
+        output:
+            'allele/vcfs/{region}/{cell_type}-{region}-filt.bcf'
+        group:
+            'variant_calling'
+        log:
+            'logs/filter_variants/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools view -i "%QUAL>=20" --output-type u '
+            '{input} > {output} 2> {log}'
 
 
-rule bcftools_stats:
-    input:
-        rules.filter_variants.output
-    output:
-        'qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt'
-    group:
-        'variant_calling'
-    log:
-        'logs/bcftools_stats/{cell_type}-{region}.log'
-    conda:
-        f'{ENVS}/bcftools.yaml'
-    shell:
-        'bcftools stats {input} > {output} 2> {log}'
+    rule bcftools_stats:
+        input:
+            rules.filter_variants.output
+        output:
+            'qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt'
+        group:
+            'variant_calling'
+        log:
+            'logs/bcftools_stats/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools stats {input} > {output} 2> {log}'
 
 
-rule sort_vcf:
-    input:
-        rules.filter_variants.output
-    output:
-        'allele/vcfs/{region}/{cell_type}-{region}.sorted.vcf'
-    group:
-        'variant_calling'
-    log:
-        'logs/sort_vcf/{cell_type}-{region}.log'
-    conda:
-        f'{ENVS}/bcftools.yaml'
-    shell:
-        'bcftools sort --output-type v {input} > {output} 2> {log}'
+    rule sort_vcf:
+        input:
+            rules.filter_variants.output
+        output:
+            'allele/vcfs/{region}/{cell_type}-{region}.sorted.vcf'
+        group:
+            'variant_calling'
+        log:
+            'logs/sort_vcf/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools sort --output-type v {input} > {output} 2> {log}'
 
 
-rule run_hapcompass:
-    input:
-        vcf = rules.sort_vcf.output,
-        bam = rules.sort.output
-    output:
-        expand(
-            'allele/hapcompass/{{cell_type}}-{{region}}_{ext}',
-            ext = ['MWER_solution.txt', 'reduced_representation.vcf',
-                   'reduced_representation.sam', 'frags.txt',
-                   'phasedSolution.txt', 'reads.sam',])
-    params:
-        dir = 'allele/hapcompass'
-    log:
-        'logs/run_hapcompass/{cell_type}-{region}.log'
-    conda:
-        f'{ENVS}/openjdk.yaml'
-    resources:
-        mem_mb = 120000
-    shell:
-        'java -Xmx120g -jar {SCRIPTS}/hapcompass.jar '
-        '--bam {input.bam} --vcf {input.vcf} --debug '
-        '--output {params.dir}/{wildcards.cell_type}-{wildcards.region} '
-        '&> {log} || touch {output} '
+    rule run_hapcompass:
+        input:
+            vcf = rules.sort_vcf.output,
+            bam = rules.sort.output
+        output:
+            expand(
+                'allele/hapcompass/{{cell_type}}-{{region}}_{ext}',
+                ext = ['MWER_solution.txt', 'reduced_representation.vcf',
+                       'reduced_representation.sam', 'frags.txt',
+                       'phasedSolution.txt', 'reads.sam',])
+        params:
+            dir = 'allele/hapcompass'
+        log:
+            'logs/run_hapcompass/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/openjdk.yaml'
+        resources:
+            mem_mb = 120000
+        shell:
+            'java -Xmx120g -jar {SCRIPTS}/hapcompass.jar '
+            '--bam {input.bam} --vcf {input.vcf} --debug '
+            '--output {params.dir}/{wildcards.cell_type}-{wildcards.region} '
+            '&> {log} || touch {output} '
 
 
-rule extract_best_hapcompass_phasing:
-    input:
-        'allele/hapcompass/{cell_type}-{region}_MWER_solution.txt'
-    output:
-        'allele/hapcompass/{cell_type}-{region}-best.txt'
-    log:
-        'logs/extract_best_hapcompass_phasing/{cell_type}-{region}.log'
-    shell:
-        '{SCRIPTS}/extract_best_hapcompass.sh {input} > {output} 2> {log}'
+    rule extract_best_hapcompass_phasing:
+        input:
+            'allele/hapcompass/{cell_type}-{region}_MWER_solution.txt'
+        output:
+            'allele/hapcompass/{cell_type}-{region}-best.txt'
+        log:
+            'logs/extract_best_hapcompass_phasing/{cell_type}-{region}.log'
+        shell:
+            '{SCRIPTS}/extract_best_hapcompass.sh {input} > {output} 2> {log}'
 
 
-rule reformat_hapcompass:
-    input:
-        mwer = rules.extract_best_hapcompass_phasing.output,
-        vcf = rules.sort_vcf.output
-    output:
-        'allele/hapcompass/{cell_type}-{region}-best.txt.vcf'
-    log:
-        'logs/reformat_vcf/{cell_type}-{region}.log'
-    conda:
-        f'{ENVS}/openjdk.yaml'
-    shell:
-        'java -jar {SCRIPTS}/hc2vcf.jar {input.mwer} {input.vcf} 2 true '
-        '2> {log} || touch {output}'
+    rule reformat_hapcompass:
+        input:
+            mwer = rules.extract_best_hapcompass_phasing.output,
+            vcf = rules.sort_vcf.output
+        output:
+            'allele/hapcompass/{cell_type}-{region}-best.txt.vcf'
+        log:
+            'logs/reformat_vcf/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/openjdk.yaml'
+        shell:
+            'java -jar {SCRIPTS}/hc2vcf.jar {input.mwer} {input.vcf} 2 true '
+            '2> {log} || touch {output}'
 
 
-multiqc_input = (
-     [expand('qc/fastqc/{sample}-{read}.raw_fastqc.zip',
-             sample=SAMPLES, read=READS),
-      expand('qc/cutadapt/{sample}.cutadapt.txt', sample=SAMPLES),
-      expand('qc/fastqc/{sample}-{read}.trim_fastqc.zip',
-             sample=SAMPLES, read=READS),
-      expand('qc/hicup/HiCUP_summary_report-{sample}.txt', sample=SAMPLES),
-      expand('qc/samtools/stats/{sample}.stats.txt', sample=SAMPLES),
-      expand('qc/samtools/idxstats/{sample}.idxstats.txt', sample=SAMPLES),
-      expand('qc/samtools/flagstat/{sample}.flagstat.txt', sample=SAMPLES),
-      expand('qc/bamqc/{sample}', sample=SAMPLES),
-      expand('qc/hicexplorer/{sample}-{region}.{bin}_QC',
-             sample=SAMPLES, region=REGIONS.index, bin=BASE_BIN)]
-)
-if config['fastq_screen'] is not None:
-    multiqc_input = multiqc_input.append(
-        expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
-               sample=SAMPLES, read=READS))
+    rule compress_hapcompass:
+        input:
+             rules.reformat_hapcompass.output
+        output:
+            f'{rules.reformat_hapcompass.output}.gz'
+        log:
+            'logs/compress_hapcompass/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools view -O z {input} > {output} 2> {log} || touch {output}'
+
+
+    rule index_hapcompass:
+        input:
+            rules.compress_hapcompass.output
+        output:
+            f'{rules.compress_hapcompass.output}.csi'
+        log:
+            'logs/index_hapcompass/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools index -f {input} 2> {log} || touch {output}'
+
+
+    rule merge_phased_regions:
+        input:
+            vcfs = expand(
+                'allele/hapcompass/{{cell_type}}-{region}-best.txt.vcf.gz',
+                region = REGIONS.index),
+            indexes = expand(
+                'allele/hapcompass/{{cell_type}}-{region}-best.txt.vcf.gz.csi',
+                region = REGIONS.index)
+        output:
+            'allele/hapcompass/{cell_type}-phased.vcf.gz'
+        log:
+            'logs/merge_phased_regions/{cell_type}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools concat --naive {input.vcfs} > {output} 2> {log}'
+
 
 rule multiqc:
     input:
         [expand('qc/fastqc/{sample}-{read}.raw_fastqc.zip',
-                sample=SAMPLES, read=READS),
-         expand('qc/cutadapt/{sample}.cutadapt.txt', sample=SAMPLES),
+                sample=ORIGINAL_SAMPLES, read=READS),
+         expand('qc/cutadapt/{sample}.cutadapt.txt', sample=ORIGINAL_SAMPLES),
          expand('qc/fastqc/{sample}-{read}.trim_fastqc.zip',
-                sample=SAMPLES, read=READS),
-         expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
-                sample=SAMPLES, read=READS,
-                proxy=[] if config['fastq_screen'] else [None]),
-         expand('qc/hicup/HiCUP_summary_report-{sample}.txt', sample=SAMPLES),
-         expand('qc/samtools/stats/{sample}.stats.txt', sample=SAMPLES),
-         expand('qc/samtools/idxstats/{sample}.idxstats.txt', sample=SAMPLES),
-         expand('qc/samtools/flagstat/{sample}.flagstat.txt', sample=SAMPLES),
-         expand('qc/bamqc/{sample}', sample=SAMPLES),
+                sample=ORIGINAL_SAMPLES, read=READS),
+         expand('qc/hicup/HiCUP_summary_report-{sample}.txt', sample=ORIGINAL_SAMPLES),
+         expand('qc/samtools/stats/{sample}.stats.txt', sample=ORIGINAL_SAMPLES),
+         expand('qc/samtools/idxstats/{sample}.idxstats.txt', sample=ORIGINAL_SAMPLES),
+         expand('qc/samtools/flagstat/{sample}.flagstat.txt', sample=ORIGINAL_SAMPLES),
+         expand('qc/bamqc/{sample}', sample=ORIGINAL_SAMPLES),
          expand('qc/hicexplorer/{sample}-{region}.{bin}_QC',
-                sample=SAMPLES, region=REGIONS.index, bin=BASE_BIN)]
+                sample=SAMPLES, region=REGIONS.index, bin=BASE_BIN),
+         expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
+                sample=ORIGINAL_SAMPLES, read=READS) if config['fastq_screen'] else []]
     output:
         directory('qc/multiqc')
     log:
