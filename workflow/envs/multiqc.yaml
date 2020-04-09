@@ -1,4 +1,8 @@
 channels :
+  - conda-forge
   - bioconda
-dependencies :
-  - multiqc >= 1.8
+  - defaults
+channel_priority: 
+  - true
+dependencies:
+  - multiqc
