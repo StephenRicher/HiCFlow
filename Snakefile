@@ -224,6 +224,8 @@ rule fastqc:
     output:
         html = 'qc/fastqc/{single}.raw_fastqc.html',
         zip = 'qc/fastqc/unmod/{single}.raw.fastqc.zip'
+    group:
+        'fastqc'
     log:
         'logs/fastqc/{single}.log'
     wrapper:
@@ -235,6 +237,8 @@ rule modify_fastqc:
         'qc/fastqc/unmod/{single}.raw.fastqc.zip'
     output:
         'qc/fastqc/{single}.raw_fastqc.zip'
+    group:
+        'fastqc'
     log:
         'logs/modify_fastqc/{single}.raw.log'
     conda:
@@ -403,21 +407,6 @@ rule hicup_map:
         '--threads 1 {input.reads} &> {log}'
 
 
-rule fixmate:
-    input:
-        rules.hicup_map.output.mapped
-    output:
-        'mapped/{pre_sample}.fixed.bam'
-    threads:
-        THREADS
-    log:
-        'logs/fixmate/{pre_sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools fixmate -@ {threads} {input} {output} &> {log}'
-
-
 rule digest:
     input:
         rules.bgzip_genome.output
@@ -436,7 +425,7 @@ rule digest:
 
 rule subsample_reads:
     input:
-        rules.fixmate.output
+        rules.hicup_map.output.mapped
     output:
         pipe('mapped/subsampled/{pre_sample}-subsample.bam')
     group:
@@ -506,7 +495,7 @@ rule plot_filter_QC:
 
 rule hicup_filter:
     input:
-        bam = rules.fixmate.output,
+        bam = rules.hicup_map.output.mapped,
         digest = rules.hicup_digest.output
     output:
         filtered = 'mapped/{pre_sample}.filt.bam',
