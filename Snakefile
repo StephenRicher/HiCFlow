@@ -284,12 +284,12 @@ rule cutadapt:
     conda:
         f'{ENVS}/cutadapt.yaml'
     threads:
-        THREADS
+        THREADS - 1
     shell:
         'cutadapt '
         '-a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA '
         '-A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT '
-        '{params.others} --cores {THREADS} '
+        '{params.others} --cores {threads} '
         '-o {output.trimmed[0]} -p {output.trimmed[1]} {input} '
         '> {output.qc} 2> {log}'
 
