@@ -227,7 +227,7 @@ rule fastqc:
     log:
         'logs/fastqc/{single}.log'
     wrapper:
-        '0.50.4/bio/fastqc'
+        '0.49.0/bio/fastqc'
 
 
 rule modify_fastqc:
@@ -326,7 +326,7 @@ if config['fastq_screen'] is not None:
         threads:
             8
         wrapper:
-            "0.50.4/bio/fastq_screen"
+            "0.49.0/bio/fastq_screen"
 
 
 rule fastqc_trimmed:
@@ -338,7 +338,7 @@ rule fastqc_trimmed:
     log:
         'logs/fastqc_trimmed/{single}.log'
     wrapper:
-        '0.50.4/bio/fastqc'
+        '0.49.0/bio/fastqc'
 
 
 rule hicup_digest:
