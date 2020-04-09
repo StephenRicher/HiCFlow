@@ -10,7 +10,8 @@ ENVS = f'{BASE}/workflow/envs'
 # Defne path to custom scripts directory
 SCRIPTS = f'{BASE}/workflow/scripts'
 
-configfile: f'{BASE}/config/config.yaml'
+if not config:
+    configfile: f'{BASE}/config/config.yaml'
 
 # Defaults configuration file - use empty string to represent no default value.
 default_config = {
