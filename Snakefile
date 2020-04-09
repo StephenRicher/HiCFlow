@@ -707,7 +707,7 @@ rule samtools_flagstat:
 rule bamqc:
     input:
         bam = rules.coordinate_sort.output,
-        regions = '/home/stephen/phd/scripts/capture_regions.bed'
+        regions = config['regions']
     output:
         directory('qc/bamqc/{pre_sample}')
     resources:
