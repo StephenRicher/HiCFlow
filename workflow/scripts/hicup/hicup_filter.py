@@ -8,13 +8,13 @@ __email__ = 'sr467@bath.ac.uk'
 __license__ = 'MIT'
 __version__ = '1.0.0'
 
+import os
 import re
 import sys
 import glob
 import shutil
 import argparse
 import subprocess
-from os import path
 import pyCommonTools as pct
 from tempfile import TemporaryDirectory
 from timeit import default_timer as timer
@@ -66,7 +66,8 @@ def filter(infile, output, outdir, summary, ditag_chart, filter_chart,
 
     zip_out = set_zip(output, ext='.bam')
 
-    with TemporaryDirectory() as tempdir:
+    # Write tempdir to same location as intended output to ensure enough space
+    with TemporaryDirectory(dir=os.path.dirname(output)) as tempdir:
 
         command = ['hicup_filter', '--shortest', f'{shortest}',
                    '--longest', f'{longest}', '--digest', digest,

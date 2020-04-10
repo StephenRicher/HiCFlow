@@ -8,13 +8,13 @@ __email__ = 'sr467@bath.ac.uk'
 __license__ = 'MIT'
 __version__ = '1.0.0'
 
+import os
 import re
 import sys
 import glob
 import shutil
 import argparse
 import subprocess
-from os import path
 import pyCommonTools as pct
 from tempfile import TemporaryDirectory
 from timeit import default_timer as timer
@@ -69,7 +69,8 @@ def digest(infiles, output, summary, genome,
 
     zip_out = set_zip(output, ext='.gz')
 
-    with TemporaryDirectory() as tempdir:
+    # Write tempdir to same location as intended output to ensure enough space
+    with TemporaryDirectory(dir=os.path.dirname(output)) as tempdir:
 
         command = ['hicup_digester', '--re1', f'{re1},{re1_name}',
             '--genome', genome, '--outdir', tempdir] + infiles
