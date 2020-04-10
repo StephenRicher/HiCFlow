@@ -15,7 +15,6 @@ import glob
 import shutil
 import argparse
 import subprocess
-from os import path
 import pyCommonTools as pct
 from tempfile import TemporaryDirectory
 from timeit import default_timer as timer
@@ -72,7 +71,8 @@ def map(infiles, output, index, summary, barchart1,
     fastq_r2 = infiles[1]
     zip_out = set_zip(output, ext='.bam')
 
-    with TemporaryDirectory() as tempdir:
+    # Write tempdir to same location as intended output to ensure enough space
+    with TemporaryDirectory(dir=os.path.dirname(output)) as tempdir:
 
         command = ['hicup_mapper', '--index', index, '--threads', str(threads),
                    '--outdir', tempdir, '--bowtie2', bowtie2,

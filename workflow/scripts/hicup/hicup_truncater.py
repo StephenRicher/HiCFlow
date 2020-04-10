@@ -8,13 +8,13 @@ __email__ = 'sr467@bath.ac.uk'
 __license__ = 'MIT'
 __version__ = '1.0.0'
 
+import os
 import re
 import sys
 import glob
 import shutil
 import argparse
 import subprocess
-from os import path
 import pyCommonTools as pct
 from tempfile import TemporaryDirectory
 from timeit import default_timer as timer
@@ -66,7 +66,8 @@ def truncate(infiles, outputs, summary, barchart1, barchart2, re1, threads):
 
     zip_out = set_zip(outputs[0], ext='.gz')
 
-    with TemporaryDirectory() as tempdir:
+    # Write tempdir to same location as intended output to ensure enough space
+    with TemporaryDirectory(dir=os.path.dirname(output)) as tempdir:
 
         command = ['hicup_truncater', '--re1', re1, '--threads', str(threads),
                    '--outdir', tempdir, fastq_r1, fastq_r2]
@@ -90,14 +91,14 @@ def truncate(infiles, outputs, summary, barchart1, barchart2, re1, threads):
         for fastq, output in zip([fastq_r1, fastq_r2], outputs):
             output_base = truncater_basename(fastq)
             extension = '.trunc.fastq.gz' if zip_out else '.trunc.fastq'
-            output_path = path.join(tempdir, output_base + extension)
+            output_path = os.path.join(tempdir, output_base + extension)
             shutil.move(output_path, output)
 
 
 def truncater_basename(file_path):
     """ Returns the hicup_truncater specific basename. """
 
-    base = path.basename(file_path)
+    base = os.path.basename(file_path)
 
     if base.endswith('.gz'):
         base = re.sub('.gz$', '', base)
