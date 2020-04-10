@@ -67,7 +67,7 @@ def truncate(infiles, outputs, summary, barchart1, barchart2, re1, threads):
     zip_out = set_zip(outputs[0], ext='.gz')
 
     # Write tempdir to same location as intended output to ensure enough space
-    with TemporaryDirectory(dir=os.path.dirname(output)) as tempdir:
+    with TemporaryDirectory(dir=os.path.dirname(outputs[0])) as tempdir:
 
         command = ['hicup_truncater', '--re1', re1, '--threads', str(threads),
                    '--outdir', tempdir, fastq_r1, fastq_r2]
