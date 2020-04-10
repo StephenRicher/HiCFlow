@@ -288,7 +288,7 @@ rule cutadapt:
     conda:
         f'{ENVS}/cutadapt.yaml'
     threads:
-        THREADS - 1
+        THREADS
     shell:
         'cutadapt '
         '-a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA '
