@@ -100,7 +100,9 @@ rule all:
                 group1 = list(GROUPS), group2 = list(GROUPS))],
          [expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
                 region=REGIONS.index, cell_type=list(CELL_TYPES)),
-         expand('allele/hapcompass/{cell_type}-phased.vcf.gz',
+          expand('allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF',
+                region=REGIONS.index, cell_type=list(CELL_TYPES)),
+          expand('allele/hapcompass/{cell_type}-phased.vcf.gz',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 
 
@@ -404,7 +406,7 @@ rule hicup_map:
         '--output {output.mapped} '
         '--summary {output.summary} '
         '--index {params.basename} '
-        '--threads 1 {input.reads} &> {log}'
+        '--threads {threads} {input.reads} &> {log}'
 
 
 rule digest:
@@ -1415,6 +1417,39 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/bcftools.yaml'
         shell:
             'bcftools sort --output-type v {input} > {output} 2> {log}'
+
+    rule extractHAIRS:
+        input:
+            vcf = rules.sort_vcf.output,
+            bam = rules.sort.output
+        output:
+            'allele/hapcut2/{region}/{cell_type}-{region}.fragments'
+        group:
+            'hapcut2'
+        log:
+            'logs/extractHAIRS/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/hapcut2.yaml'
+        shell:
+            'extractHAIRS --hic 1 --bam {input.bam} '
+            '--VCF {input.vcf} --out {output} &> {log}'
+
+    rule hapCut2:
+        input:
+            fragments = rules.extractHAIRS.output,
+            vcf = rules.sort_vcf.output
+        output:
+            block = 'allele/hapcut2/{region}/{cell_type}-{region}',
+            vcf = 'allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF'
+        group:
+            'hapcut2'
+        log:
+            'logs/hapCut2/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/hapcut2.yaml'
+        shell:
+            'HAPCUT2 --hic 1 --fragments {input.fragments} '
+            '--VCF {input.vcf} --outvcf 1 --out {output.block} &> {log}'
 
 
     rule run_hapcompass:
