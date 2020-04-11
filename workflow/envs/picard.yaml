@@ -5,4 +5,4 @@ channels :
 channel_priority:
   - true
 dependencies :
-  - gatk4
+  - picard

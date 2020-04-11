@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import pandas as pd
 from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, get_allele_groupings
 
@@ -31,7 +32,8 @@ default_config = {
     'threads':      1,
     'arima':        False,
     're2':          None,
-    're2_seq':      None
+    're2_seq':      None,
+    'known_sites':  None
 }
 config = set_config(config, default_config)
 
@@ -63,7 +65,13 @@ else:
     SAMPLES = ORIGINAL_SAMPLES
     GROUPS = ORIGINAL_GROUPS
     ALLELE_SPECIFIC = False
+    if not config['known_sites']:
+        sys.stderr.write(
+            f'\033[31mNo configuration provided for "known_sites" and '
+             'no default available.\n')
+        sys.exit(1)
 
+# Need to prevent '.' also!
 wildcard_constraints:
     cell_type = r'[^-\/]+',
     pre_group = r'[^-\/g]+',
@@ -72,7 +80,8 @@ wildcard_constraints:
     allele = r'[12]',
     rep = r'\d+',
     read = r'R[12]',
-    bin = r'\d+'
+    bin = r'\d+',
+    mode = r'SNP|INDEL'
 
 if ALLELE_SPECIFIC:
     wildcard_constraints:
@@ -103,7 +112,9 @@ rule all:
           expand('allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF',
                 region=REGIONS.index, cell_type=list(CELL_TYPES)),
           expand('allele/hapcompass/{cell_type}-phased.vcf.gz',
-                cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
+                cell_type=list(CELL_TYPES)),
+          expand('gatk/{cell_type}-all.filt.vcf.gz',
+            cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 
 
 rule mask_genome:
@@ -1163,7 +1174,8 @@ rule straw:
     log:
         'logs/straw/{all}-{region}-{bin}.log'
     params:
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region],
+        # Strip 'chr' as juicer removes by default
+        chr = lambda wildcards: REGIONS['chr'][wildcards.region].lstrip('chr'),
         start = lambda wildcards: REGIONS['start'][wildcards.region],
         end = lambda wildcards: REGIONS['end'][wildcards.region],
     conda:
@@ -1224,8 +1236,8 @@ rule links2interact:
         '--up {output.up} --down {output.down} {input} &> {log}'
 
 
-p_thresh = 0.05
-fc_thresh = 0
+p_thresh = 0.01
+fc_thresh = 1
 rule filter_links:
     input:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
@@ -1300,6 +1312,329 @@ rule plot_tads:
 
 
 if not ALLELE_SPECIFIC:
+
+    # Need to add IndexFeature for each input feature provided in config
+    rule merge_bam_cell_type_gatk:
+        input:
+            lambda wildcards: expand('mapped/{pre_sample}.pair.bam',
+                pre_sample = CELL_TYPES[wildcards.cell_type])
+        output:
+            'mapped/merged_by_cell/{cell_type}.bam'
+        log:
+            'logs/merge_bam_cell_type_gatk/{cell_type}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        threads:
+            THREADS
+        shell:
+            'samtools merge -@ {threads} {output} {input} 2> {log}'
+
+
+    rule coordinate_sort_gatk:
+        input:
+            rules.merge_bam_cell_type_gatk.output
+        output:
+            'mapped/merged_by_cell/{cell_type}.sort.bam'
+        params:
+            mem = '1G'
+        threads:
+            THREADS
+        log:
+            'logs/coordinate_sort_gatk/{cell_type}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools sort -@ {threads} -m {params.mem} {input} '
+            '> {output} 2> {log}'
+
+
+
+    rule MarkDuplicates:
+        input:
+            rules.coordinate_sort_gatk.output
+        output:
+            bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam',
+            metrics = 'qc/picard_dedup/{cell_type}.metrics.txt'
+        log:
+            'logs/picard/MarkDuplicates/{cell_type}.log'
+        conda:
+            f'{ENVS}/picard.yaml'
+        shell:
+            'picard MarkDuplicates REMOVE_DUPLICATES=true '
+            'INPUT={input} OUTPUT={output.bam} '
+            'METRICS_FILE={output.metrics} &> {log}'
+
+
+    rule AddReadGroup:
+        input:
+            rules.MarkDuplicates.output.bam
+        output:
+            'mapped/merged_by_cell/{cell_type}.dedup-RG.bam'
+        params:
+            lib = 'lib',
+            platform = 'platform',
+            unit = 'unit'
+        log:
+            'logs/picard/AddReadGroup/{cell_type}.log'
+        conda:
+            f'{ENVS}/picard.yaml'
+        shell:
+            'picard AddOrReplaceReadGroups INPUT={input} '
+            'OUTPUT={output} RGLB={params.lib} '
+            'RGPL={params.platform} RGPU={params.unit} '
+            'RGSM={wildcards.cell_type} &> {log}'
+
+
+    rule index_gatk:
+        input:
+            rules.AddReadGroup.output
+        output:
+            f'{rules.AddReadGroup.output}.bai'
+        threads:
+            THREADS
+        log:
+            'logs/samtools/index/{cell_type}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools index -@ {threads} {input} &> {log}'
+
+
+    rule CreateSequenceDictionary:
+        input:
+            rules.bgzip_genome.output
+        output:
+            f'{rules.bgzip_genome.output}.dict'
+        log:
+            f'logs/gatk/CreateSequenceDictionary/{BUILD}.log'
+        conda:
+            f'{ENVS}/picard.yaml'
+        shell:
+            'picard CreateSequenceDictionary R={input} O={output} 2> {log}'
+
+
+    def known_sites(input_known):
+        input_known_string = ""
+        for known in input_known:
+            input_known_string += f' --known-sites {known}'
+        return input_known_string
+
+
+    rule BaseRecalibrator:
+        input:
+            bam = rules.AddReadGroup.output,
+            bam_index = rules.index_gatk.output,
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output
+        output:
+            recal_table = 'gatk/recalibation/{cell_type}.recal.table'
+        params:
+            intervals = config['regions'],
+            known = known_sites(config['known_sites']),
+            extra = ''
+        log:
+            'logs/gatk/BaseRecalibrator/{cell_type}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+             'gatk BaseRecalibrator {params.extra} {params.known} '
+             '--input {input.bam} --reference {input.ref} '
+             '--output {output.recal_table} --intervals {params.intervals} '
+             '--sequence-dictionary {input.ref_dict} &> {log}'
+
+
+    rule ApplyBQSR:
+        input:
+            bam = rules.AddReadGroup.output,
+            bam_index = rules.index_gatk.output,
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output,
+            recal_table = rules.BaseRecalibrator.output
+        output:
+            'mapped/merged_by_cell/{cell_type}.recalibrated.bam'
+        params:
+            intervals = config['regions'],
+            extra = ''
+        log:
+            'logs/gatk/ApplyBQSR/{cell_type}.log'
+        threads:
+            THREADS
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+            'gatk ApplyBQSR {params.extra} '
+            '--input {input.bam} --reference {input.ref} '
+            '--bqsr-recal-file {input.recal_table} --output {output} '
+            '--intervals {params.intervals} &> {log}'
+
+
+    rule HaplotypeCaller:
+        input:
+            bam = rules.ApplyBQSR.output,
+            bam_index = rules.index_gatk.output,
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output
+        output:
+            'gatk/{cell_type}-g.vcf.gz'
+        params:
+            intervals = config['regions'],
+            java_opts = '-Xmx6G',
+            extra = ''
+        log:
+            'logs/gatk/HaplotypeCaller/{cell_type}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+            'gatk --java-options {params.java_opts} HaplotypeCaller '
+            '{params.extra} --input {input.bam} --output {output} '
+            '--reference {input.ref}  --intervals {params.intervals} '
+            '-ERC GVCF &> {log}'
+
+
+    # Possibly should combine gvcfs
+    rule GenotypeGVCFs:
+        input:
+            gvcf = rules.HaplotypeCaller.output,
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output
+        output:
+            'gatk/{cell_type}.vcf.gz'
+        params:
+            java_opts = '-Xmx4G',
+            extra = '',  # optional
+        log:
+            'logs/gatk/GenotypeGVCFs/{cell_type}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+             'gatk --java-options {params.java_opts} GenotypeGVCFs '
+             '--reference {input.ref} --variant {input.gvcf} '
+             '--output {output} &> {log}'
+
+
+    rule SelectVariants:
+        input:
+            vcf = rules.GenotypeGVCFs.output,
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output
+        output:
+            'gatk/{cell_type}-{mode}.vcf.gz'
+        log:
+            'logs/gatk/SelectVariants/{cell_type}-{mode}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+            'gatk SelectVariants --reference {input.ref} '
+            '--variant {input.vcf} --select-type-to-include {wildcards.mode} '
+            '--output {output} &> {log}'
+
+
+    rule VariantRecalibrator_SNPs:
+        input:
+            vcf = 'gatk/{cell_type}-SNP.vcf.gz',
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output
+        output:
+            recal = 'gatk/{cell_type}-SNP.vcf.recal',
+            tranches = 'gatk/{cell_type}-SNP.vcf.tranches'
+        params:
+            truth = '--resource:hapmap,known=false,training=true,truth=true,'
+            'prior=15.0 /media/stephen/Data/HiC-subsample/data/hapmap_3.3.hg38.vcf.gz',
+            training1 = '--resource:omni,known=false,training=true,truth=false,'
+            'prior=12.0 /media/stephen/Data/HiC-subsample/data/1000G_omni2.5.hg38.vcf.gz',
+            training2 = '--resource:1000G,known=false,training=true,truth=false,'
+            'prior=10.0 /media/stephen/Data/HiC-subsample/data/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+            known = '--resource:dbsnp,known=true,training=false,truth=false,'
+            'prior=2.0 /media/stephen/Data/HiC-subsample/data/dbsnp_146.hg38.vcf.gz',
+            max_gaussians = 3,
+            java_opts = '-Xmx4G',
+            extra = '',  # optional
+        log:
+            'logs/gatk/VariantRecalibrator/{cell_type}-SNP.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+            'gatk --java-options {params.java_opts} VariantRecalibrator '
+            '--reference {input.ref} --variant {input.vcf} --mode SNP '
+            '-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR '
+            '--output {output.recal} --tranches-file {output.tranches} '
+            '--max-gaussians {params.max_gaussians} '
+            '{params.known} {params.truth} {params.training1} '
+            '{params.training2} {params.extra} &> {log}'
+
+
+    rule VariantRecalibrator_INDELs:
+        input:
+            vcf = 'gatk/{cell_type}-INDEL.vcf.gz',
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output
+        output:
+            recal = 'gatk/{cell_type}-INDEL.vcf.recal',
+            tranches = 'gatk/{cell_type}-INDEL.vcf.tranches'
+        params:
+            mills = '--resource:mills,known=false,training=true,truth=true,'
+            'prior=12.0 /media/stephen/Data/HiC-subsample/data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz',
+            known = '--resource:dbsnp,known=true,training=false,truth=false,'
+            'prior=2.0 /media/stephen/Data/HiC-subsample/data/dbsnp_146.hg38.vcf.gz',
+            max_gaussians = 3,
+            java_opts = '-Xmx4G',
+            extra = '',  # optional
+        log:
+            'logs/gatk/VariantRecalibrator/{cell_type}-INDEL.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+            'gatk --java-options {params.java_opts} VariantRecalibrator '
+            '--reference {input.ref} --variant {input.vcf} --mode INDEL '
+            '-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR '
+            '--output {output.recal} --tranches-file {output.tranches} '
+            '--max-gaussians {params.max_gaussians} '
+            '{params.known} {params.mills} {params.extra} &> {log}'
+
+    rule ApplyVQSR:
+        input:
+            vcf = rules.SelectVariants.output,
+            tranches = 'gatk/{cell_type}-{mode}.vcf.tranches',
+            recal = 'gatk/{cell_type}-{mode}.vcf.recal',
+            ref = rules.bgzip_genome.output,
+            ref_index = rules.index_genome.output,
+            ref_dict = rules.CreateSequenceDictionary.output
+        output:
+            'gatk/{cell_type}-{mode}.filt.vcf.gz'
+        log:
+            'logs/gatk/ApplyVQSR/{cell_type}-{mode}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+            'gatk ApplyVQSR --reference {input.ref} --variant {input.vcf} '
+            '--tranches-file {input.tranches} --mode {wildcards.mode} '
+            '--exclude-filtered --recal-file {input.recal} '
+            '--truth-sensitivity-filter-level 99.0 '
+            '--output {output} &> {log}'
+
+
+    rule MergeVCFs:
+        input:
+            SNP = 'gatk/{cell_type}-SNP.filt.vcf.gz',
+            INDEL = 'gatk/{cell_type}-INDEL.filt.vcf.gz',
+        output:
+            'gatk/{cell_type}-all.filt.vcf.gz'
+        log:
+            'logs/picard/merge_vcfs/{cell_type}.log'
+        conda:
+            f'{ENVS}/picard.yaml'
+        shell:
+            'picard MergeVcfs INPUT={input.SNP} INPUT={input.INDEL} '
+            'OUTPUT={output} &> {log}'
+
+
     rule merge_bam_cell_type:
         input:
             lambda wildcards: expand(

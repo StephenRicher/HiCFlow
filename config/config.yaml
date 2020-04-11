@@ -1,9 +1,9 @@
 
-build : GRCh38
-genome : /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
+build : hg38
+genome : /media/stephen/Data/HiC-subsample/data/Homo_sapiens_assembly38.fasta.gz
 re1 : Mbo1
 re1_seq : '^GATC'
-threads : 6
+threads : 1
 
 workdir: /media/stephen/Data/HiC-subsample/analysis/
 
@@ -22,4 +22,9 @@ ctcf_orientation: [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/ctcf/MCF-7_C
 
 genes: /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
 
-phased_vcf: /media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
+known_sites: ['/media/stephen/Data/HiC-subsample/data/dbsnp_146.hg38.vcf.gz',
+              '/media/stephen/Data/HiC-subsample/data/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+              '/media/stephen/Data/HiC-subsample/data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+
+
+#phased_vcf: /media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
