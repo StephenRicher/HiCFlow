@@ -1779,8 +1779,6 @@ if not ALLELE_SPECIFIC:
 
     rule extractHAIRS:
         input:
-            #vcf = rules.sort_vcf.output,
-            #bam = rules.sort.output
             vcf = rules.SplitVCFS.output,
             bam = rules.AddReadGroup.output
         output:

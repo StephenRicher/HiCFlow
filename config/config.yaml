@@ -24,6 +24,8 @@ hicup:
 hicCompare:
     fdr:
     logFC:
+gatk:
+    
 fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
 binsize : [5000, 10000]
 
