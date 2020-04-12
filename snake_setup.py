@@ -8,33 +8,62 @@ class ConfigurationError(Exception):
     pass
 
 
-def set_config(config, default_config):
+def unset_defaults(default, outer_key=''):
+    """ Return True if default or any value in default
+        nested dictionary is an empty string.
+    """
+    out = 0
+    if default == '':
+        sys.stderr.write(
+            f'\033[31mNo configuration provided for {outer_key} and '
+             'no default available.\n')
+        out += 1
+    elif isinstance(default, dict):
+        for key in default:
+            full_key = f'{outer_key} : {key}' if outer_key else key
+            out += unset_defaults(default[key], outer_key=full_key)
+    return out
+
+
+def set_default(config, default, key, outer_key):
 
     RC = 0
+    if unset_defaults(default[key], outer_key=outer_key):
+        RC = 1
+    else:
+        config[key] = default[key]
+        sys.stderr.write(
+            f'\033[33mNo configuration provided for {outer_key}'
+            f' - setting to default: {config[key]}.\n')
 
-    for key in default_config:
+    return RC
+
+
+def set_config(config, default, outer_key=''):
+
+    RC = 0
+    for key in default:
+        full_key = f'{outer_key} : {key}' if outer_key else key
         try:
-            config[key]
-            sys.stderr.write(f'\033[32mSetting {key} to: {config[key]}\n')
-        except KeyError:
-            if default_config[key] == '':
-                sys.stderr.write(
-                    f'\033[31mNo configuration provided for {key} and '
-                     'no default available.\n')
-                RC = 1
+            if isinstance(default[key], dict):
+                set_config(config[key], default[key], outer_key=full_key)
+            elif config[key] is None:
+                RC += set_default(config, default, key, outer_key=full_key)
             else:
-                config[key] = default_config[key]
                 sys.stderr.write(
-                    f'\033[33mNo configuration provided for {key}.\n')
-                sys.stderr.write(
-                    f'\033[33mSetting {key} to default: {config[key]}.\n')
+                    f'\033[32mSetting {full_key} to: {config[key]}\n')
+        except KeyError:
+            RC += set_default(config, default, key, outer_key=full_key)
+        except TypeError:
+            RC += set_default(config, default, key, outer_key=full_key)
 
-    if RC == 1:
+    if RC > 0:
         raise ConfigurationError(
             '\033[31mInvalid configuration setting.\033[m\n')
 
-    sys.stderr.write('\033[m')
+    sys.stdout.write('\033[m')
     return config
+
 
 
 def load_samples(samples_file):

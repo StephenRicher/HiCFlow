@@ -16,48 +16,57 @@ if not config:
 
 # Defaults configuration file - use empty string to represent no default value.
 default_config = {
-    'workdir':      workflow.basedir,
-    'samples':      '',
-    'phased_vcf':   None,
-    'build':        'genome',
-    'genome':       '',
+    'workdir':           workflow.basedir,
+    'threads':           1,
+    'data':
+        {'samples':      ''      ,
+         'phased_vcf':   None    ,},
+    'genome':
+        {'build':        'genome',
+         'sequence':     ''      ,
+         'genes':        None    ,
+         'ctcf':         None    ,
+         'ctcf_orient':  None    ,},
+    'protocol':
+        {'regions':      ''      ,
+         're1':          'enzyme',
+         're1_seq':      ''      ,
+         're2':          None    ,
+         're2_seq':      None    ,
+         'arima':        False   ,},
+    'hicup':
+        {'shortest' :    150     ,
+         'longest' :     850     ,},
+    'HiCcompare':
+        {'fdr' :         0.01    ,
+         'logFC' :       1       ,},
+    'binsize':      [5000, 10000],
     'fastq_screen': None,
-    're1':          'enzyme',
-    're1_seq':      '',
-    'regions':      '',
-    'ctcf':         None,
-    'ctcf_orient':  None,
-    'genes':        None,
-    'reads':        ['R1', 'R2'],
-    'threads':      1,
-    'arima':        False,
-    're2':          None,
-    're2_seq':      None,
-    'known_sites':  None
 }
+
 config = set_config(config, default_config)
 
 workdir: config['workdir']
-BUILD = config['build']
 THREADS = config['threads']
-RE1 = config['re1']
-RE1_SEQ = config['re1_seq']
-RE2 = config['re2']
-RE2_SEQ = config['re2_seq']
-READS = config['reads']
+BUILD = config['genome']['build']
+RE1 = config['protocol']['re1']
+RE1_SEQ = config['protocol']['re1_seq']
+RE2 = config['protocol']['re2']
+RE2_SEQ = config['protocol']['re2_seq']
+READS = ['R1', 'R2']
 BINS = config['binsize']
 BASE_BIN = BINS[0]
 
 # Read path to samples in pandas
-samples = load_samples(config['samples'])
+samples = load_samples(config['data']['samples'])
 
 # Extract groups and replicates.
 ORIGINAL_SAMPLES, ORIGINAL_GROUPS, CELL_TYPES = get_grouping(samples)
 
-REGIONS = load_regions(config['regions'])
+REGIONS = load_regions(config['protocol']['regions'])
 
-if config['phased_vcf']:
-    PHASED_VCFS = load_vcf_paths(config['phased_vcf'], samples)
+if config['data']['phased_vcf']:
+    PHASED_VCFS = load_vcf_paths(config['data']['phased_vcf'], samples)
     workdir: config['workdir'] + 'allele_specific'
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
     ALLELE_SPECIFIC = True
@@ -119,7 +128,7 @@ rule all:
 
 rule mask_genome:
     input:
-        genome = config['genome'],
+        genome = config['genome']['sequence'],
         vcf = lambda wc: PHASED_VCFS[wc.cell_type]
     output:
         f'allele/genome/masked/{BUILD}-{{cell_type}}.fa'
@@ -148,7 +157,7 @@ rule reformat_SNPsplit:
 
 rule bgzip_genome:
     input:
-        config['genome']
+        config['genome']['sequence']
     output:
         f'genome/{BUILD}.fa.gz'
     log:
@@ -220,7 +229,7 @@ else:
 
 rule process_gff3:
     input:
-        config['genes']
+        config['genome']['genes']
     output:
         f'genome/{BUILD}-genes.bed'
     log:
@@ -369,7 +378,7 @@ rule hicup_digest:
         re1_seq = RE1_SEQ,
         re2 = f'--re2_name {RE2}' if RE2 else '',
         re2_seq = '--re2 {RE2_SEQ}' if RE2_SEQ else '',
-        arima = '--arima' if config['arima'] else ''
+        arima = '--arima' if config['protocol']['arima'] else ''
     log:
         f'logs/hicup_digest/{BUILD}.log'
     conda:
@@ -426,7 +435,7 @@ rule digest:
     output:
         f'genome/digest/{BUILD}-{RE1}-pyHiCtools-digest.txt'
     params:
-        re1_seq = config['re1_seq']
+        re1_seq = RE1_SEQ
     log:
         f'logs/digest/{BUILD}-{RE1}.log'
     conda:
@@ -515,8 +524,8 @@ rule hicup_filter:
         summary = 'qc/hicup/{pre_sample}-filter-summary.txt',
         rejects = directory('qc/hicup/{pre_sample}-ditag_rejects')
     params:
-        shortest = 150,
-        longest = 800
+        shortest = config['hicup']['shortest'],
+        longest = config['hicup']['longest']
     log:
         'logs/hicup_filter/{pre_sample}.log'
     conda:
@@ -709,7 +718,7 @@ rule samtools_flagstat:
 rule bamqc:
     input:
         bam = rules.coordinate_sort.output,
-        regions = config['regions']
+        regions = config['protocol']['regions']
     output:
         directory('qc/bamqc/{pre_sample}')
     resources:
@@ -1095,8 +1104,8 @@ rule generate_config:
     conda:
         f'{ENVS}/python3.yaml'
     params:
-        ctcf_orientation = config['ctcf_orientation'],
-        ctcf = config['ctcf'],
+        ctcf_orientation = config['genome']['ctcf_orient'],
+        ctcf = config['genome']['ctcf'],
         depth = lambda wc: int(REGIONS['length'][wc.region] / 1.5),
     log:
         'logs/generate_config/{group}-{region}-{bin}.log'
@@ -1236,14 +1245,15 @@ rule links2interact:
         '--up {output.up} --down {output.down} {input} &> {log}'
 
 
-p_thresh = 0.01
-fc_thresh = 1
 rule filter_links:
     input:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
     output:
-        up = f'HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-p{p_thresh}-fc{fc_thresh}-up.links',
-        down = f'HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-p{p_thresh}-fc{fc_thresh}-down.links',
+        up = f'HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-up.links',
+        down = f'HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-down.links'
+    params:
+        p_value = config['HiCcompare']['fdr'],
+        log_fc = config['HiCcompare']['logFC'],
     group:
         'HiCcompare'
     log:
@@ -1253,18 +1263,16 @@ rule filter_links:
     shell:
         '{SCRIPTS}/filter_links.py '
         '--up {output.up} --down {output.down} '
-        '--p_value {p_thresh} --log_fc {fc_thresh} {input} &> {log}'
+        '--p_value {params.p_value} --log_fc {params.log_fc} {input} &> {log}'
 
 
 rule merge_config:
     input:
         links_up = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-p{p_thresh}-fc{fc_thresh}-up.links',
-            p_thresh = p_thresh, fc_thresh = fc_thresh,
+            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-up.links',
             group1 = list(GROUPS), group2 = list(GROUPS)),
         links_down = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-p{p_thresh}-fc{fc_thresh}-down.links',
-            p_thresh = p_thresh, fc_thresh = fc_thresh,
+            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-down.links',
             group1 = list(GROUPS), group2 = list(GROUPS)),
         configs = expand(
             'matrices/{{region}}/{{bin}}/plots/configs/{group}-{{region}}-{{bin}}.ini',
@@ -1430,7 +1438,7 @@ if not ALLELE_SPECIFIC:
         output:
             recal_table = 'gatk/recalibation/{cell_type}.recal.table'
         params:
-            intervals = config['regions'],
+            intervals = config['protocol']['regions'],
             known = known_sites(config['known_sites']),
             extra = ''
         log:
@@ -1455,7 +1463,7 @@ if not ALLELE_SPECIFIC:
         output:
             'mapped/merged_by_cell/{cell_type}.recalibrated.bam'
         params:
-            intervals = config['regions'],
+            intervals = config['protocol']['regions'],
             extra = ''
         log:
             'logs/gatk/ApplyBQSR/{cell_type}.log'
@@ -1480,7 +1488,7 @@ if not ALLELE_SPECIFIC:
         output:
             'gatk/{cell_type}-g.vcf.gz'
         params:
-            intervals = config['regions'],
+            intervals = config['protocol']['regions'],
             java_opts = '-Xmx6G',
             extra = ''
         log:

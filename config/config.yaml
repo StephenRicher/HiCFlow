@@ -1,30 +1,32 @@
 
-build : hg38
-genome : /media/stephen/Data/HiC-subsample/data/Homo_sapiens_assembly38.fasta.gz
-re1 : Mbo1
-re1_seq : '^GATC'
-threads : 1
-
 workdir: /media/stephen/Data/HiC-subsample/analysis/
-
+threads : 1
+data:
+    samples: /media/stephen/Data/HiC-subsample/config/samples.csv
+    phased_vcf: #/media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
+genome :
+    build :  hg38
+    sequence : /media/stephen/Data/HiC-subsample/data/Homo_sapiens_assembly38.fasta.gz
+    genes : /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
+    ctcf : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
+           /home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
+    ctcf_orient : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/ctcf/MCF-7_CTCF-merged.bed]
+protocol:
+    regions: /media/stephen/Data/HiC-subsample/config/regions.bed
+    re1 : Mbo1
+    re1_seq : '^GATC'
+    re2:
+    re2_seq:
+    arima:
+hicup:
+    shortest:
+    longest:
+hicCompare:
+    fdr:
+    logFC:
 fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
-
 binsize : [5000, 10000]
-
-regions : /media/stephen/Data/HiC-subsample/config/regions.bed
-
-samples : /media/stephen/Data/HiC-subsample/config/samples.csv
-
-ctcf : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
-        /home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
-
-ctcf_orientation: [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/ctcf/MCF-7_CTCF-merged.bed]
-
-genes: /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
 
 known_sites: ['/media/stephen/Data/HiC-subsample/data/dbsnp_146.hg38.vcf.gz',
               '/media/stephen/Data/HiC-subsample/data/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
               '/media/stephen/Data/HiC-subsample/data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
-
-
-#phased_vcf: /media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
