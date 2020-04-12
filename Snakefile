@@ -121,9 +121,7 @@ rule all:
           expand('allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF',
                 region=REGIONS.index, cell_type=list(CELL_TYPES)),
           expand('allele/hapcompass/{cell_type}-phased.vcf.gz',
-                cell_type=list(CELL_TYPES)),
-          expand('gatk/{cell_type}-all.filt.vcf.gz',
-            cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
+                cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 
 
 rule mask_genome:
@@ -1356,7 +1354,6 @@ if not ALLELE_SPECIFIC:
             '> {output} 2> {log}'
 
 
-
     rule MarkDuplicates:
         input:
             rules.coordinate_sort_gatk.output
@@ -1643,6 +1640,25 @@ if not ALLELE_SPECIFIC:
             'OUTPUT={output} &> {log}'
 
 
+    rule SplitVCFS:
+        input:
+            rules.MergeVCFs.output
+        output:
+            'gatk/{cell_type}-all-{region}.filt.vcf'
+        params:
+            region = REGIONS.index,
+            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
+            start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
+            end = lambda wildcards: REGIONS['end'][wildcards.region]
+        log:
+            'logs/SplitVCFS/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools view --regions {params.chr}:{params.start}-{params.end} '
+            '{input} > {output} 2> {log}'
+
+
     rule merge_bam_cell_type:
         input:
             lambda wildcards: expand(
@@ -1763,8 +1779,10 @@ if not ALLELE_SPECIFIC:
 
     rule extractHAIRS:
         input:
-            vcf = rules.sort_vcf.output,
-            bam = rules.sort.output
+            #vcf = rules.sort_vcf.output,
+            #bam = rules.sort.output
+            vcf = rules.SplitVCFS.output,
+            bam = rules.AddReadGroup.output
         output:
             'allele/hapcut2/{region}/{cell_type}-{region}.fragments'
         group:
@@ -1780,7 +1798,8 @@ if not ALLELE_SPECIFIC:
     rule hapCut2:
         input:
             fragments = rules.extractHAIRS.output,
-            vcf = rules.sort_vcf.output
+            #vcf = rules.sort_vcf.output
+            vcf = rules.SplitVCFS.output
         output:
             block = 'allele/hapcut2/{region}/{cell_type}-{region}',
             vcf = 'allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF'
@@ -1797,8 +1816,8 @@ if not ALLELE_SPECIFIC:
 
     rule run_hapcompass:
         input:
-            vcf = rules.sort_vcf.output,
-            bam = rules.sort.output
+            vcf = rules.SplitVCFS.output,
+            bam = rules.AddReadGroup.output
         output:
             expand(
                 'allele/hapcompass/{{cell_type}}-{{region}}_{ext}',
