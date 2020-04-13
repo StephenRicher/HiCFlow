@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import tempfile
 import pandas as pd
 from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, get_allele_groupings
 
@@ -40,8 +41,9 @@ default_config = {
     'HiCcompare':
         {'fdr' :         0.01    ,
          'logFC' :       1       ,},
-    'binsize':      [5000, 10000],
-    'fastq_screen': None,
+    'binsize':           [5000, 10000],
+    'fastq_screen':      None,
+    'tmpdir':            tempfile.gettempdir()
 }
 
 config = set_config(config, default_config)
@@ -1360,6 +1362,8 @@ if not ALLELE_SPECIFIC:
         output:
             bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam',
             metrics = 'qc/picard_dedup/{cell_type}.metrics.txt'
+        params:
+            tmp = config['tmpdir']
         log:
             'logs/picard/MarkDuplicates/{cell_type}.log'
         conda:
@@ -1367,7 +1371,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'picard MarkDuplicates REMOVE_DUPLICATES=true '
             'INPUT={input} OUTPUT={output.bam} '
-            'METRICS_FILE={output.metrics} &> {log}'
+            'METRICS_FILE={output.metrics} --TMP_DIR {params.tmp} &> {log}'
 
 
     rule AddReadGroup:
@@ -1376,6 +1380,7 @@ if not ALLELE_SPECIFIC:
         output:
             'mapped/merged_by_cell/{cell_type}.dedup-RG.bam'
         params:
+            tmp = config['tmpdir'],
             lib = 'lib',
             platform = 'platform',
             unit = 'unit'
@@ -1387,7 +1392,7 @@ if not ALLELE_SPECIFIC:
             'picard AddOrReplaceReadGroups INPUT={input} '
             'OUTPUT={output} RGLB={params.lib} '
             'RGPL={params.platform} RGPU={params.unit} '
-            'RGSM={wildcards.cell_type} &> {log}'
+            'RGSM={wildcards.cell_type} --TMP_DIR {params.tmp} &> {log}'
 
 
     rule index_gatk:
@@ -1410,12 +1415,15 @@ if not ALLELE_SPECIFIC:
             rules.bgzip_genome.output
         output:
             f'{rules.bgzip_genome.output}.dict'
+        params:
+            tmp = config['tmpdir']
         log:
             f'logs/gatk/CreateSequenceDictionary/{BUILD}.log'
         conda:
             f'{ENVS}/picard.yaml'
         shell:
-            'picard CreateSequenceDictionary R={input} O={output} 2> {log}'
+            'picard CreateSequenceDictionary R={input} O={output} '
+            '--TMP_DIR {params.tmp} &> {log}'
 
 
     def known_sites(input_known):
@@ -1435,6 +1443,7 @@ if not ALLELE_SPECIFIC:
         output:
             recal_table = 'gatk/recalibation/{cell_type}.recal.table'
         params:
+            tmp = config['tmpdir'],
             intervals = config['protocol']['regions'],
             known = known_sites(config['known_sites']),
             extra = ''
@@ -1446,7 +1455,8 @@ if not ALLELE_SPECIFIC:
              'gatk BaseRecalibrator {params.extra} {params.known} '
              '--input {input.bam} --reference {input.ref} '
              '--output {output.recal_table} --intervals {params.intervals} '
-             '--sequence-dictionary {input.ref_dict} &> {log}'
+             '--sequence-dictionary {input.ref_dict} '
+             '--TMP_DIR {params.tmp} &> {log}'
 
 
     rule ApplyBQSR:
@@ -1460,6 +1470,7 @@ if not ALLELE_SPECIFIC:
         output:
             'mapped/merged_by_cell/{cell_type}.recalibrated.bam'
         params:
+            tmp = config['tmpdir'],
             intervals = config['protocol']['regions'],
             extra = ''
         log:
@@ -1472,7 +1483,8 @@ if not ALLELE_SPECIFIC:
             'gatk ApplyBQSR {params.extra} '
             '--input {input.bam} --reference {input.ref} '
             '--bqsr-recal-file {input.recal_table} --output {output} '
-            '--intervals {params.intervals} &> {log}'
+            '--intervals {params.intervals} '
+            '--TMP_DIR {params.tmp} &> {log}'
 
 
     rule HaplotypeCaller:
@@ -1485,6 +1497,7 @@ if not ALLELE_SPECIFIC:
         output:
             'gatk/{cell_type}-g.vcf.gz'
         params:
+            tmp = config['tmpdir'],
             intervals = config['protocol']['regions'],
             java_opts = '-Xmx6G',
             extra = ''
@@ -1496,7 +1509,7 @@ if not ALLELE_SPECIFIC:
             'gatk --java-options {params.java_opts} HaplotypeCaller '
             '{params.extra} --input {input.bam} --output {output} '
             '--reference {input.ref}  --intervals {params.intervals} '
-            '-ERC GVCF &> {log}'
+            '--TMP_DIR {params.tmp} -ERC GVCF &> {log}'
 
 
     # Possibly should combine gvcfs
@@ -1509,6 +1522,7 @@ if not ALLELE_SPECIFIC:
         output:
             'gatk/{cell_type}.vcf.gz'
         params:
+            tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
@@ -1518,7 +1532,7 @@ if not ALLELE_SPECIFIC:
         shell:
              'gatk --java-options {params.java_opts} GenotypeGVCFs '
              '--reference {input.ref} --variant {input.gvcf} '
-             '--output {output} &> {log}'
+             '--TMP_DIR {params.tmp} --output {output} &> {log}'
 
 
     rule SelectVariants:
@@ -1529,6 +1543,8 @@ if not ALLELE_SPECIFIC:
             ref_dict = rules.CreateSequenceDictionary.output
         output:
             'gatk/{cell_type}-{mode}.vcf.gz'
+        params:
+            tmp = config['tmpdir']
         log:
             'logs/gatk/SelectVariants/{cell_type}-{mode}.log'
         conda:
@@ -1536,7 +1552,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk SelectVariants --reference {input.ref} '
             '--variant {input.vcf} --select-type-to-include {wildcards.mode} '
-            '--output {output} &> {log}'
+            '--TMP_DIR {params.tmp} --output {output} &> {log}'
 
 
     rule VariantRecalibrator_SNPs:
@@ -1549,6 +1565,7 @@ if not ALLELE_SPECIFIC:
             recal = 'gatk/{cell_type}-SNP.vcf.recal',
             tranches = 'gatk/{cell_type}-SNP.vcf.tranches'
         params:
+            tmp = config['tmpdir'],
             truth = '--resource:hapmap,known=false,training=true,truth=true,'
             'prior=15.0 /media/stephen/Data/HiC-subsample/data/hapmap_3.3.hg38.vcf.gz',
             training1 = '--resource:omni,known=false,training=true,truth=false,'
@@ -1571,7 +1588,8 @@ if not ALLELE_SPECIFIC:
             '--output {output.recal} --tranches-file {output.tranches} '
             '--max-gaussians {params.max_gaussians} '
             '{params.known} {params.truth} {params.training1} '
-            '{params.training2} {params.extra} &> {log}'
+            '{params.training2} {params.extra} '
+            '--TMP_DIR {params.tmp} &> {log}'
 
 
     rule VariantRecalibrator_INDELs:
@@ -1584,6 +1602,7 @@ if not ALLELE_SPECIFIC:
             recal = 'gatk/{cell_type}-INDEL.vcf.recal',
             tranches = 'gatk/{cell_type}-INDEL.vcf.tranches'
         params:
+            tmp = config['tmpdir'],
             mills = '--resource:mills,known=false,training=true,truth=true,'
             'prior=12.0 /media/stephen/Data/HiC-subsample/data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz',
             known = '--resource:dbsnp,known=true,training=false,truth=false,'
@@ -1601,7 +1620,8 @@ if not ALLELE_SPECIFIC:
             '-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR '
             '--output {output.recal} --tranches-file {output.tranches} '
             '--max-gaussians {params.max_gaussians} '
-            '{params.known} {params.mills} {params.extra} &> {log}'
+            '{params.known} {params.mills} {params.extra} '
+            '--TMP_DIR {params.tmp} &> {log}'
 
     rule ApplyVQSR:
         input:
@@ -1613,6 +1633,8 @@ if not ALLELE_SPECIFIC:
             ref_dict = rules.CreateSequenceDictionary.output
         output:
             'gatk/{cell_type}-{mode}.filt.vcf.gz'
+        params:
+            tmp = config['tmpdir']
         log:
             'logs/gatk/ApplyVQSR/{cell_type}-{mode}.log'
         conda:
@@ -1622,7 +1644,7 @@ if not ALLELE_SPECIFIC:
             '--tranches-file {input.tranches} --mode {wildcards.mode} '
             '--exclude-filtered --recal-file {input.recal} '
             '--truth-sensitivity-filter-level 99.0 '
-            '--output {output} &> {log}'
+            '--TMP_DIR {params.tmp} --output {output} &> {log}'
 
 
     rule MergeVCFs:
@@ -1631,13 +1653,15 @@ if not ALLELE_SPECIFIC:
             INDEL = 'gatk/{cell_type}-INDEL.filt.vcf.gz',
         output:
             'gatk/{cell_type}-all.filt.vcf.gz'
+        params:
+            tmp = config['tmpdir']
         log:
             'logs/picard/merge_vcfs/{cell_type}.log'
         conda:
             f'{ENVS}/picard.yaml'
         shell:
             'picard MergeVcfs INPUT={input.SNP} INPUT={input.INDEL} '
-            'OUTPUT={output} &> {log}'
+            '--TMP_DIR {params.tmp} OUTPUT={output} &> {log}'
 
 
     rule SplitVCFS:
