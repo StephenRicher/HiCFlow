@@ -1328,7 +1328,7 @@ if not ALLELE_SPECIFIC:
             lambda wildcards: expand('mapped/{pre_sample}.pair.bam',
                 pre_sample = CELL_TYPES[wildcards.cell_type])
         output:
-            pipe('mapped/merged_by_cell/{cell_type}.bam')
+            pipe('mapped/merged_by_cell/{cell_type}.merged.bam')
         group:
             'merge_cell'
         log:
@@ -1336,12 +1336,41 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools merge {output} {input} 2> {log}'
+            'samtools merge -n -l 0 {output} {input} &> {log}'
+
+
+    rule fixmate:
+        input:
+            rules.merge_bam_cell_type_gatk.output
+        output:
+            pipe('mapped/merged_by_cell/{cell_type}.fixed.bam')
+        group:
+            'merge_cell'
+        log:
+            'logs/fixmate/{cell_type}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools fixmate -pmr {input} {output} &> {log}'
+
+
+    rule addReadGroup:
+        input:
+            rules.fixmate.output
+        output:
+            pipe('mapped/merged_by_cell/{cell_type}.fixed-RG.bam')
+        group:
+            'merge_cell'
+        log:
+            'logs/addReadGroup/{cell_type}.log'
+        shell:
+            'samtools addreplacerg -r ID:{wildcards.cell_type} {input} '
+            '> {output} 2> {log}'
 
 
     rule coordinate_sort_gatk:
         input:
-            rules.merge_bam_cell_type_gatk.output
+            rules.addReadGroup.output
         output:
             'mapped/merged_by_cell/{cell_type}.sort.bam'
         group:
@@ -1349,7 +1378,7 @@ if not ALLELE_SPECIFIC:
         params:
             mem = '1G'
         threads:
-            THREADS - 1 if THREADS > 1 else 1
+            THREADS - 3 if THREADS > 3 else 1
         log:
             'logs/coordinate_sort_gatk/{cell_type}.log'
         conda:
@@ -1359,55 +1388,26 @@ if not ALLELE_SPECIFIC:
             '> {output} 2> {log}'
 
 
-    rule MarkDuplicates:
+    rule remove_duplicates:
         input:
             rules.coordinate_sort_gatk.output
         output:
-            bam = pipe('mapped/merged_by_cell/{cell_type}.dedup.bam'),
-            metrics = 'qc/picard_dedup/{cell_type}.metrics.txt'
-        group:
-            'markdup_gatk'
-        params:
-            tmp = config['tmpdir'],
-            mem = '4G'
+            'mapped/merged_by_cell/{cell_type}.dedup.bam'
+        threads:
+            THREADS
         log:
-            'logs/picard/MarkDuplicates/{cell_type}.log'
+            'logs/remove_duplicates/{cell_type}.log'
         conda:
-            f'{ENVS}/picard.yaml'
+            f'{ENVS}/samtools.yaml'
         shell:
-            'picard -Xmx{params.mem} MarkDuplicates REMOVE_DUPLICATES=true '
-            'INPUT={input} OUTPUT={output.bam} '
-            'METRICS_FILE={output.metrics} TMP_DIR={params.tmp} &> {log}'
-
-
-    rule AddReadGroup:
-        input:
-            rules.MarkDuplicates.output.bam
-        output:
-            'mapped/merged_by_cell/{cell_type}.dedup-RG.bam'
-        group:
-            'markdup_gatk'
-        params:
-            tmp = config['tmpdir'],
-            lib = 'lib',
-            platform = 'platform',
-            unit = 'unit'
-        log:
-            'logs/picard/AddReadGroup/{cell_type}.log'
-        conda:
-            f'{ENVS}/picard.yaml'
-        shell:
-            'picard AddOrReplaceReadGroups INPUT={input} '
-            'OUTPUT={output} RGLB={params.lib} '
-            'RGPL={params.platform} RGPU={params.unit} '
-            'RGSM={wildcards.cell_type} TMP_DIR={params.tmp} &> {log}'
+            'samtools markdup -@ {threads} -r {input} > {output} 2> {log}'
 
 
     rule index_gatk:
         input:
-            rules.AddReadGroup.output
+            rules.coordinate_sort_gatk.output
         output:
-            f'{rules.AddReadGroup.output}.bai'
+            f'{rules.coordinate_sort_gatk.output}.bai'
         threads:
             THREADS
         log:
@@ -1443,7 +1443,7 @@ if not ALLELE_SPECIFIC:
 
     rule BaseRecalibrator:
         input:
-            bam = rules.AddReadGroup.output,
+            bam = rules.coordinate_sort_gatk.output,
             bam_index = rules.index_gatk.output,
             ref = rules.bgzip_genome.output,
             ref_index = rules.index_genome.output,
@@ -1469,7 +1469,7 @@ if not ALLELE_SPECIFIC:
 
     rule ApplyBQSR:
         input:
-            bam = rules.AddReadGroup.output,
+            bam = rules.coordinate_sort_gatk.output,
             bam_index = rules.index_gatk.output,
             ref = rules.bgzip_genome.output,
             ref_index = rules.index_genome.output,
@@ -1812,7 +1812,7 @@ if not ALLELE_SPECIFIC:
     rule extractHAIRS:
         input:
             vcf = rules.SplitVCFS.output,
-            bam = rules.AddReadGroup.output
+            bam = rules.coordinate_sort_gatk.output
         output:
             'allele/hapcut2/{region}/{cell_type}-{region}.fragments'
         group:
@@ -1847,7 +1847,7 @@ if not ALLELE_SPECIFIC:
     rule run_hapcompass:
         input:
             vcf = rules.SplitVCFS.output,
-            bam = rules.AddReadGroup.output
+            bam = rules.coordinate_sort_gatk.output
         output:
             expand(
                 'allele/hapcompass/{{cell_type}}-{{region}}_{ext}',
