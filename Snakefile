@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import re
 import sys
 import tempfile
 import pandas as pd
@@ -1067,8 +1068,8 @@ rule run_OnTAD:
     params:
         bin = BINS,
         region = REGIONS.index,
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-        length = lambda wildcards: REGIONS['length'][wildcards.region],
+        chr = lambda wc: re.sub('chr', '', REGIONS['chr'][wc.region]),
+        length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'matrices/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
     log:
         'logs/run_OnTAD/{all}-{region}-{bin}.log'
@@ -1184,7 +1185,7 @@ rule straw:
         'logs/straw/{all}-{region}-{bin}.log'
     params:
         # Strip 'chr' as juicer removes by default
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region].lstrip('chr'),
+        chr = lambda wc: re.sub('chr', '', REGIONS['chr'][wc.region]),
         start = lambda wildcards: REGIONS['start'][wildcards.region],
         end = lambda wildcards: REGIONS['end'][wildcards.region],
     conda:
