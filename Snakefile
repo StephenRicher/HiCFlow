@@ -1371,7 +1371,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'picard MarkDuplicates REMOVE_DUPLICATES=true '
             'INPUT={input} OUTPUT={output.bam} '
-            'METRICS_FILE={output.metrics} --TMP_DIR={params.tmp} &> {log}'
+            'METRICS_FILE={output.metrics} TMP_DIR={params.tmp} &> {log}'
 
 
     rule AddReadGroup:
@@ -1392,7 +1392,7 @@ if not ALLELE_SPECIFIC:
             'picard AddOrReplaceReadGroups INPUT={input} '
             'OUTPUT={output} RGLB={params.lib} '
             'RGPL={params.platform} RGPU={params.unit} '
-            'RGSM={wildcards.cell_type} --TMP_DIR={params.tmp} &> {log}'
+            'RGSM={wildcards.cell_type} TMP_DIR={params.tmp} &> {log}'
 
 
     rule index_gatk:
@@ -1423,7 +1423,7 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/picard.yaml'
         shell:
             'picard CreateSequenceDictionary R={input} O={output} '
-            '--TMP_DIR={params.tmp} &> {log}'
+            'TMP_DIR={params.tmp} &> {log}'
 
 
     def known_sites(input_known):
@@ -1661,7 +1661,7 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/picard.yaml'
         shell:
             'picard MergeVcfs INPUT={input.SNP} INPUT={input.INDEL} '
-            '--TMP_DIR={params.tmp} OUTPUT={output} &> {log}'
+            'TMP_DIR={params.tmp} OUTPUT={output} &> {log}'
 
 
     rule SplitVCFS:
