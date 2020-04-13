@@ -1328,26 +1328,28 @@ if not ALLELE_SPECIFIC:
             lambda wildcards: expand('mapped/{pre_sample}.pair.bam',
                 pre_sample = CELL_TYPES[wildcards.cell_type])
         output:
-            'mapped/merged_by_cell/{cell_type}.bam'
+            pipe('mapped/merged_by_cell/{cell_type}.bam')
+        group:
+            'prepare_gatk'
         log:
             'logs/merge_bam_cell_type_gatk/{cell_type}.log'
         conda:
             f'{ENVS}/samtools.yaml'
-        threads:
-            THREADS
         shell:
-            'samtools merge -@ {threads} {output} {input} 2> {log}'
+            'samtools merge {output} {input} 2> {log}'
 
 
     rule coordinate_sort_gatk:
         input:
             rules.merge_bam_cell_type_gatk.output
         output:
-            'mapped/merged_by_cell/{cell_type}.sort.bam'
+            pipe('mapped/merged_by_cell/{cell_type}.sort.bam')
+        group:
+            'prepare_gatk'
         params:
             mem = '1G'
         threads:
-            THREADS
+            THREADS - 3 if THREADS > 3 else 1
         log:
             'logs/coordinate_sort_gatk/{cell_type}.log'
         conda:
@@ -1361,8 +1363,10 @@ if not ALLELE_SPECIFIC:
         input:
             rules.coordinate_sort_gatk.output
         output:
-            bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam',
+            bam = pipe('mapped/merged_by_cell/{cell_type}.dedup.bam'),
             metrics = 'qc/picard_dedup/{cell_type}.metrics.txt'
+        group:
+            'prepare_gatk'
         params:
             tmp = config['tmpdir'],
             mem = '4G'
@@ -1381,6 +1385,8 @@ if not ALLELE_SPECIFIC:
             rules.MarkDuplicates.output.bam
         output:
             'mapped/merged_by_cell/{cell_type}.dedup-RG.bam'
+        group:
+            'prepare_gatk'
         params:
             tmp = config['tmpdir'],
             lib = 'lib',
