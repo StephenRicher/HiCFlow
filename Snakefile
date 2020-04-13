@@ -1330,7 +1330,7 @@ if not ALLELE_SPECIFIC:
         output:
             pipe('mapped/merged_by_cell/{cell_type}.bam')
         group:
-            'prepare_gatk'
+            'merge_cell'
         log:
             'logs/merge_bam_cell_type_gatk/{cell_type}.log'
         conda:
@@ -1343,13 +1343,13 @@ if not ALLELE_SPECIFIC:
         input:
             rules.merge_bam_cell_type_gatk.output
         output:
-            pipe('mapped/merged_by_cell/{cell_type}.sort.bam')
+            'mapped/merged_by_cell/{cell_type}.sort.bam'
         group:
-            'prepare_gatk'
+            'merge_cell'
         params:
             mem = '1G'
         threads:
-            THREADS - 3 if THREADS > 3 else 1
+            THREADS - 1 if THREADS > 1 else 1
         log:
             'logs/coordinate_sort_gatk/{cell_type}.log'
         conda:
@@ -1366,7 +1366,7 @@ if not ALLELE_SPECIFIC:
             bam = pipe('mapped/merged_by_cell/{cell_type}.dedup.bam'),
             metrics = 'qc/picard_dedup/{cell_type}.metrics.txt'
         group:
-            'prepare_gatk'
+            'markdup_gatk'
         params:
             tmp = config['tmpdir'],
             mem = '4G'
@@ -1386,7 +1386,7 @@ if not ALLELE_SPECIFIC:
         output:
             'mapped/merged_by_cell/{cell_type}.dedup-RG.bam'
         group:
-            'prepare_gatk'
+            'markdup_gatk'
         params:
             tmp = config['tmpdir'],
             lib = 'lib',
