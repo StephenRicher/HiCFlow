@@ -1364,7 +1364,7 @@ if not ALLELE_SPECIFIC:
             bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam',
             metrics = 'qc/picard_dedup/{cell_type}.metrics.txt'
         params:
-            tmp = config['tmpdir']
+            tmp = config['tmpdir'],
             mem = '4G'
         log:
             'logs/picard/MarkDuplicates/{cell_type}.log'
