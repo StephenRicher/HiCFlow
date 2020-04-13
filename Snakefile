@@ -1364,12 +1364,13 @@ if not ALLELE_SPECIFIC:
             metrics = 'qc/picard_dedup/{cell_type}.metrics.txt'
         params:
             tmp = config['tmpdir']
+            mem = '4G'
         log:
             'logs/picard/MarkDuplicates/{cell_type}.log'
         conda:
             f'{ENVS}/picard.yaml'
         shell:
-            'picard MarkDuplicates REMOVE_DUPLICATES=true '
+            'picard -Xmx{params.mem} MarkDuplicates REMOVE_DUPLICATES=true '
             'INPUT={input} OUTPUT={output.bam} '
             'METRICS_FILE={output.metrics} TMP_DIR={params.tmp} &> {log}'
 
