@@ -1363,6 +1363,8 @@ if not ALLELE_SPECIFIC:
             'merge_cell'
         log:
             'logs/addReadGroup/{cell_type}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
         shell:
             'samtools addreplacerg -r ID:{wildcards.cell_type} {input} '
             '> {output} 2> {log}'
