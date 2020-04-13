@@ -85,10 +85,10 @@ else:
 
 # Need to prevent '.' also!
 wildcard_constraints:
-    cell_type = r'[^-\/]+',
-    pre_group = r'[^-\/g]+',
-    pre_sample = r'[^-\/g]+-\d+',
-    region = r'[^-\/]+',
+    cell_type = r'[^-\.\/]+',
+    pre_group = r'[^-\.\/g]+',
+    pre_sample = r'[^-\.\/g]+-\d+',
+    region = r'[^-\.\/]+',
     allele = r'[12]',
     rep = r'\d+',
     read = r'R[12]',
