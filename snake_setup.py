@@ -72,12 +72,12 @@ def load_samples(samples_file):
         samples_file, sep = ',', dtype = {'rep' : str})
 
     # Validate read file input with wildcard definitions
-    if not samples['cell_type'].str.match(r'[^-\/]+').all():
+    if not samples['cell_type'].str.match(r'[^-\.\/]+').all():
         sys.exit(f'Invalid cell_type definition in {samples_file}.\n'
-            'Cell types must not contain the following characters: - /')
-    if not samples['group'].str.match(r'[^-\/g]+').all():
+            'Cell types must not contain the following characters: - . /')
+    if not samples['group'].str.match(r'[^-\.\/g]+').all():
         sys.exit(f'Invalid group definition in {samples_file}.\n'
-            'Groups must not contain the following characters: - / g')
+            'Groups must not contain the following characters: - / . g')
     if not samples['rep'].str.match(r'\d+').all():
         sys.exit(f'Invalid replicate definition in {samples_file}.\n'
             'Replicates must only contain integers.')
@@ -125,9 +125,9 @@ def load_regions(regions_file):
     regions['length'] = regions['end'] - regions['start']
 
     # Validate read file input with wildcard definitions
-    if not regions.index.to_series().str.match(r'[^-\/]+').all():
+    if not regions.index.to_series().str.match(r'[^-\.\/]+').all():
         sys.exit(f'Invalid region definition in {regions_file}.\n'
-            'Region names must not contain the following characters: - /')
+            'Region names must not contain the following characters: - . /')
 
     return regions
 
@@ -139,9 +139,9 @@ def load_vcf_paths(phased_vcfs, samples):
         names=['cell_type', 'path'],
         index_col='cell_type',sep = ',')
 
-    if not vcfs.index.str.match(r'[^-\/]+').all():
+    if not vcfs.index.str.match(r'[^-\.\/]+').all():
         sys.exit(f'Invalid cell_type definition in {phased_vcfs}.\n'
-            'Cell types must not contain the following characters: - /')
+            'Cell types must not contain the following characters: - . /')
 
     if len(vcfs.index.difference(samples.index.get_level_values('cell_type'))):
         sys.exit(f'Differing cell types given in {phased_vcfs} compared '
