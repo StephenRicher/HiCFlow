@@ -118,7 +118,7 @@ rule all:
                 region=REGIONS.index, bin=BINS),
          expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
                 region=REGIONS.index, bin=BINS,
-                group1 = list(GROUPS), group2 = list(GROUPS))],
+                group1 = list(GROUPS), group2 = list(GROUPS))] if 1 == 0 else [],
          [expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
                 region=REGIONS.index, cell_type=list(CELL_TYPES)),
           expand('allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF',
@@ -1336,7 +1336,8 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools merge -n -l 0 {output} {input} &> {log}'
+            'samtools merge -O bam,level=0 -n - {input} '
+            '> {output} 2> {log}'
 
 
     rule fixmate:
@@ -1351,7 +1352,8 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools fixmate -pmr {input} {output} &> {log}'
+            'samtools fixmate -O bam,level=0 -pmr {input} - '
+            '> {output} 2> {log}'
 
 
     rule addReadGroup:
@@ -1366,8 +1368,9 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools addreplacerg -r ID:{wildcards.cell_type} {input} '
-            '> {output} 2> {log}'
+            'samtools addreplacerg -O bam,level=0 '
+            '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cell_type}" '
+            '{input} > {output} 2> {log}'
 
 
     rule coordinate_sort_gatk:
@@ -1380,36 +1383,37 @@ if not ALLELE_SPECIFIC:
         params:
             mem = '1G'
         threads:
-            THREADS - 3 if THREADS > 3 else 1
+            THREADS - 4 if THREADS > 4 else 1
         log:
             'logs/coordinate_sort_gatk/{cell_type}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools sort -@ {threads} -m {params.mem} {input} '
-            '> {output} 2> {log}'
+            'samtools sort -@ {threads} -O bam,level=0 '
+            '-m {params.mem} {input} > {output} 2> {log}'
 
 
     rule remove_duplicates:
         input:
             rules.coordinate_sort_gatk.output
         output:
-            'mapped/merged_by_cell/{cell_type}.dedup.bam'
-        threads:
-            THREADS
+            bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam'
+            qc = 'qc/remove_duplicates/{cell_type}.txt'
+        group:
+            'merge_cell'
         log:
             'logs/remove_duplicates/{cell_type}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools markdup -@ {threads} -r {input} > {output} 2> {log}'
+            'samtools markdup -rsf {output.qc} {input} {output.bam} &> {log}'
 
 
     rule index_gatk:
         input:
-            rules.coordinate_sort_gatk.output
+            rules.remove_duplicates.output.bam
         output:
-            f'{rules.coordinate_sort_gatk.output}.bai'
+            f'{rules.remove_duplicates.output.bam}.bai'
         threads:
             THREADS
         log:
@@ -1445,7 +1449,7 @@ if not ALLELE_SPECIFIC:
 
     rule BaseRecalibrator:
         input:
-            bam = rules.coordinate_sort_gatk.output,
+            bam = rules.remove_duplicates.output.bam,
             bam_index = rules.index_gatk.output,
             ref = rules.bgzip_genome.output,
             ref_index = rules.index_genome.output,
@@ -1466,12 +1470,12 @@ if not ALLELE_SPECIFIC:
              '--input {input.bam} --reference {input.ref} '
              '--output {output.recal_table} --intervals {params.intervals} '
              '--sequence-dictionary {input.ref_dict} '
-             '--TMP_DIR {params.tmp} &> {log}'
+             '--tmp-dir {params.tmp} &> {log}'
 
 
     rule ApplyBQSR:
         input:
-            bam = rules.coordinate_sort_gatk.output,
+            bam = rules.remove_duplicates.output.bam,
             bam_index = rules.index_gatk.output,
             ref = rules.bgzip_genome.output,
             ref_index = rules.index_genome.output,
@@ -1494,7 +1498,7 @@ if not ALLELE_SPECIFIC:
             '--input {input.bam} --reference {input.ref} '
             '--bqsr-recal-file {input.recal_table} --output {output} '
             '--intervals {params.intervals} '
-            '--TMP_DIR {params.tmp} &> {log}'
+            '--tmp-dir {params.tmp} &> {log}'
 
 
     rule HaplotypeCaller:
@@ -1519,7 +1523,7 @@ if not ALLELE_SPECIFIC:
             'gatk --java-options {params.java_opts} HaplotypeCaller '
             '{params.extra} --input {input.bam} --output {output} '
             '--reference {input.ref}  --intervals {params.intervals} '
-            '--TMP_DIR {params.tmp} -ERC GVCF &> {log}'
+            '--tmp-dir {params.tmp} -ERC GVCF &> {log}'
 
 
     # Possibly should combine gvcfs
@@ -1542,7 +1546,7 @@ if not ALLELE_SPECIFIC:
         shell:
              'gatk --java-options {params.java_opts} GenotypeGVCFs '
              '--reference {input.ref} --variant {input.gvcf} '
-             '--TMP_DIR {params.tmp} --output {output} &> {log}'
+             '--tmp-dir {params.tmp} --output {output} &> {log}'
 
 
     rule SelectVariants:
@@ -1562,7 +1566,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk SelectVariants --reference {input.ref} '
             '--variant {input.vcf} --select-type-to-include {wildcards.mode} '
-            '--TMP_DIR {params.tmp} --output {output} &> {log}'
+            '--tmp-dir {params.tmp} --output {output} &> {log}'
 
 
     rule VariantRecalibrator_SNPs:
@@ -1599,7 +1603,7 @@ if not ALLELE_SPECIFIC:
             '--max-gaussians {params.max_gaussians} '
             '{params.known} {params.truth} {params.training1} '
             '{params.training2} {params.extra} '
-            '--TMP_DIR {params.tmp} &> {log}'
+            '--tmp-dir {params.tmp} &> {log}'
 
 
     rule VariantRecalibrator_INDELs:
@@ -1631,7 +1635,7 @@ if not ALLELE_SPECIFIC:
             '--output {output.recal} --tranches-file {output.tranches} '
             '--max-gaussians {params.max_gaussians} '
             '{params.known} {params.mills} {params.extra} '
-            '--TMP_DIR {params.tmp} &> {log}'
+            '--tmp-dir {params.tmp} &> {log}'
 
     rule ApplyVQSR:
         input:
@@ -1654,7 +1658,7 @@ if not ALLELE_SPECIFIC:
             '--tranches-file {input.tranches} --mode {wildcards.mode} '
             '--exclude-filtered --recal-file {input.recal} '
             '--truth-sensitivity-filter-level 99.0 '
-            '--TMP_DIR {params.tmp} --output {output} &> {log}'
+            '--tmp-dir {params.tmp} --output {output} &> {log}'
 
 
     rule MergeVCFs:
@@ -1814,7 +1818,7 @@ if not ALLELE_SPECIFIC:
     rule extractHAIRS:
         input:
             vcf = rules.SplitVCFS.output,
-            bam = rules.coordinate_sort_gatk.output
+            bam = rules.remove_duplicates.output.bam
         output:
             'allele/hapcut2/{region}/{cell_type}-{region}.fragments'
         group:
@@ -1849,7 +1853,7 @@ if not ALLELE_SPECIFIC:
     rule run_hapcompass:
         input:
             vcf = rules.SplitVCFS.output,
-            bam = rules.coordinate_sort_gatk.output
+            bam = rules.remove_duplicates.output.bam
         output:
             expand(
                 'allele/hapcompass/{{cell_type}}-{{region}}_{ext}',
