@@ -1335,8 +1335,10 @@ if not ALLELE_SPECIFIC:
             'logs/merge_bam_cell_type_gatk/{cell_type}.log'
         conda:
             f'{ENVS}/samtools.yaml'
+        threads:
+            max(1, (THREADS - 1) / 2)
         shell:
-            'samtools merge -O bam,level=0 -n - {input} '
+            'samtools merge -@ {threads} -O bam,level=0 -n - {input} '
             '> {output} 2> {log}'
 
 
@@ -1367,8 +1369,10 @@ if not ALLELE_SPECIFIC:
             'logs/addReadGroup/{cell_type}.log'
         conda:
             f'{ENVS}/samtools.yaml'
+        threads:
+            max(1, (THREADS - 1) / 2)
         shell:
-            'samtools addreplacerg -O bam,level=0 '
+            'samtools addreplacerg -@ {threads} '
             '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cell_type}" '
             '{input} > {output} 2> {log}'
 
@@ -1408,7 +1412,8 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools markdup -rsf {output.qc} {input} {output.bam} &> {log}'
+            'samtools markdup -@ {threads} -rsf {output.qc} {input} '
+            '{output.bam} &> {log}'
 
 
     rule index_gatk:
