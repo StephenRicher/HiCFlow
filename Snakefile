@@ -1360,7 +1360,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.fixmate.output
         output:
-            'mapped/merged_by_cell/{cell_type}.fixed-RG.bam'
+            temp('mapped/merged_by_cell/{cell_type}.fixed-RG.bam')
         group:
             'merge_cell'
         log:
@@ -1383,7 +1383,7 @@ if not ALLELE_SPECIFIC:
         params:
             mem = '1G'
         threads:
-            THREADS - 3 if THREADS > 3 else 1
+            THREADS - 2 if THREADS > 2 else 1
         log:
             'logs/coordinate_sort_gatk/{cell_type}.log'
         conda:
@@ -1402,7 +1402,7 @@ if not ALLELE_SPECIFIC:
         group:
             'dedup'
         threads:
-            THREADS
+            2 if THREADS - 2 > 1 else 1
         log:
             'logs/remove_duplicates/{cell_type}.log'
         conda:
