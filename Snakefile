@@ -1377,7 +1377,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.addReadGroup.output
         output:
-            'mapped/merged_by_cell/{cell_type}.sort.bam'
+            pipe('mapped/merged_by_cell/{cell_type}.sort.bam')
         group:
             'merge_cell'
         params:
