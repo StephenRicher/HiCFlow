@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import re
 import sys
 import tempfile
@@ -1338,8 +1339,8 @@ if not ALLELE_SPECIFIC:
         threads:
             max(1, (THREADS - 1) / 2)
         shell:
-            'samtools merge -@ {threads} -O bam,level=0 -n - {input} '
-            '> {output} 2> {log}'
+            'samtools merge -@ {threads} -O bam,level=0 '
+            '-n - {input} > {output} 2> {log}'
 
 
     rule fixmate:
@@ -1354,8 +1355,8 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools fixmate -O bam,level=0 -pmr {input} - '
-            '> {output} 2> {log}'
+            'samtools fixmate -O bam,level=0 '
+            '-pmr {input} - > {output} 2> {log}'
 
 
     rule addReadGroup:
@@ -1372,7 +1373,7 @@ if not ALLELE_SPECIFIC:
         threads:
             max(1, (THREADS - 1) / 2)
         shell:
-            'samtools addreplacerg -@ {threads} '
+            'samtools addreplacerg -@ {threads} -O bam,level=-1 '
             '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cell_type}" '
             '{input} > {output} 2> {log}'
 
@@ -1412,8 +1413,8 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools markdup -@ {threads} -rsf {output.qc} {input} '
-            '{output.bam} &> {log}'
+            'samtools markdup -@ {threads} -O bam,level=-1 '
+            '-rsf {output.qc} {input} {output.bam} &> {log}'
 
 
     rule index_gatk:
@@ -1435,7 +1436,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.bgzip_genome.output
         output:
-            f'{rules.bgzip_genome.output}.dict'
+            f'{BUILD}.dict'
         params:
             tmp = config['tmpdir']
         log:
