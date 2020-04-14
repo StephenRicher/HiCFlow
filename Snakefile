@@ -1377,13 +1377,13 @@ if not ALLELE_SPECIFIC:
         input:
             rules.addReadGroup.output
         output:
-            pipe('mapped/merged_by_cell/{cell_type}.sort.bam')
+            temp('mapped/merged_by_cell/{cell_type}.sort.bam')
         group:
             'merge_cell'
         params:
             mem = '1G'
         threads:
-            THREADS - 4 if THREADS > 4 else 1
+            THREADS - 3 if THREADS > 3 else 1
         log:
             'logs/coordinate_sort_gatk/{cell_type}.log'
         conda:
@@ -1399,8 +1399,8 @@ if not ALLELE_SPECIFIC:
         output:
             bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam',
             qc = 'qc/remove_duplicates/{cell_type}.txt'
-        group:
-            'merge_cell'
+        threads:
+            THREADS
         log:
             'logs/remove_duplicates/{cell_type}.log'
         conda:
