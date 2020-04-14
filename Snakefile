@@ -1328,7 +1328,7 @@ if not ALLELE_SPECIFIC:
             lambda wildcards: expand('mapped/{pre_sample}.pair.bam',
                 pre_sample = CELL_TYPES[wildcards.cell_type])
         output:
-            pipe('mapped/{cell_type}/{cell_type}.merged.bam')
+            pipe('mapped/merged_by_cell/{cell_type}.merged.bam')
         group:
             'merge_cell'
         log:
@@ -1344,7 +1344,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.merge_bam_cell_type_gatk.output
         output:
-            pipe('mapped/{cell_type}/{cell_type}.fixed.bam')
+            pipe('mapped/merged_by_cell/{cell_type}.fixed.bam')
         group:
             'merge_cell'
         log:
@@ -1360,7 +1360,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.fixmate.output
         output:
-            pipe('mapped/{cell_type}/{cell_type}.fixed-RG.bam')
+            'mapped/merged_by_cell/{cell_type}.fixed-RG.bam'
         group:
             'merge_cell'
         log:
@@ -1377,9 +1377,9 @@ if not ALLELE_SPECIFIC:
         input:
             rules.addReadGroup.output
         output:
-            pipe('mapped/{cell_type}/{cell_type}.sort.bam')
+            pipe('mapped/merged_by_cell/{cell_type}.sort.bam')
         group:
-            'merge_cell'
+            'dedup'
         params:
             mem = '1G'
         threads:
@@ -1397,10 +1397,10 @@ if not ALLELE_SPECIFIC:
         input:
             rules.coordinate_sort_gatk.output
         output:
-            bam = 'mapped/{cell_type}/{cell_type}.dedup.bam',
+            bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam',
             qc = 'qc/remove_duplicates/{cell_type}.txt'
         group:
-            'merge_cell'
+            'dedup'
         threads:
             THREADS
         log:
