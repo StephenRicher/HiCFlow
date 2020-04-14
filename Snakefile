@@ -1397,7 +1397,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.coordinate_sort_gatk.output
         output:
-            bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam'
+            bam = 'mapped/merged_by_cell/{cell_type}.dedup.bam',
             qc = 'qc/remove_duplicates/{cell_type}.txt'
         group:
             'merge_cell'
