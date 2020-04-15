@@ -123,8 +123,6 @@ rule all:
          [expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
                 region=REGIONS.index, cell_type=list(CELL_TYPES)),
           expand('allele/hapcut2/{cell_type}-phased.vcf',
-                cell_type=list(CELL_TYPES)),
-          expand('allele/hapcompass/{cell_type}-phased.vcf.gz',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 
 
@@ -1466,7 +1464,6 @@ if not ALLELE_SPECIFIC:
             recal_table = 'gatk/recalibation/{cell_type}.recal.table'
         params:
             tmp = config['tmpdir'],
-            intervals = config['protocol']['regions'],
             known = known_sites(config['known_sites']),
             extra = ''
         log:
@@ -1476,7 +1473,7 @@ if not ALLELE_SPECIFIC:
         shell:
              'gatk BaseRecalibrator {params.extra} {params.known} '
              '--input {input.bam} --reference {input.ref} '
-             '--output {output.recal_table} --intervals {params.intervals} '
+             '--output {output.recal_table} '
              '--sequence-dictionary {input.ref_dict} '
              '--tmp-dir {params.tmp} &> {log}'
 
@@ -1493,7 +1490,6 @@ if not ALLELE_SPECIFIC:
             'mapped/merged_by_cell/{cell_type}.recalibrated.bam'
         params:
             tmp = config['tmpdir'],
-            intervals = config['protocol']['regions'],
             extra = ''
         log:
             'logs/gatk/ApplyBQSR/{cell_type}.log'
@@ -1505,7 +1501,6 @@ if not ALLELE_SPECIFIC:
             'gatk ApplyBQSR {params.extra} '
             '--input {input.bam} --reference {input.ref} '
             '--bqsr-recal-file {input.recal_table} --output {output} '
-            '--intervals {params.intervals} '
             '--tmp-dir {params.tmp} &> {log}'
 
 
@@ -1520,7 +1515,6 @@ if not ALLELE_SPECIFIC:
             'gatk/{cell_type}-g.vcf.gz'
         params:
             tmp = config['tmpdir'],
-            intervals = config['protocol']['regions'],
             java_opts = '-Xmx6G',
             extra = ''
         log:
@@ -1530,7 +1524,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk --java-options {params.java_opts} HaplotypeCaller '
             '{params.extra} --input {input.bam} --output {output} '
-            '--reference {input.ref}  --intervals {params.intervals} '
+            '--reference {input.ref} '
             '--tmp-dir {params.tmp} -ERC GVCF &> {log}'
 
 
