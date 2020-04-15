@@ -119,7 +119,7 @@ rule all:
                 region=REGIONS.index, bin=BINS),
          expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
                 region=REGIONS.index, bin=BINS,
-                group1 = list(GROUPS), group2 = list(GROUPS))] if 1 == 0 else [],
+                group1 = list(GROUPS), group2 = list(GROUPS))],
          [expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
                 region=REGIONS.index, cell_type=list(CELL_TYPES)),
           expand('allele/hapcut2/{cell_type}-phased.vcf',
