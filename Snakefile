@@ -122,8 +122,8 @@ rule all:
                 group1 = list(GROUPS), group2 = list(GROUPS))] if 1 == 0 else [],
          [expand('qc/variant_quality/{cell_type}-{region}-bcftools_stats.txt',
                 region=REGIONS.index, cell_type=list(CELL_TYPES)),
-          expand('allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF',
-                region=REGIONS.index, cell_type=list(CELL_TYPES)),
+          expand('allele/hapcut2/{cell_type}-phased.vcf',
+                cell_type=list(CELL_TYPES)),
           expand('allele/hapcompass/{cell_type}-phased.vcf.gz',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 
@@ -1436,7 +1436,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.bgzip_genome.output
         output:
-            f'{BUILD}.dict'
+            f'genome/{BUILD}.dict'
         params:
             tmp = config['tmpdir']
         log:
@@ -1842,7 +1842,6 @@ if not ALLELE_SPECIFIC:
     rule hapCut2:
         input:
             fragments = rules.extractHAIRS.output,
-            #vcf = rules.sort_vcf.output
             vcf = rules.SplitVCFS.output
         output:
             block = 'allele/hapcut2/{region}/{cell_type}-{region}',
@@ -1856,6 +1855,75 @@ if not ALLELE_SPECIFIC:
         shell:
             'HAPCUT2 --hic 1 --fragments {input.fragments} '
             '--VCF {input.vcf} --outvcf 1 --out {output.block} &> {log}'
+
+
+    rule bgzipPhased:
+        input:
+            rules.hapCut2.output.vcf
+        output:
+            f'{rules.hapCut2.output.vcf}.gz'
+        log:
+            'logs/bgzip_phased/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/tabix.yaml'
+        shell:
+            'bgzip --stdout {input} > {output} 2> {log}'
+
+
+    rule indexPhased:
+        input:
+            rules.bgzipPhased.output
+        output:
+            f'{rules.bgzipPhased.output}.tbi'
+        log:
+            'logs/index_phased/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/tabix.yaml'
+        shell:
+            'tabix {input} &> {log}'
+
+
+    rule extractBestBlock:
+        input:
+            rules.hapCut2.output.block
+        output:
+            'allele/hapcut2/{region}/{cell_type}-{region}.tsv'
+        log:
+            'logs/extractBestPhase/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/coreutils.yaml'
+        shell:
+            '{SCRIPTS}/extract_best_hapcut2.sh {input} > {output} 2> {log}'
+
+
+    rule extractVCF:
+        input:
+            block = rules.extractBestBlock.output,
+            vcf = rules.bgzipPhased.output,
+            vcf_index = rules.indexPhased.output
+        output:
+            'allele/hapcut2/{region}/{cell_type}-{region}-best.vcf'
+        log:
+            'logs/extractVCF/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools view -R {input.block} {input.vcf} > {output} 2> {log}'
+
+
+    rule mergeVCFsbyRegion:
+        input:
+            vcfs = expand(
+                'allele/hapcut2/{region}/{{cell_type}}-{region}-best.vcf',
+                region = REGIONS.index),
+        output:
+            'allele/hapcut2/{cell_type}-phased.vcf'
+        log:
+            'logs/mergeVCFsbyRegion/{cell_type}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools concat {input.vcfs} > {output} 2> {log}'
 
 
     rule run_hapcompass:
