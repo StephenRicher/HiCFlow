@@ -391,7 +391,7 @@ rule hicup_digest:
 
 
 def hicup_map_index(wildcards):
-    """ Retrieve cell type associated with sample. """
+    """ Retrieve bowtie2 index associated with sample. """
 
     if ALLELE_SPECIFIC:
         for cell_type, samples in CELL_TYPES.items():
@@ -406,6 +406,20 @@ def hicup_map_index(wildcards):
             build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
 
 
+def hicup_map_basename(wildcards):
+    """ Retrieve bowtie2 index basename associated with sample. """
+
+    if ALLELE_SPECIFIC:
+        for cell_type, samples in CELL_TYPES.items():
+            if wildcards.pre_sample in samples:
+                type = cell_type
+
+        return expand('genome/index/{build}-{cell_type}',
+            build=BUILD, cell_type=type)
+    else:
+        return expand('genome/index/{build}', build=BUILD)
+
+
 rule hicup_map:
     input:
         reads = rules.cutadapt.output.trimmed,
@@ -414,7 +428,7 @@ rule hicup_map:
         mapped = 'mapped/{pre_sample}.pair.bam',
         summary = 'qc/hicup/{pre_sample}-map-summary.txt'
     params:
-        basename = f'genome/index/{BUILD}'
+        basename = hicup_map_basename
     threads:
         12
     log:
