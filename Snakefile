@@ -200,7 +200,7 @@ if ALLELE_SPECIFIC:
             expand('genome/index/{build}-{{cell_type}}.{n}.bt2',
                    build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
         params:
-            basename = f'genome/index/{BUILD}'
+            basename = lambda wc: f'genome/index/{BUILD}-{wc.cell_type}'
         log:
             f'logs/bowtie2Build/{BUILD}-{{cell_type}}.log'
         conda:
