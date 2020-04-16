@@ -71,7 +71,7 @@ REGIONS = load_regions(config['protocol']['regions'])
 
 if config['data']['phased_vcf']:
     PHASED_VCFS = load_vcf_paths(config['data']['phased_vcf'], samples)
-    workdir: config['workdir'] + 'allele'
+    workdir: config['workdir'] + '/allele'
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
     ALLELE_SPECIFIC = True
 else:
@@ -131,7 +131,7 @@ rule mask_genome:
         genome = config['genome']['sequence'],
         vcf = lambda wc: PHASED_VCFS[wc.cell_type]
     output:
-        f'allele/genome/masked/{BUILD}-{{cell_type}}.fa'
+        f'genome/masked/{BUILD}-{{cell_type}}.fa'
     log:
         'logs/mask_genome/{cell_type}.log'
     conda:
@@ -146,7 +146,7 @@ rule reformat_SNPsplit:
     input:
         vcf = lambda wc: PHASED_VCFS[wc.cell_type]
     output:
-        'allele/snpsplit/{cell_type}-snpsplit.txt'
+        'snpsplit/{cell_type}-snpsplit.txt'
     log:
         'logs/reformat_SNPsplit/{cell_type}.log'
     conda:
@@ -599,7 +599,7 @@ def SNPsplit_input(wildcards):
         if wildcards.pre_sample in samples:
             type = cell_type
 
-    return f'allele/snpsplit/{type}-snpsplit.txt'
+    return f'snpsplit/{type}-snpsplit.txt'
 
 
 rule SNPsplit:
@@ -607,12 +607,12 @@ rule SNPsplit:
         bam = rules.hicup_deduplicate.output.deduped,
         snps = SNPsplit_input
     output:
-        expand('allele/snpsplit/{{pre_sample}}.matepairs.{ext}',
+        expand('snpsplit/{{pre_sample}}.matepairs.{ext}',
             ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
                    'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
                    'UA_UA.bam', 'allele_flagged.bam'])
     params:
-        outdir = 'allele/snpsplit/'
+        outdir = 'snpsplit/'
     log:
         'logs/SNPsplit/SNPsplit-{pre_sample}.log'
     conda:
@@ -624,12 +624,12 @@ rule SNPsplit:
 
 rule merge_SNPsplit:
     input:
-        'allele/snpsplit/{pre_group}-{rep}.matepairs.G{allele}_G{allele}.bam',
-        'allele/snpsplit/{pre_group}-{rep}.matepairs.G{allele}_UA.bam'
+        'snpsplit/{pre_group}-{rep}.matepairs.G{allele}_G{allele}.bam',
+        'snpsplit/{pre_group}-{rep}.matepairs.G{allele}_UA.bam'
     output:
-        'allele/snpsplit/merged/{pre_group}_g{allele}-{rep}.matepairs.bam'
+        'snpsplit/merged/{pre_group}_g{allele}-{rep}.matepairs.bam'
     log:
-        'logs/allele/merge_SNPsplit/{pre_group}_g{allele}-{rep}.log'
+        'logs/merge_SNPsplit/{pre_group}_g{allele}-{rep}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -766,7 +766,7 @@ rule multibamqc:
 
 def split_input(wildcards):
     if ALLELE_SPECIFIC:
-        return 'allele/snpsplit/merged/{sample}.matepairs.bam'
+        return 'snpsplit/merged/{sample}.matepairs.bam'
     else:
         return f'mapped/{wildcards.sample}.dedup.bam'
 
