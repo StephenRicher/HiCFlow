@@ -1515,6 +1515,7 @@ if not ALLELE_SPECIFIC:
             'gatk/{cell_type}-g.vcf.gz'
         params:
             tmp = config['tmpdir'],
+            intervals = config['protocol']['regions'],
             java_opts = '-Xmx6G',
             extra = ''
         log:
@@ -1524,7 +1525,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk --java-options {params.java_opts} HaplotypeCaller '
             '{params.extra} --input {input.bam} --output {output} '
-            '--reference {input.ref} '
+            '--reference {input.ref} --intervals {params.intervals} '
             '--tmp-dir {params.tmp} -ERC GVCF &> {log}'
 
 
