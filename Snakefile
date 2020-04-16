@@ -71,7 +71,7 @@ REGIONS = load_regions(config['protocol']['regions'])
 
 if config['data']['phased_vcf']:
     PHASED_VCFS = load_vcf_paths(config['data']['phased_vcf'], samples)
-    workdir: config['workdir'] + 'allele_specific'
+    workdir: config['workdir'] + 'allele'
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
     ALLELE_SPECIFIC = True
 else:
@@ -98,12 +98,12 @@ wildcard_constraints:
 
 if ALLELE_SPECIFIC:
     wildcard_constraints:
-        group = r'[^-\/]+_g\d+',
-        sample = r'[^-\/]+_g\d+-\d+'
+        group = r'[^-\.\/]+_g\d+',
+        sample = r'[^-\.\/]+_g\d+-\d+'
 else:
     wildcard_constraints:
-        group = r'[^-\/g]+',
-        sample = r'[^-\/g]+-\d+'
+        group = r'[^-\.\/g]+',
+        sample = r'[^-\.\/g]+-\d+'
 
 
 rule all:
@@ -1862,7 +1862,7 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/tabix.yaml'
         shell:
-            'bgzip --stdout {input} > {output} 2> {log}'
+            'bgzip -c {input} > {output} 2> {log}'
 
 
     rule indexPhased:
