@@ -41,8 +41,8 @@ default_config = {
         {'shortest' :    150     ,
          'longest' :     850     ,},
     'HiCcompare':
-        {'fdr' :         0.01    ,
-         'logFC' :       1       ,},
+        {'fdr' :         0.05    ,
+         'logFC' :       0       ,},
     'binsize':           [5000, 10000],
     'fastq_screen':      None,
     'tmpdir':            tempfile.gettempdir()
