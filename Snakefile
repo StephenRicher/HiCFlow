@@ -780,7 +780,7 @@ rule multibamqc:
 
 def split_input(wildcards):
     if ALLELE_SPECIFIC:
-        return 'snpsplit/merged/{sample}.matepairs.bam'
+        return 'snpsplit/merged/{sample}.dedup.bam'
     else:
         return f'mapped/{wildcards.sample}.dedup.bam'
 
