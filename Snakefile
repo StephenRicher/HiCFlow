@@ -621,7 +621,7 @@ rule SNPsplit:
         bam = rules.hicup_deduplicate.output.deduped,
         snps = SNPsplit_input
     output:
-        expand('snpsplit/{{pre_sample}}.matepairs.{ext}',
+        expand('snpsplit/{{pre_sample}}.dedup.{ext}',
             ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
                    'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
                    'UA_UA.bam', 'allele_flagged.bam'])
@@ -638,10 +638,10 @@ rule SNPsplit:
 
 rule merge_SNPsplit:
     input:
-        'snpsplit/{pre_group}-{rep}.matepairs.G{allele}_G{allele}.bam',
-        'snpsplit/{pre_group}-{rep}.matepairs.G{allele}_UA.bam'
+        'snpsplit/{pre_group}-{rep}.dedup.G{allele}_G{allele}.bam',
+        'snpsplit/{pre_group}-{rep}.dedup.G{allele}_UA.bam'
     output:
-        'snpsplit/merged/{pre_group}_g{allele}-{rep}.matepairs.bam'
+        'snpsplit/merged/{pre_group}_g{allele}-{rep}.dedup.bam'
     log:
         'logs/merge_SNPsplit/{pre_group}_g{allele}-{rep}.log'
     conda:
