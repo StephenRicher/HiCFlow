@@ -1085,7 +1085,7 @@ rule OnTAD:
     params:
         bin = BINS,
         region = REGIONS.index,
-        chr = lambda wc: re.sub('chr', '', REGIONS['chr'][wc.region]),
+        chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'matrices/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
     log:
@@ -1202,7 +1202,7 @@ rule straw:
         'logs/straw/{all}-{region}-{bin}.log'
     params:
         # Strip 'chr' as juicer removes by default
-        chr = lambda wc: re.sub('chr', '', REGIONS['chr'][wc.region]),
+        chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         start = lambda wildcards: REGIONS['start'][wildcards.region],
         end = lambda wildcards: REGIONS['end'][wildcards.region],
     conda:
