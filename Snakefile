@@ -949,7 +949,8 @@ rule plotMatrix:
         '--region {params.chr}:{params.start}-{params.end} '
         '--colorMap {params.colour} '
         '--title {params.title} '
-        '--vMin 0 --vMax 2 --dpi {params.dpi} &> {log}'
+        '--vMin 0 --vMax 2 --dpi {params.dpi} '
+        '&> {log} || touch {output}'
 
 
 rule TadInsulation:
