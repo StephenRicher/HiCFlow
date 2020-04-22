@@ -20,29 +20,34 @@ if not config:
 # Defaults configuration file - use empty string to represent no default value.
 default_config = {
     'workdir':           workflow.basedir,
-    'threads':           1,
+    'threads':           1          ,
     'data':
-        {'samples':      ''      ,
-         'phased_vcf':   None    ,},
+        {'samples':      ''         ,
+         'phased_vcf':   None       ,},
     'genome':
-        {'build':        'genome',
-         'sequence':     ''      ,
-         'genes':        None    ,
-         'ctcf':         None    ,
-         'ctcf_orient':  None    ,},
+        {'build':        'genome'    ,
+         'sequence':     ''          ,
+         'genes':        None        ,
+         'ctcf':         None        ,
+         'ctcf_orient':  None        ,},
     'protocol':
-        {'regions':      ''      ,
-         're1':          'enzyme',
-         're1_seq':      ''      ,
-         're2':          None    ,
-         're2_seq':      None    ,
-         'arima':        False   ,},
+        {'regions':      ''          ,
+         're1':          'enzyme'    ,
+         're1_seq':      ''          ,
+         're2':          None        ,
+         're2_seq':      None        ,
+         'arima':        False       ,},
     'hicup':
-        {'shortest' :    150     ,
-         'longest' :     850     ,},
+        {'shortest' :    150          ,
+         'longest' :     850          ,},
     'HiCcompare':
-        {'fdr' :         0.05    ,
-         'logFC' :       0       ,},
+        {'fdr' :         0.05         ,
+         'logFC' :       0            ,},
+    'compareMatrices':
+        {'operation' :   'log2ratio'  ,
+         'colourmap' :   'bwr'        ,
+         'vmin' :        -4           ,
+         'vmax' :        4            ,},
     'binsize':           [5000, 10000],
     'fastq_screen':      None,
     'tmpdir':            tempfile.gettempdir()
@@ -124,9 +129,15 @@ phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
 
 rule all:
     input:
-        preQC_mode,
-        HiC_mode,
-        phase_gatk
+        #preQC_mode,
+        #HiC_mode,
+        #phase_gatk,
+        expand('matrices/{region}/{bin}/plots/configs/{region}-{bin}-{group1}-vs-{group2}-compare.ini',
+            region=REGIONS.index, bin=BINS,
+            group1 = list(GROUPS), group2 = list(GROUPS)),
+        expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
+            region=REGIONS.index, bin=BINS,
+            group1 = list(GROUPS), group2 = list(GROUPS))
 
 
 rule maskPhased:
@@ -955,7 +966,7 @@ rule plotMatrix:
 
 rule TadInsulation:
     input:
-        rules.IceMatrix.output
+        rules.IceMatrix.output.matrix
     output:
         expand(
             'matrices/{{region}}/{{bin}}/tads/{{all}}-{{region}}-{{bin}}_{ext}',
@@ -1014,6 +1025,24 @@ rule detectLoops:
         '--peakInteractionsThreshold {params.peakInter} '
         '--threads {threads} '
         '&> {log} || touch {output} && touch {output} '
+
+
+rule compareMatrices:
+    input:
+        expand('matrices/{{region}}/{{bin}}/ice/{group}-{{region}}-{{bin}}.h5',
+               group = list(GROUPS))
+    output:
+        expand('matrices/{{region}}/{{bin}}/ice/{group1}-vs-{group2}-{{region}}-{{bin}}.h5',
+               group1 = list(GROUPS), group2 = list(GROUPS))
+    log:
+        'logs/compareMatrices/{region}-{bin}.log'
+    params:
+        operation = config['compareMatrices']['operation']
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        '{SCRIPTS}/compareMatrices.py --operation {params.operation} '
+        '{input} &> {log}'
 
 
 rule reformatHomer:
@@ -1285,6 +1314,37 @@ rule filterHiCcompare:
         '--p_value {params.p_value} --log_fc {params.log_fc} {input} &> {log}'
 
 
+rule createCompareConfig:
+    input:
+        matrix = 'matrices/{region}/{bin}/ice/{group1}-vs-{group2}-{region}-{bin}.h5',
+        links = ['HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up.links',
+                 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down.links'],
+        genes = rules.reformatGenes.output
+    output:
+        'matrices/{region}/{bin}/plots/configs/{region}-{bin}-{group1}-vs-{group2}-compare.ini',
+    params:
+        ctcf_orientation = config['genome']['ctcf_orient'],
+        ctcf = config['genome']['ctcf'],
+        depth = lambda wc: int(REGIONS['length'][wc.region] / 1.5),
+        sample = lambda wc: f'{wc.group1}-over-{wc.group2}',
+        colourmap = config['compareMatrices']['colourmap'],
+        vmin = config['compareMatrices']['vmin'],
+        vmax = config['compareMatrices']['vmax']
+
+    log:
+        'logs/createCompareConfig/{region}-{bin}-{group1}-{group2}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/generate_config.py '
+        '--sample {params.sample} --matrix {input.matrix} '
+        '--genes {input.genes} --links {input.links} '
+        '--ctcfs {params.ctcf} --ctcf_orientation {params.ctcf_orientation} '
+        '--depth {params.depth} --colourmap {params.colourmap} '
+        '--vmin {params.vmin} --vmax {params.vmax} > {output} 2> {log}'
+
+
+# Deprecetated rule
 rule mergeConfigs:
     input:
         links_up = expand(
@@ -1318,7 +1378,8 @@ rule mergeConfigs:
 
 rule plotAnalysis:
     input:
-        'matrices/{region}/{bin}/plots/configs/{region}-{bin}-{group1}-vs-{group2}.ini'
+        rules.createCompareConfig.output
+        #'matrices/{region}/{bin}/plots/configs/{region}-{bin}-{group1}-vs-{group2}.ini'
     output:
         'matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png'
     params:
