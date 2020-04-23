@@ -5,7 +5,7 @@ import re
 import sys
 import tempfile
 import pandas as pd
-from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, get_allele_groupings
+from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, load_genomes, get_allele_groupings
 
 BASE = workflow.basedir
 
@@ -25,7 +25,8 @@ default_config = {
         {'samples':      ''         ,
          'phased_vcf':   None       ,},
     'genome':
-        {'build':        'genome'    ,
+        {'table':        ''          ,
+         'build':        'genome'    ,
          'sequence':     ''          ,
          'genes':        None        ,
          'ctcf':         None        ,
@@ -42,7 +43,7 @@ default_config = {
          'longest' :     850          ,},
     'HiCcompare':
         {'fdr' :         0.05         ,
-         'logFC' :       0            ,},
+         'logFC' :       1            ,},
     'compareMatrices':
         {'operation' :   'log2ratio'  ,
          'colourmap' :   'bwr'        ,
@@ -111,7 +112,7 @@ else:
         sample = r'[^-\.\/g]+-\d+'
 
 preQC_mode = ['qc/multiqc', 'qc/multiBamQC', 'qc/filterQC/ditag_length.png']
-HiC_mode = [expand('matrices/{region}/{bin}/plots/{all}-{region}-{bin}.png',
+HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('matrices/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS),
@@ -120,7 +121,9 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS),
             expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
                 region=REGIONS.index, bin=BINS,
-                group1 = list(GROUPS), group2 = list(GROUPS))],
+                group1 = list(GROUPS), group2 = list(GROUPS)),
+            expand('matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png',
+                region=REGIONS.index, bin=BINS, group=list(GROUPS))]
 phase_gatk = [expand('allele/hapcut2/{cell_type}-phased.vcf',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
@@ -129,15 +132,9 @@ phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
 
 rule all:
     input:
-        #preQC_mode,
-        #HiC_mode,
-        #phase_gatk,
-        expand('matrices/{region}/{bin}/plots/configs/{region}-{bin}-{group1}-vs-{group2}-compare.ini',
-            region=REGIONS.index, bin=BINS,
-            group1 = list(GROUPS), group2 = list(GROUPS)),
-        expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
-            region=REGIONS.index, bin=BINS,
-            group1 = list(GROUPS), group2 = list(GROUPS))
+        preQC_mode,
+        HiC_mode,
+        phase_gatk,
 
 
 rule maskPhased:
@@ -942,7 +939,7 @@ rule plotMatrix:
     input:
         rules.distanceNormalise.output
     output:
-        'matrices/{region}/{bin}/plots/{all}-{region}-{bin}.png'
+        'matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1170,6 +1167,29 @@ rule createConfig:
         '-d {params.depth} > {output} 2> {log}'
 
 
+rule plotHiC:
+    input:
+        rules.createConfig.output
+    output:
+        'matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region],
+        title = lambda wc: f'{wc.group} - {wc.region} at {wc.bin} bin size',
+        dpi = 600
+    log:
+        'logs/plotHiC/{group}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/pygenometracks.yaml'
+    shell:
+        'pyGenomeTracks --tracks {input} '
+        '--region {params.chr}:{params.start}-{params.end} '
+        '--outFileName {output} '
+        '--title {params.title} '
+        '--dpi {params.dpi} &> {log}'
+
+
 rule mergeBamByReplicate:
     input:
         lambda wildcards: expand(
@@ -1376,10 +1396,9 @@ rule mergeConfigs:
             '--prefix {params.prefix} &> {log}'
 
 
-rule plotAnalysis:
+rule plotCompare:
     input:
         rules.createCompareConfig.output
-        #'matrices/{region}/{bin}/plots/configs/{region}-{bin}-{group1}-vs-{group2}.ini'
     output:
         'matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png'
     params:
