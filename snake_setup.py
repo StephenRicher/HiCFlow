@@ -149,6 +149,14 @@ def load_vcf_paths(phased_vcfs, samples):
     return vcfs
 
 
+def load_genomes(genomes_path):
+    genomes = pd.read_table(
+        genomes_path, squeeze=True,
+        names=['cell_type', 'path'],
+        index_col='cell_type', sep = ',')
+    return genomes
+
+
 def get_allele_groupings(samples):
 
     allele_groups = defaultdict(list)
