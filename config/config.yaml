@@ -5,8 +5,7 @@ data:
     samples: /media/stephen/Data/HiC-subsample/config/samples.csv
     phased_vcf: #/media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
 genome :
-    build :  hg38
-    sequence : /media/stephen/Data/HiC-subsample/data/Homo_sapiens_assembly38.fasta.gz
+    table : /media/stephen/Data/HiC-subsample/config/genomes.csv
     genes : /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
     ctcf : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
            /home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
@@ -25,7 +24,7 @@ hicCompare:
     fdr:
     logFC:
 gatk:
-    
+
 fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
 binsize : [5000, 10000]
 
