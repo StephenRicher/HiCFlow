@@ -521,7 +521,7 @@ rule plotQC:
                fig=['trans_stats.csv', 'insert_size_frequency.png',
                     'ditag_length.png'])
     params:
-        outdir = 'qc/filter_qc'
+        outdir = 'qc/filterQC'
     log:
         'logs/plot_filter/plot_subsample.log'
     conda:
@@ -530,21 +530,21 @@ rule plotQC:
         '{SCRIPTS}/figures/plot_filter.R {params.outdir} {input} 2> {log}'
 
 
-def hicup_filter_digest(wildcards):
-    """ Retrieve hicup filter digest file associated with sample. """
+def getHicupDigest(wildcards):
+    """ Retrieve hicup filter digest file associated with pre_sample. """
 
     for cell_type, samples in CELL_TYPES.items():
         if wildcards.pre_sample in samples:
             type = cell_type
 
-    return expand('genome/digest/{cell_type}-{re1}-pyHiCtools-digest.txt',
+    return expand('genome/digest/{cell_type}-{re1}-hicup-digest.txt.gz',
         cell_type=type, re1=RE1)
 
 
 rule hicupFilter:
     input:
         bam = rules.hicupMap.output.mapped,
-        digest = hicup_filter_digest
+        digest = getHicupDigest
     output:
         filtered = 'mapped/{pre_sample}.filt.bam',
         summary = 'qc/hicup/{pre_sample}-filter-summary.txt',
@@ -1223,33 +1223,20 @@ rule reformatPre:
         '| awk -f {SCRIPTS}/bam_to_pre.awk > {output}) 2> {log} '
 
 
-def all2allele(all):
-    """ Convert list of sample and groups to allele specific versions """
-
-    allele_all = []
-    for name in all:
-        if '-' in name:
-            group = name.split('-')[0]
-            rep = name.split('-')[1]
-            allele_names = [f'{group}_g1', f'{group}_g2',
-                            f'{group}_g1-{rep}', f'{group}_g2-{rep}']
-            allele_all.extend(allele_names)
-    return allele_all
-
-
 def getChromSizes(wildcards):
     """ Retrieve chromSizes file associated with group or sample. """
 
     for cell_type, samples in CELL_TYPES.items():
-        groups = [sample.split('-')[0] for sample in samples]
-        all = samples + groups
         if ALLELE_SPECIFIC:
-            all = all2allele(all)
+            groups, samples = get_allele_groupings(samples)
+            groups = list(groups) # Get keys from dictionary as list
+        else:
+            groups = [sample.split('-')[0] for sample in samples]
+        all = samples + groups
         if wildcards.all in all:
             type = cell_type
 
-    return expand('genome/index/{cell_type}.{n}.bt2',
-        cell_type=type, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+    return expand('genome/chrom_sizes/{cell_type}.chrom.sizes', cell_type=type)
 
 
 rule juicerPre:
@@ -1914,7 +1901,8 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
-            'bcftools view -R {input.block} {input.vcf} > {output} 2> {log}'
+            'bcftools view -R {input.block} {input.vcf} '
+            '> {output} 2> {log} || touch {output}'
 
 
     rule mergeVCFsbyRegion:
