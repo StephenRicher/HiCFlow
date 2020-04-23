@@ -25,9 +25,7 @@ default_config = {
         {'samples':      ''         ,
          'phased_vcf':   None       ,},
     'genome':
-        {'table':        ''          ,
-         'build':        'genome'    ,
-         'sequence':     ''          ,
+        {'table':        None        ,
          'genes':        None        ,
          'ctcf':         None        ,
          'ctcf_orient':  None        ,},
@@ -58,7 +56,6 @@ config = set_config(config, default_config)
 
 workdir: config['workdir']
 THREADS = config['threads']
-BUILD = config['genome']['build']
 RE1 = config['protocol']['re1']
 RE1_SEQ = config['protocol']['re1_seq']
 RE2 = config['protocol']['re2']
@@ -90,7 +87,9 @@ else:
              'no default available.\n')
         sys.exit(1)
 
-# Need to prevent '.' also!
+GENOMES = load_genomes(config['genome']['table'])
+
+
 wildcard_constraints:
     cell_type = r'[^-\.\/]+',
     pre_group = r'[^-\.\/g]+',
@@ -136,21 +135,21 @@ rule all:
         HiC_mode,
         phase_gatk,
 
-
-rule maskPhased:
-    input:
-        genome = config['genome']['sequence'],
-        vcf = lambda wc: PHASED_VCFS[wc.cell_type]
-    output:
-        f'genome/masked/{BUILD}-{{cell_type}}.fa'
-    log:
-        'logs/maskPhased/{cell_type}.log'
-    conda:
-        f'{ENVS}/bedtools.yaml'
-    shell:
-        'bedtools maskfasta -fullHeader '
-        '-fi <(zcat -f {input.genome}) '
-        '-bed {input.vcf} -fo {output} 2> {log}'
+if ALLELE_SPECIFIC:
+    rule maskPhased:
+        input:
+            genome = lambda wc: GENOMES[wc.cell_type],
+            vcf = lambda wc: PHASED_VCFS[wc.cell_type]
+        output:
+            'genome/masked/{cell_type}.fa'
+        log:
+            'logs/maskPhased/{cell_type}.log'
+        conda:
+            f'{ENVS}/bedtools.yaml'
+        shell:
+            'bedtools maskfasta -fullHeader '
+            '-fi <(zcat -f {input.genome}) '
+            '-bed {input.vcf} -fo {output} 2> {log}'
 
 
 rule vcf2SNPsplit:
@@ -168,11 +167,11 @@ rule vcf2SNPsplit:
 
 rule bgzipGenome:
     input:
-        config['genome']['sequence']
+        lambda wc: GENOMES[wc.cell_type]
     output:
-        f'genome/{BUILD}.fa.gz'
+        'genome/{cell_type}.fa.gz'
     log:
-        f'logs/bgzipGenome/{BUILD}.log'
+        'logs/bgzipGenome/{cell_type}.log'
     conda:
         f'{ENVS}/tabix.yaml'
     shell:
@@ -185,7 +184,7 @@ rule indexGenome:
     output:
         f'{rules.bgzipGenome.output}.fai'
     log:
-        'logs/indexGenome/indexGenome.log'
+        'logs/indexGenome/{cell_type}-indexGenome.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -196,55 +195,44 @@ rule getChromSizes:
     input:
         rules.indexGenome.output
     output:
-        f'genome/chrom_sizes/{BUILD}.chrom.sizes'
+        'genome/chrom_sizes/{cell_type}.chrom.sizes'
     log:
-        f'logs/getChromSizes/{BUILD}.log'
+        'logs/getChromSizes/{cell_type}.log'
     shell:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
-if ALLELE_SPECIFIC:
-    rule bowtie2Build:
-        input:
-            rules.maskPhased.output
-        output:
-            expand('genome/index/{build}-{{cell_type}}.{n}.bt2',
-                   build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
-        params:
-            basename = lambda wc: f'genome/index/{BUILD}-{wc.cell_type}'
-        log:
-            f'logs/bowtie2Build/{BUILD}-{{cell_type}}.log'
-        conda:
-            f'{ENVS}/bowtie2.yaml'
-        threads:
-            THREADS
-        shell:
-            'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
-else:
-    rule bowtie2Build:
-        input:
-            rules.bgzipGenome.output
-        output:
-            expand('genome/index/{build}.{n}.bt2',
-                   build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
-        params:
-            basename = f'genome/index/{BUILD}'
-        log:
-            f'logs/bowtie2Build/{BUILD}.log'
-        conda:
-            f'{ENVS}/bowtie2.yaml'
-        threads:
-            THREADS
-        shell:
-            'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
+def bowtie2BuildInput(wildcards):
+    if ALLELE_SPECIFIC:
+        return rules.maskPhased.output
+    else:
+        return rules.bgzipGenome.output
+
+
+rule bowtie2Build:
+    input:
+        bowtie2BuildInput
+    output:
+        expand('genome/index/{{cell_type}}.{n}.bt2',
+               n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+    params:
+        basename = lambda wc: f'genome/index/{wc.cell_type}'
+    log:
+        'logs/bowtie2Build/{cell_type}.log'
+    conda:
+        f'{ENVS}/bowtie2.yaml'
+    threads:
+        THREADS
+    shell:
+        'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
 
 rule reformatGenes:
     input:
         config['genome']['genes']
     output:
-        f'genome/{BUILD}-genes.bed'
+        f'genome/genes.bed'
     log:
-        f'logs/reformatGenes/{BUILD}.log'
+        f'logs/reformatGenes.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -382,21 +370,20 @@ rule hicupDigest:
     input:
         rules.bgzipGenome.output
     output:
-        f'genome/digest/{BUILD}-{RE1}-hicup-digest.txt.gz'
+        f'genome/digest/{{cell_type}}-{RE1}-hicup-digest.txt.gz'
     params:
-        genome = BUILD,
         re1 = RE1,
         re1_seq = RE1_SEQ,
         re2 = f'--re2_name {RE2}' if RE2 else '',
         re2_seq = '--re2 {RE2_SEQ}' if RE2_SEQ else '',
         arima = '--arima' if config['protocol']['arima'] else ''
     log:
-        f'logs/hicupDigest/{BUILD}.log'
+        'logs/hicupDigest/{cell_type}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
         '{SCRIPTS}/hicup/hicup_digester.py '
-        '--output {output} --genome {params.genome} '
+        '--output {output} --genome {wildcards.cell_type} '
         '--re1 {params.re1_seq} --re1_name {params.re1} '
         '{params.arima} {params.re2_seq} {params.re2} {input} &> {log}'
 
@@ -404,31 +391,22 @@ rule hicupDigest:
 def hicup_map_index(wildcards):
     """ Retrieve bowtie2 index associated with sample. """
 
-    if ALLELE_SPECIFIC:
-        for cell_type, samples in CELL_TYPES.items():
-            if wildcards.pre_sample in samples:
-                type = cell_type
+    for cell_type, samples in CELL_TYPES.items():
+        if wildcards.pre_sample in samples:
+            type = cell_type
 
-        return expand('genome/index/{build}-{cell_type}.{n}.bt2',
-            build=BUILD, cell_type=type,
-            n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
-    else:
-        return expand('genome/index/{build}.{n}.bt2',
-            build=BUILD, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+    return expand('genome/index/{cell_type}.{n}.bt2',
+        cell_type=type, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
 
 
 def hicup_map_basename(wildcards):
     """ Retrieve bowtie2 index basename associated with sample. """
 
-    if ALLELE_SPECIFIC:
-        for cell_type, samples in CELL_TYPES.items():
-            if wildcards.pre_sample in samples:
-                type = cell_type
+    for cell_type, samples in CELL_TYPES.items():
+        if wildcards.pre_sample in samples:
+            type = cell_type
 
-        return expand('genome/index/{build}-{cell_type}',
-            build=BUILD, cell_type=type)
-    else:
-        return expand('genome/index/{build}', build=BUILD)
+    return expand('genome/index/{cell_type}', cell_type=type)
 
 
 rule hicupMap:
@@ -458,11 +436,11 @@ rule digest:
     input:
         rules.bgzipGenome.output
     output:
-        f'genome/digest/{BUILD}-{RE1}-pyHiCtools-digest.txt'
+        f'genome/digest/{{cell_type}}-{RE1}-pyHiCtools-digest.txt'
     params:
         re1_seq = RE1_SEQ
     log:
-        f'logs/digest/{BUILD}-{RE1}.log'
+        f'logs/digest/{{cell_type}}-{RE1}.log'
     conda:
         f'{ENVS}/pyHiCTools.yaml'
     shell:
@@ -489,10 +467,21 @@ rule sampleReads:
         '> {output} 2> {log}'
 
 
+def processHiC_digest(wildcards):
+    """ Retrieve pyHiCTools digest file associated with sample. """
+
+    for cell_type, samples in CELL_TYPES.items():
+        if wildcards.pre_sample in samples:
+            type = cell_type
+
+    return expand('genome/digest/{cell_type}-{re1}-pyHiCtools-digest.txt',
+        cell_type=type, re1=RE1)
+
+
 rule processHiC:
     input:
         dedup_nmsort = rules.sampleReads.output,
-        digest = rules.digest.output
+        digest = processHiC_digest
     output:
         pipe('mapped/subsampled/{pre_sample}.processed.sam')
     group:
@@ -541,10 +530,21 @@ rule plotQC:
         '{SCRIPTS}/figures/plot_filter.R {params.outdir} {input} 2> {log}'
 
 
+def hicup_filter_digest(wildcards):
+    """ Retrieve hicup filter digest file associated with sample. """
+
+    for cell_type, samples in CELL_TYPES.items():
+        if wildcards.pre_sample in samples:
+            type = cell_type
+
+    return expand('genome/digest/{cell_type}-{re1}-pyHiCtools-digest.txt',
+        cell_type=type, re1=RE1)
+
+
 rule hicupFilter:
     input:
         bam = rules.hicupMap.output.mapped,
-        digest = rules.hicupDigest.output
+        digest = hicup_filter_digest
     output:
         filtered = 'mapped/{pre_sample}.filt.bam',
         summary = 'qc/hicup/{pre_sample}-filter-summary.txt',
@@ -1223,10 +1223,39 @@ rule reformatPre:
         '| awk -f {SCRIPTS}/bam_to_pre.awk > {output}) 2> {log} '
 
 
+def all2allele(all):
+    """ Convert list of sample and groups to allele specific versions """
+
+    allele_all = []
+    for name in all:
+        if '-' in name:
+            group = name.split('-')[0]
+            rep = name.split('-')[1]
+            allele_names = [f'{group}_g1', f'{group}_g2',
+                            f'{group}_g1-{rep}', f'{group}_g2-{rep}']
+            allele_all.extend(allele_names)
+    return allele_all
+
+
+def getChromSizes(wildcards):
+    """ Retrieve chromSizes file associated with group or sample. """
+
+    for cell_type, samples in CELL_TYPES.items():
+        groups = [sample.split('-')[0] for sample in samples]
+        all = samples + groups
+        if ALLELE_SPECIFIC:
+            all = all2allele(all)
+        if wildcards.all in all:
+            type = cell_type
+
+    return expand('genome/index/{cell_type}.{n}.bt2',
+        cell_type=type, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+
+
 rule juicerPre:
     input:
         tsv = 'matrices/{region}/base/raw/{all}-{region}.pre.tsv',
-        chrom_sizes = rules.getChromSizes.output
+        chrom_sizes = getChromSizes
     output:
         'matrices/{region}/{all}-{region}.hic'
     log:
@@ -1533,11 +1562,11 @@ if not ALLELE_SPECIFIC:
         input:
             rules.bgzipGenome.output
         output:
-            f'genome/{BUILD}.dict'
+            'genome/{cell_type}.dict'
         params:
             tmp = config['tmpdir']
         log:
-            f'logs/gatk/createSequenceDictionary/{BUILD}.log'
+            'logs/gatk/createSequenceDictionary/{cell_type}.log'
         conda:
             f'{ENVS}/picard.yaml'
         shell:
