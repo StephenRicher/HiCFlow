@@ -131,9 +131,9 @@ phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
 
 rule all:
     input:
-        preQC_mode,
+        #preQC_mode,
         HiC_mode,
-        phase_gatk,
+        #phase_gatk,
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -966,7 +966,7 @@ rule TadInsulation:
         rules.IceMatrix.output.matrix
     output:
         expand(
-            'matrices/{{region}}/{{bin}}/tads/{{all}}-{{region}}-{{bin}}_{ext}',
+            'matrices/{{region}}/{{bin}}/tads/{{all}}-{{region}}-{{bin}}{ext}',
             ext = ['_boundaries.bed', '_boundaries.gff', '_domains.bed',
                    '_score.bedgraph', '_zscore_matrix.h5']),
         score = 'matrices/{region}/{bin}/tads/{all}-{region}-{bin}_tad_score.bm'
@@ -1176,12 +1176,14 @@ rule plotHiC:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
-        title = lambda wc: f'{wc.group} - {wc.region} at {wc.bin} bin size',
+        title = lambda wc: f'"{wc.group} : {wc.region} at {wc.bin} bin size"',
         dpi = 600
     log:
         'logs/plotHiC/{group}-{region}-{bin}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
+    threads:
+        12 # Need to ensure it is run 1 at a time!
     shell:
         'pyGenomeTracks --tracks {input} '
         '--region {params.chr}:{params.start}-{params.end} '
@@ -1302,14 +1304,15 @@ rule HiCcompare:
     log:
         'logs/HiCcompare/{region}-{bin}.log'
     params:
-        dir = lambda wildcards: f'HiCcompare/{wildcards.region}/{wildcards.bin}',
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region]
+        dir = lambda wc: f'HiCcompare/{wc.region}/{wc.bin}',
+        chr = lambda wc: REGIONS['chr'][wc.region]
+    threads:
+        12
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
-        '({SCRIPTS}/HiCcompare.R '
-        'HiCcompare/{wildcards.region}/{wildcards.bin} '
-        '{params.chr} {wildcards.bin} {input} || touch {output}) &> {log}'
+        '({SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {wildcards.bin} '
+        '{input} || touch {output}) &> {log}'
 
 
 rule reformatInteract:
@@ -1366,7 +1369,6 @@ rule createCompareConfig:
         colourmap = config['compareMatrices']['colourmap'],
         vmin = config['compareMatrices']['vmin'],
         vmax = config['compareMatrices']['vmax']
-
     log:
         'logs/createCompareConfig/{region}-{bin}-{group1}-{group2}.log'
     conda:
@@ -1424,10 +1426,12 @@ rule plotCompare:
         dpi = 600
     log:
         'logs/plotAnalysis/{region}-{bin}-{group1}-vs-{group2}.log'
+    threads:
+        12 # Need to ensure it is run 1 at a time!
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
-        'pyGenomeTracks --tracks {input} '
+        'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
         '--region {params.chr}:{params.start}-{params.end} '
         '--outFileName {output} '
         '--title "{wildcards.region} at {wildcards.bin} bin size" '
