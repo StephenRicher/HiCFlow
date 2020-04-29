@@ -45,8 +45,8 @@ default_config = {
     'compareMatrices':
         {'operation' :   'log2ratio'  ,
          'colourmap' :   'bwr'        ,
-         'vmin' :        -4           ,
-         'vmax' :        4            ,},
+         'vmin' :        -3           ,
+         'vmax' :        3            ,},
     'binsize':           [5000, 10000],
     'fastq_screen':      None,
     'tmpdir':            tempfile.gettempdir()
@@ -122,7 +122,10 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
                 region=REGIONS.index, bin=BINS,
                 group1 = list(GROUPS), group2 = list(GROUPS)),
             expand('matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png',
-                region=REGIONS.index, bin=BINS, group=list(GROUPS))]
+                region=REGIONS.index, bin=BINS, group=list(GROUPS)),
+            expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
+            expand('diffhic/genome/{cell_type}-custom.fa',
+                cell_type=list(CELL_TYPES))]
 phase_gatk = [expand('allele/hapcut2/{cell_type}-phased.vcf',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
@@ -1024,6 +1027,7 @@ rule detectLoops:
         '&> {log} || touch {output} && touch {output} '
 
 
+# Deprecetad rule - now we build comparison matrices from HiCcompare output see homerToH5
 rule compareMatrices:
     input:
         expand('matrices/{{region}}/{{bin}}/ice/{group}-{{region}}-{{bin}}.h5',
@@ -1155,12 +1159,11 @@ rule createConfig:
     log:
         'logs/createConfig/{group}-{region}-{bin}.log'
     shell:
-        '{SCRIPTS}/generate_config.py '
+        '{SCRIPTS}/generate_config.py --flip '
         '-i {input.insulations} '
         '-l {input.loops} '
         '-t {input.tads} '
         '-m {input.matrix} '
-        '-s {wildcards.group} '
         '-c {params.ctcf} '
         '-r {params.ctcf_orientation} '
         '-g {input.genes} '
@@ -1287,6 +1290,9 @@ rule HiCcompare:
         expand('matrices/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-sutm.txt',
                group = list(GROUPS))
     output:
+        matrices = expand(
+            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}.homer',
+            group1 = list(GROUPS), group2 = list(GROUPS)),
         links = expand(
             'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}.links',
             group1 = list(GROUPS), group2 = list(GROUPS)),
@@ -1313,6 +1319,20 @@ rule HiCcompare:
     shell:
         '({SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {wildcards.bin} '
         '{input} || touch {output}) &> {log}'
+
+
+rule homerToH5:
+    input:
+        'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer'
+    output:
+        'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.h5'
+    log:
+        'logs/homerToH5/{group1}-vs-{group2}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        '(hicConvertFormat --matrices {input} --outFileName {output} '
+        '--inputFormat homer --outputFormat h5 || touch {output})  &> {log}'
 
 
 rule reformatInteract:
@@ -1355,7 +1375,7 @@ rule filterHiCcompare:
 
 rule createCompareConfig:
     input:
-        matrix = 'matrices/{region}/{bin}/ice/{group1}-vs-{group2}-{region}-{bin}.h5',
+        matrix = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.h5',
         links = ['HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up.links',
                  'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down.links'],
         genes = rules.reformatGenes.output
@@ -1365,7 +1385,6 @@ rule createCompareConfig:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
         depth = lambda wc: int(REGIONS['length'][wc.region] / 1.5),
-        sample = lambda wc: f'{wc.group1}-over-{wc.group2}',
         colourmap = config['compareMatrices']['colourmap'],
         vmin = config['compareMatrices']['vmin'],
         vmax = config['compareMatrices']['vmax']
@@ -1374,9 +1393,9 @@ rule createCompareConfig:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_config.py '
-        '--sample {params.sample} --matrix {input.matrix} '
-        '--genes {input.genes} --links {input.links} '
+        '{SCRIPTS}/generate_config.py --compare '
+        '--matrix {input.matrix} '
+        '--genes {input.genes} --loops {input.links} ' # --links {input.links}
         '--ctcfs {params.ctcf} --ctcf_orientation {params.ctcf_orientation} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '--vmin {params.vmin} --vmax {params.vmax} > {output} 2> {log}'
@@ -1420,9 +1439,10 @@ rule plotCompare:
     output:
         'matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png'
     params:
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-        start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
-        end = lambda wildcards: REGIONS['end'][wildcards.region],
+        # Ensure region is 1 bin smaller because it is trimmed by HiCcompare
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region],
         dpi = 600
     log:
         'logs/plotAnalysis/{region}-{bin}-{group1}-vs-{group2}.log'
@@ -1436,6 +1456,57 @@ rule plotCompare:
         '--outFileName {output} '
         '--title "{wildcards.region} at {wildcards.bin} bin size" '
         '--dpi {params.dpi} &> {log}'
+
+
+rule modifyBam:
+    input:
+        rules.buildBaseMatrix.output.bam
+    output:
+        'diffhic/bams/{region}/{sample}-{region}.bam'
+    params:
+        region = REGIONS.index,
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region],
+        end = lambda wc: REGIONS['end'][wc.region]
+    log:
+        'logs/modifyBam/{sample}-{region}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        '{SCRIPTS}/modify_bams.sh '
+        '-r {wildcards.region} -c {params.chr} '
+        '-s {params.start} -e {params.end} {input} '
+        '> {output} 2> {log} || touch {output}'
+
+
+rule mergeBamByRegion:
+    input:
+        expand('diffhic/bams/{region}/{{sample}}-{region}.bam',
+            region = REGIONS.index)
+    output:
+        'diffhic/bams/{sample}.bam'
+    log:
+        'logs/mergeBamByRegion/{sample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools merge -n {output} {input} 2> {log}'
+
+
+rule createCustomGenome:
+    input:
+        genome = rules.bgzipGenome.output,
+        index = rules.indexGenome.output,
+        regions = config['protocol']['regions']
+    output:
+        'diffhic/genome/{cell_type}-custom.fa'
+    log:
+        'logs/createCustomGenome/{cell_type}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        '{SCRIPTS}/create_custom_genome.sh {input.regions} {input.genome} '
+        '> {output} 2> {log}'
 
 
 if not ALLELE_SPECIFIC:
