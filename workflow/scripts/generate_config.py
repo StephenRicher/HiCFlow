@@ -20,19 +20,21 @@ def main():
     parser.add_argument(
         '-i', '--insulations', nargs = '*', default = None,
         help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
-
     parser.add_argument(
         '-t', '--tads', nargs = '*', default = None,
         help = 'TAD scores in ".links" format.')
     parser.add_argument(
+        '--flip', default=False, action='store_true',
+        help='Plot inverted HiC map in addition to other HiC map.')
+    parser.add_argument(
         '-l', '--loops', nargs = '*', default = None,
         help = 'Loop output.')
     parser.add_argument(
+        '--compare', default=False, action='store_true',
+        help='Generate .ini file for HiC compare.')
+    parser.add_argument(
         '-m', '--matrix',
         help = 'HiC matrix.')
-    parser.add_argument(
-        '-s', '--sample', default = 'sample',
-        help = 'Sample name')
     parser.add_argument(
         '--links', nargs=2, default=None,
         help = 'UP and DOWN links files showing differential interactions.')
@@ -66,33 +68,32 @@ def main():
     return func(**vars(args))
 
 
-def make_config(insulations, sample, matrix, tads, loops, links, ctcfs,
-                ctcf_orientation, genes, depth, colourmap, vmin, vmax):
+def make_config(insulations, matrix, tads, loops, links, ctcfs, compare,
+                ctcf_orientation, genes, depth, colourmap, vmin, vmax, flip):
 
-    # Detect use of HiC comparision and replace dash with newline to fit
-    if '-over-' in sample:
-        sample.replace('-', '\n')
 
     print('[spacer]')
     if matrix and not_empty(matrix):
-        write_matrix(sample, matrix, colourmap, depth, vmin, vmax)
+        write_matrix(matrix, colourmap, depth, vmin, vmax)
 
     if loops is not None:
         for i, loop in enumerate(loops):
             if not_empty(loop):
-                write_loops(sample, loop, i = i)
+                write_loops(loop, i = i, compare=compare)
 
     if tads is not None:
         for i, tad in enumerate(tads):
             if not_empty(tad):
-                write_tads(sample, tad, i = i)
+                write_tads(tad, i = i)
 
+    if flip and matrix and not_empty(matrix):
+        write_matrix(matrix, colourmap, depth, vmin, vmax, flip=True)
     print('[spacer]')
 
     if insulations is not None:
         for i, insulation in enumerate(insulations):
             if not_empty(insulation):
-                write_insulation(sample = sample , insulation = insulation, i = i)
+                write_insulation(insulation = insulation, i = i)
         print('[spacer]')
 
 
@@ -129,36 +130,42 @@ def not_empty(path):
     return os.path.exists(path) and os.path.getsize(path) > 0
 
 def write_matrix(
-        sample, matrix, colourmap='Purples', depth=1000000, vmin=0, vmax=2):
-    print(f'[{sample} - matrix]',
+        matrix, colourmap='Purples',
+        depth=1000000, vmin=0, vmax=2, flip=False):
+
+    orientation = 'inverted' if flip else 'None'
+    print(f'[Matrix]',
           f'file = {matrix}',
-          f'title = {sample}',
           f'depth = {depth}',
           f'min_value = {vmin}',
           f'max_value = {vmax}',
           f'colormap = {colourmap}',
+          f'orientation = {orientation}',
           f'show_masked_bins = true',
           f'file_type = hic_matrix', sep = '\n')
 
 
-def write_loops(sample, loops, i):
+def write_loops(loops, i, compare=False):
+    colours = ['Reds', 'Blues']
+    colour = colours[i] if compare else '#FF000080'
 
-    print(f'[{sample} - loops]',
+    print(f'[Loops]',
           f'file = {loops}',
           f'links_type = loops',
-          f'color = #FF000080',
+          f'line_style = solid',
+          f'color = {colour}',
           f'overlay_previous = share-y',
           f'file_type = links',
           f'line_width = 5', sep = '\n')
 
 
-def write_tads(sample, tads, i,
+def write_tads(tads, i,
         colours = ['#1b9e7780', '#d95f0280', '#d902d980', '#00000080'],
         styles = ['dashed', 'solid', 'dashed', 'solid']):
     colour = colours[i]
     style = styles[i]
 
-    print(f'[{sample} - tads]',
+    print(f'[Tads]',
           f'file = {tads}',
           f'links_type = triangles',
           f'line_style = {style}',
@@ -167,14 +174,14 @@ def write_tads(sample, tads, i,
           f'line_width = 1.5', sep = '\n')
 
 
-def write_insulation(sample, insulation, i,
+def write_insulation(insulation, i,
         colours = ['#1b9e7780', '#d95f0280', '#d902d980', '#00000080']):
     colour = colours[i]
     overlay = 'share-y' if i > 0 else 'no'
 
-    print(f'[{sample} - bedgraph matrix]',
+    print(f'[Bedgraph matrix]',
           f'file = {insulation}',
-          f'title = {sample} Insulation',
+          f'title = Insulation',
           f'height = 3',
           f'color = {colour}',
           f'file_type = bedgraph_matrix',
