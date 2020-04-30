@@ -37,7 +37,7 @@ writeMatrix <- function(hic.table, out) {
   hic.table$bin1 = paste(hic.table$chr1, hic.table$start1, sep='-')
   hic.table$bin2 = paste(hic.table$chr2, hic.table$start2, sep='-')
   hic.table = missingBins(hic.table)
-  homer <- dcast(hic.table, bin1 ~ bin2, value.var = "adj.M", fill = 0)
+  homer <- dcast(hic.table, bin1 ~ bin2, value.var = "Z", fill = 0)
   rows <- homer[,1]
   homer[,1] <- NULL
   homer[lower.tri(homer)] <- t(homer)[lower.tri(homer)]
