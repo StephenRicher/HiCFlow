@@ -45,8 +45,8 @@ default_config = {
     'compareMatrices':
         {'operation' :   'log2ratio'  ,
          'colourmap' :   'bwr'        ,
-         'vmin' :        -3           ,
-         'vmax' :        3            ,},
+         'vMin' :        -3           ,
+         'vMax' :        3            ,},
     'binsize':           [5000, 10000],
     'fastq_screen':      None,
     'tmpdir':            tempfile.gettempdir()
@@ -134,9 +134,9 @@ phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
 
 rule all:
     input:
-        #preQC_mode,
+        preQC_mode,
         HiC_mode,
-        #phase_gatk,
+        phase_gatk,
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -163,7 +163,7 @@ rule vcf2SNPsplit:
     log:
         'logs/vcf2SNPsplit/{cell_type}.log'
     conda:
-        f'{ENVS}/gawk.yaml'
+        f'{ENVS}/coreutils.yaml'
     shell:
         '{SCRIPTS}/reformat_snpsplit.sh {input} > {output} 2> {log}'
 
@@ -1137,13 +1137,14 @@ rule reformatLinks:
     log:
         'logs/reformatLinks/{all}-{region}-{bin}.log'
     shell:
-        '{SCRIPTS}/reformat_ontad.sh {params.start} {input} '
+        '{SCRIPTS}/reformat_ontad.sh {params.start} {wildcards.bin} {input} '
         '> {output} 2> {log} || touch {output}'
 
 
 rule createConfig:
     input:
-        matrix = 'matrices/{region}/{bin}/ice/obs_exp/{group}-{region}-{bin}.h5',
+        #obsexp_matrix = 'matrices/{region}/{bin}/ice/obs_exp/{group}-{region}-{bin}.h5',
+        matrix = 'matrices/{region}/{bin}/ice/{group}-{region}-{bin}.h5',
         loops = 'matrices/{region}/{bin}/loops/{group}-{region}-{bin}.bedgraph',
         insulations = 'matrices/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
         tads = 'matrices/{region}/{bin}/tads/{group}-{region}-{bin}-ontad.links',
@@ -1155,19 +1156,18 @@ rule createConfig:
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
-        depth = lambda wc: int(REGIONS['length'][wc.region] / 1.5),
+        depth = lambda wc: int(REGIONS['length'][wc.region] / 2),
     log:
         'logs/createConfig/{group}-{region}-{bin}.log'
     shell:
-        '{SCRIPTS}/generate_config.py --flip '
-        '-i {input.insulations} '
-        '-l {input.loops} '
-        '-t {input.tads} '
-        '-m {input.matrix} '
-        '-c {params.ctcf} '
-        '-r {params.ctcf_orientation} '
-        '-g {input.genes} '
-        '-d {params.depth} > {output} 2> {log}'
+        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --flip '
+        '--insulations {input.insulations} '
+        '--loops {input.loops} '
+        '--tads {input.tads} '
+        '--ctcfs {params.ctcf} '
+        '--ctcf_orientation {params.ctcf_orientation} '
+        '--genes {input.genes} '
+        '--depth {params.depth} > {output} 2> {log}'
 
 
 rule plotHiC:
@@ -1384,21 +1384,20 @@ rule createCompareConfig:
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
-        depth = lambda wc: int(REGIONS['length'][wc.region] / 1.5),
+        depth = lambda wc: int(REGIONS['length'][wc.region] / 2),
         colourmap = config['compareMatrices']['colourmap'],
-        vmin = config['compareMatrices']['vmin'],
-        vmax = config['compareMatrices']['vmax']
+        vMin = config['compareMatrices']['vMin'],
+        vMax = config['compareMatrices']['vMax']
     log:
         'logs/createCompareConfig/{region}-{bin}-{group1}-{group2}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_config.py --compare '
-        '--matrix {input.matrix} '
-        '--genes {input.genes} --loops {input.links} ' # --links {input.links}
+        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --compare '
+        '--genes {input.genes} --loops {input.links} '
         '--ctcfs {params.ctcf} --ctcf_orientation {params.ctcf_orientation} '
         '--depth {params.depth} --colourmap {params.colourmap} '
-        '--vmin {params.vmin} --vmax {params.vmax} > {output} 2> {log}'
+        '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
 
 # Deprecetated rule
