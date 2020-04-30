@@ -1,0 +1,33 @@
+
+workdir: /media/stephen/Data/HiC-subsample/analysis/
+threads : 1
+data:
+    samples: /media/stephen/Data/HiC-subsample/config/samples.csv
+    phased_vcf: /media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
+genome :
+    table : /media/stephen/Data/HiC-subsample/config/genomes.csv
+    genes : /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
+    ctcf : [/media/stephen/Data/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
+            /media/stephen/Data/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
+    ctcf_orient : [/media/stephen/Data/genomes/GRCh38/ctcf/MCF7-CTCF-orientation.bed]
+protocol:
+    regions: /media/stephen/Data/HiC-subsample/config/regions.bed
+    re1 : Mbo1
+    re1_seq : '^GATC'
+    re2:
+    re2_seq:
+    arima:
+hicup:
+    shortest:
+    longest:
+HiCcompare:
+    fdr: 0.01
+    logFC: 0
+gatk:
+
+fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
+binsize : [5000, 10000, 20000]
+
+known_sites: ['/media/stephen/Data/HiC-subsample/data/dbsnp_146.hg38.vcf.gz',
+              '/media/stephen/Data/HiC-subsample/data/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+              '/media/stephen/Data/HiC-subsample/data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
