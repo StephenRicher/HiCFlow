@@ -18,47 +18,48 @@ def main():
     parser.set_defaults(function = make_config)
 
     parser.add_argument(
-        '-i', '--insulations', nargs = '*', default = None,
+        '--insulations', nargs = '*', default = None,
         help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
     parser.add_argument(
-        '-t', '--tads', nargs = '*', default = None,
+        '--tads', nargs = '*', default = None,
         help = 'TAD scores in ".links" format.')
     parser.add_argument(
-        '--flip', default=False, action='store_true',
-        help='Plot inverted HiC map in addition to other HiC map.')
+        '--flip',  action='store_true',
+        help='Plot a copy of the HiC map inverted.')
     parser.add_argument(
-        '-l', '--loops', nargs = '*', default = None,
+        '--loops', nargs = '*', default = None,
         help = 'Loop output.')
     parser.add_argument(
         '--compare', default=False, action='store_true',
         help='Generate .ini file for HiC compare.')
     parser.add_argument(
-        '-m', '--matrix',
+        '--matrix',
         help = 'HiC matrix.')
     parser.add_argument(
         '--links', nargs=2, default=None,
         help = 'UP and DOWN links files showing differential interactions.')
     parser.add_argument(
-        '-c', '--ctcfs', nargs = '+', default = None,
+        '--ctcfs', nargs = '+', default = None,
         help = 'CTCF position in bigWig format.')
     parser.add_argument(
-        '-r', '--ctcf_orientation',
+        '--ctcf_orientation',
         help = 'CTCF orientations in BED format.')
     parser.add_argument(
-        '-g', '--genes',
+        '--genes',
         help = 'Genes in BED format.')
     parser.add_argument(
-        '-d', '--depth', type = int, default = 1000000,
+        '--depth', type = int, default = 1000000,
         help = 'HiC matrix depth.')
     parser.add_argument(
         '--colourmap', default='Purples',
-        help = 'Matplotlib coluor map to use for the heatmap.')
+        help = 'Matplotlib colour map to use for the heatmap.')
     parser.add_argument(
-        '--vmin', type = int, default = 0,
-        help = 'Minimum score value.')
+        '--vMin', type=float,
+        help = 'Minimum score value for HiC matrices.')
     parser.add_argument(
-        '--vmax', type = int, default = 2,
-        help = 'Minimum score value.')
+        '--vMax', type=float,
+        help = 'Minimum score value for matrix. Note: matrices provided in the '
+        '--flip argument have an automatic vmax.')
 
     args = parser.parse_args()
     func = args.function
@@ -69,12 +70,13 @@ def main():
 
 
 def make_config(insulations, matrix, tads, loops, links, ctcfs, compare,
-                ctcf_orientation, genes, depth, colourmap, vmin, vmax, flip):
+                ctcf_orientation, genes, depth, colourmap, vMin, vMax, flip):
 
 
     print('[spacer]')
     if matrix and not_empty(matrix):
-        write_matrix(matrix, colourmap, depth, vmin, vmax)
+        write_matrix(matrix, cmap=colourmap, depth=depth,
+            vMin=vMin, vMax=vMax, compare=compare)
 
     if loops is not None:
         for i, loop in enumerate(loops):
@@ -86,8 +88,9 @@ def make_config(insulations, matrix, tads, loops, links, ctcfs, compare,
             if not_empty(tad):
                 write_tads(tad, i = i)
 
-    if flip and matrix and not_empty(matrix):
-        write_matrix(matrix, colourmap, depth, vmin, vmax, flip=True)
+    if flip and not_empty(matrix):
+        write_matrix(matrix, cmap=colourmap, depth=depth,
+            vMin=vMin, vMax=vMax, invert=True)
     print('[spacer]')
 
     if insulations is not None:
@@ -126,23 +129,38 @@ def make_config(insulations, matrix, tads, loops, links, ctcfs, compare,
         print('[spacer]')
     print('[x-axis]')
 
+
 def not_empty(path):
     return os.path.exists(path) and os.path.getsize(path) > 0
 
-def write_matrix(
-        matrix, colourmap='Purples',
-        depth=1000000, vmin=0, vmax=2, flip=False):
 
-    orientation = 'inverted' if flip else 'None'
-    print(f'[Matrix]',
-          f'file = {matrix}',
-          f'depth = {depth}',
-          f'min_value = {vmin}',
-          f'max_value = {vmax}',
-          f'colormap = {colourmap}',
-          f'orientation = {orientation}',
-          f'show_masked_bins = true',
-          f'file_type = hic_matrix', sep = '\n')
+def write_matrix(
+        matrix, cmap='Purples',
+        depth=1000000, vMin=None, vMax=None,
+        invert=False, compare=False):
+
+    if invert:
+        orientation='inverted'
+        depth = int(depth / 2)
+    else:
+        orientation = 'None'
+    config = ['[Matrix]',
+              f'file = {matrix}',
+              f'depth = {depth}',
+              f'colormap = {cmap}',
+              f'orientation = {orientation}',
+              'show_masked_bins = true',
+              'file_type = hic_matrix']
+
+    # Do not log transform compare matrices (which have negative values)
+    if not compare:
+        config.append(f'transform = log1p')
+    if vMin is not None:
+        config.append(f'min_value = {vMin}')
+    if vMax is not None:
+        config.append(f'max_value = {vMax}')
+
+    print(*config, sep='\n')
 
 
 def write_loops(loops, i, compare=False):
@@ -160,7 +178,7 @@ def write_loops(loops, i, compare=False):
 
 
 def write_tads(tads, i,
-        colours = ['#1b9e7780', '#d95f0280', '#d902d980', '#00000080'],
+        colours = ['#d95f0280', '#1b9e7780', '#d902d980', '#00000080'],
         styles = ['dashed', 'solid', 'dashed', 'solid']):
     colour = colours[i]
     style = styles[i]
@@ -175,7 +193,7 @@ def write_tads(tads, i,
 
 
 def write_insulation(insulation, i,
-        colours = ['#1b9e7780', '#d95f0280', '#d902d980', '#00000080']):
+        colours = ['#d95f0280', '#1b9e7780', '#d902d980', '#00000080']):
     colour = colours[i]
     overlay = 'share-y' if i > 0 else 'no'
 
@@ -229,7 +247,7 @@ def write_ctcf(ctcf, i,
           f'number_of_bins = 500',
           f'nans_to_zeros = True',
           f'summary_method = mean',
-          f'show_data_range = yes',
+          f'show_data_range = true',
           f'file_type = bigwig',
           f'overlay_previous = {overlay}', sep = '\n')
 
