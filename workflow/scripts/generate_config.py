@@ -140,15 +140,11 @@ def write_matrix(
         invert=False, compare=False):
 
     if invert:
-        orientation='inverted'
         depth = int(depth / 2)
-    else:
-        orientation = 'None'
     config = ['[Matrix]',
               f'file = {matrix}',
               f'depth = {depth}',
               f'colormap = {cmap}',
-              f'orientation = {orientation}',
               'show_masked_bins = true',
               'file_type = hic_matrix']
 
@@ -159,6 +155,8 @@ def write_matrix(
         config.append(f'min_value = {vMin}')
     if vMax is not None:
         config.append(f'max_value = {vMax}')
+    if invert:
+        config.append('orientation = inverted')
 
     print(*config, sep='\n')
 
