@@ -21,13 +21,13 @@ empty_file <- function(file) {
 
 
 missingBins <- function(hic.table) {
-  # Some intervals may be completely missing fomr bin1 or bin2 due to missing data.
+  # Find any bins not shared in both lists
+  # Some intervals may be completely missing from bin1 or bin2 due to missing data.
   # Dummy values must be added here to ensure a square matrix is produced.
-  missingBins = unique(c(
-    setdiff(unique(hic.table$bin1), unique(hic.table$bin2)), 
-    setdiff(unique(hic.table$bin1), unique(hic.table$bin2))))
+  missingBins = setdiff(union(hic.table$bin1, hic.table$bin2), 
+                        intersect(hic.table$bin1, hic.table$bin2))
   for (bin in missingBins) {
-    hic.table[nrow(hic.table)+1, c("bin1","bin2")]  = list(bin, bin)
+    hic.table[nrow(hic.table) + 1, c("bin1","bin2")]  = list(bin, bin)
   }
   return(hic.table)
 }
@@ -76,13 +76,27 @@ for (matrix1 in matrices) {
 
     hic.table <- hic_loess(data.table, Plot = TRUE, Plot.smooth = FALSE)
     png(loess_plot)
-
-    filter_params(hic.table, numChanges = numChanges, Plot = TRUE)
+    dev.off()
+    
+    # Very sparse matrices can trigger exceptions in filter params
+    err = tryCatch(
+      expr = {
+        filter_params(hic.table, numChanges = numChanges, Plot = TRUE)
+      }, 
+      error = function(err) {
+        return(NULL)
+      }
+    )
+    if (is.null(err)) {
+      print(paste('Skipping', matrix1, matrix2))
+      next
+    }
+    
     png(filter_plot)
-
+    dev.off()
     hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = TRUE)
     png(compare_plot)
-
+    dev.off()
     hic.table$abs.adj.M = abs(hic.table$adj.M)
     hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 
@@ -92,7 +106,9 @@ for (matrix1 in matrices) {
       out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
     
     
-    writeMatrix(as.data.frame(hic.table), out_matrix)
+    hic.table = as.data.frame(hic.table)
+    hic.table.original = hic.table
+    writeMatrix(hic.table, out_matrix)
   }
 }
 
