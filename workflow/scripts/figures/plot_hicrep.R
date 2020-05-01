@@ -51,15 +51,23 @@ for (matrix1 in matrices) {
     if (matrix1 != matrix2) {
       # Don't rerun equivalent combinations
       combo = paste(sort(c(matrix1, matrix2)), collapse = ":")
-      if (combo %in% sample_combinations){next}
+      if (combo %in% sample_combinations) {
+        next
+      }
       sample_combinations = c(sample_combinations, combo)
-
+      
       m2 = read.table(matrix2)
       # Calculate optimal smoothing parameter for a given region and bin
-      tryCatch({h_hat <- htrain(m1, m2, resol = bin, max = max_interaction, range = 0:20)},
-               error = function(e) {cat("ERROR :",conditionMessage(e), "\n"); h_hat = NULL})
-
-      if (is.null(h_hat)){print(paste("Skipping", matrix1, matrix2)); next}
+      h_hat = tryCatch({
+        htrain(m1, m2, resol = bin, max = max_interaction, range = 0:20)
+      }, error = function(e) {cat("ERROR :", conditionMessage(e), "\n")})
+      
+      if (is.null(h_hat)) {
+        print(paste("Skipping", matrix1, matrix2))
+        scc_values[nrow(scc_values) + 1,] = list(
+          get_sample(matrix1), get_sample(matrix2), NA, NA)
+        next
+      }
 
       # Downsample matrices to the same sequencing depth
       min_sample = as.integer(min(sum(m1[,-c(1:3)]), sum(m2[,-c(1:3)])))
@@ -93,10 +101,19 @@ nm = matrix(NA, nrow=length(vals), ncol=length(vals), dimnames=list(vals, vals))
 nm[as.matrix(scc_values[, c('sample1', 'sample2')])] <- scc_values[, 'scc']
 nm[as.matrix(scc_values[, c('sample2', 'sample1')])] <- scc_values[, 'scc']
 
+# Check if any non-NA values are less than 0
+if (any(nm[!is.na(nm)] < 0)) {
+  print('Negative correlations detected - this is usually due to very low sparsity and so will be excluded.')
+  nm[nm < 0] = NA
+}
+
+# Remove any rows or columns where all are NA - pheatmap won't plot this
+nm = nm[rowSums(is.na(nm)) != ncol(nm), colSums(is.na(nm)) != nrow(nm)]
+
 heatmap = pheatmap(nm,
                    color = viridis(100), display_numbers = TRUE,
                    number_color = 'red',
                    fontsize = 8, fontsize_number = 10,
-                   angle_col = 0, treeheight_col = 0)
+                   angle_col = 45, treeheight_col = 0)
 ggsave(filename = outfile, plot = heatmap, width = 8, height = 5)
 
