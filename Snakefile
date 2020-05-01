@@ -115,7 +115,10 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('matrices/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS),
-                method=['norm', 'ice'], ext=['h5', 'gz',]),
+                method=['norm', 'ice'], ext=['h5', 'gz']),
+            expand('matrices/{region}/{bin}/raw/{sample}-{region}-{bin}.{ext}',
+                region=REGIONS.index, bin=BINS,
+                sample=SAMPLES, ext=['h5', 'gz']),
             expand('qc/hicrep/{region}-{bin}-hicrep.png',
                 region=REGIONS.index, bin=BINS),
             expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
@@ -850,17 +853,34 @@ rule buildBaseMatrix:
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
+rule mergeBins:
+    input:
+        f'matrices/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5'
+    output:
+        'matrices/{region}/{bin}/raw/{sample}-{region}-{bin}.h5'
+    params:
+        bin = config['binsize'],
+        nbins = lambda wildcards: int(int(wildcards.bin) / BASE_BIN)
+    log:
+        'logs/mergeBins/{sample}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
+        '--outFileName {output} &> {log} || touch {output}'
+
+
 rule readCountNormalise:
     input:
-        expand('matrices/{{region}}/base/raw/{sample}-{{region}}.{bin}.h5',
-               bin=BASE_BIN, sample=SAMPLES)
+        expand('matrices/{{region}}/{{bin}}/raw/{sample}-{{region}}-{{bin}}.h5',
+               sample=SAMPLES)
     output:
-        expand('matrices/{{region}}/base/norm/{sample}-{{region}}-{bin}.h5',
-               bin=BASE_BIN, sample=SAMPLES)
+        expand('matrices/{{region}}/{{bin}}/norm/{sample}-{{region}}-{{bin}}.h5',
+               sample=SAMPLES)
     params:
         method = 'smallest'
     log:
-        'logs/readCountNormalise/{region}.log'
+        'logs/readCountNormalise/{region}-{bin}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -872,13 +892,12 @@ rule readCountNormalise:
 rule sumReplicates:
     input:
         lambda wildcards: expand(
-            'matrices/{{region}}/base/norm/{group}-{rep}-{{region}}-{bin}.h5',
-            bin=BASE_BIN, group=wildcards.group,
-            rep=GROUPS[wildcards.group])
+            'matrices/{{region}}/{{bin}}/norm/{group}-{rep}-{{region}}-{{bin}}.h5',
+            group=wildcards.group, rep=GROUPS[wildcards.group])
     output:
-        f'matrices/{{region}}/base/norm/{{group}}-{{region}}-{BASE_BIN}.h5'
+        f'matrices/{{region}}/{{bin}}/norm/{{group}}-{{region}}-{{bin}}.h5'
     log:
-        'logs/sumReplicates/{group}-{region}.h5'
+        'logs/sumReplicates/{group}-{bin}-{region}.h5'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -886,26 +905,9 @@ rule sumReplicates:
         '&> {log} || touch {output}'
 
 
-rule mergeBins:
-    input:
-        f'matrices/{{region}}/base/norm/{{all}}-{{region}}-{BASE_BIN}.h5'
-    output:
-        'matrices/{region}/{bin}/norm/{all}-{region}-{bin}.h5'
-    params:
-        bin = config['binsize'],
-        nbins = lambda wildcards: int(int(wildcards.bin) / BASE_BIN)
-    log:
-        'logs/mergeBins/{all}-{region}-{bin}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
-        '--outFileName {output} &> {log} || touch {output}'
-
-
 rule IceMatrix:
     input:
-        rules.mergeBins.output
+        'matrices/{region}/{bin}/norm/{all}-{region}-{bin}.h5'
     output:
         plot = 'qc/IceMatrix/{all}-{region}-{bin}-diagnosic_plot.png',
         matrix = 'matrices/{region}/{bin}/ice/{all}-{region}-{bin}.h5'
@@ -1062,9 +1064,9 @@ rule reformatHomer:
 
 rule reformatNxN3p:
     input:
-        'matrices/{region}/{bin}/norm/{sample}-{region}-{bin}.gz'
+        'matrices/{region}/{bin}/raw/{sample}-{region}-{bin}.gz'
     output:
-        'matrices/{region}/{bin}/norm/{sample}-{region}-{bin}.nxnp3.tsv'
+        'matrices/{region}/{bin}/raw/{sample}-{region}-{bin}.nxnp3.tsv'
     params:
         region = REGIONS.index,
     log:
@@ -1078,7 +1080,7 @@ rule reformatNxN3p:
 rule HiCRep:
     input:
         expand(
-            'matrices/{{region}}/{{bin}}/norm/{sample}-{{region}}-{{bin}}.nxnp3.tsv',
+            'matrices/{{region}}/{{bin}}/raw/{sample}-{{region}}-{{bin}}.nxnp3.tsv',
             sample = SAMPLES)
     output:
         'qc/hicrep/{region}-{bin}-hicrep.png'
