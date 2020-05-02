@@ -26,7 +26,7 @@ HiCcompare:
 gatk:
 
 fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
-binsize : [5000, 10000, 20000]
+binsize : [5000, 10000, 20000, 50000]
 
 known_sites: ['/media/stephen/Data/HiC-subsample/data/dbsnp_146.hg38.vcf.gz',
               '/media/stephen/Data/HiC-subsample/data/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
