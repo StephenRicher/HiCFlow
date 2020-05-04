@@ -38,6 +38,15 @@ def main():
         '--barchart2', type=svg_file, default=None,
         help='Truncation summary barchart for FASTQ R2 in SVG format')
     parser.add_argument(
+        '--fill', dest='fill', action='store_true',
+        help='Hi-C protocol did include a fill-in of sticky ends '
+             'prior to re-ligation.')
+    parser.add_argument(
+        '--nofill', dest='fill', action='store_false',
+        help='Hi-C protocol did NOT include a fill-in of sticky ends '
+             'prior to re-ligation and therefore reads shall be '
+             'truncated at the restriction site sequence.')
+    parser.add_argument(
         '-@', '--threads', default=1, type=int,
         help='Number of threads to use (default: %(default)s)')
     requiredNamed = parser.add_argument_group(
@@ -49,12 +58,13 @@ def main():
         '--re1', required=True, type=restriction_seq,
         help='Restriction cut sequence with ^ to indicate cut site. '
              'e.g. Mbol = ^GATC')
-    parser.set_defaults(function=truncate)
+    parser.set_defaults(function=truncate, feature=True)
 
     return (pct.execute(parser))
 
 
-def truncate(infiles, outputs, summary, barchart1, barchart2, re1, threads):
+def truncate(infiles, outputs, summary, barchart1, barchart2,
+        fill, re1, threads):
 
     fastq_r1 = infiles[0]
     fastq_r2 = infiles[1]
@@ -73,6 +83,8 @@ def truncate(infiles, outputs, summary, barchart1, barchart2, re1, threads):
                    '--outdir', tempdir, fastq_r1, fastq_r2]
         if zip_out:
             command.insert(1, '--zip')
+        if not fill:
+            command.insert(1, '--nofill')
 
         subprocess.run(command, check=True)
 
