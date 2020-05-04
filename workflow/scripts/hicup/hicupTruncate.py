@@ -58,7 +58,7 @@ def main():
         '--re1', required=True, type=restriction_seq,
         help='Restriction cut sequence with ^ to indicate cut site. '
              'e.g. Mbol = ^GATC')
-    parser.set_defaults(function=truncate, feature=True)
+    parser.set_defaults(function=truncate, fill=True)
 
     return (pct.execute(parser))
 
