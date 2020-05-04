@@ -38,7 +38,8 @@ default_config = {
          'arima':        False       ,},
     'hicup':
         {'shortest' :    150          ,
-         'longest' :     850          ,},
+         'longest' :     850          ,
+         'nofill' :      False        ,},
     'HiCcompare':
         {'fdr' :         0.05         ,
          'logFC' :       1            ,},
@@ -49,7 +50,8 @@ default_config = {
          'vMax' :        3            ,},
     'binsize':           [5000, 10000],
     'fastq_screen':      None,
-    'tmpdir':            tempfile.gettempdir()
+    'tmpdir':            tempfile.gettempdir(),
+    'known_sites':       None
 }
 
 config = set_config(config, default_config)
@@ -274,7 +276,6 @@ rule reformatFastQC:
         '{SCRIPTS}/modify_fastqc.sh {input} {output} '
         '{wildcards.single} &> {log}'
 
-
 rule hicupTruncate:
     input:
         lambda wc: samples.xs(wc.pre_sample, level=2)['path']
@@ -283,7 +284,8 @@ rule hicupTruncate:
                      'fastq/truncated/{pre_sample}-R2.trunc.fastq.gz'],
         summary = 'qc/hicup/{pre_sample}-truncate-summary.txt'
     params:
-        re1_seq = RE1_SEQ
+        re1_seq = RE1_SEQ,
+        fill = '--nofill' if config['hicup']['nofill'] else ''
     threads:
         2 if THREADS > 2 else THREADS
     log:
@@ -291,7 +293,7 @@ rule hicupTruncate:
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
-        '{SCRIPTS}/hicup/hicupTruncate.py '
+        '{SCRIPTS}/hicup/hicupTruncate.py {params.fill} '
         '--output {output.truncated} '
         '--summary {output.summary} '
         '--re1 {params.re1_seq} '
