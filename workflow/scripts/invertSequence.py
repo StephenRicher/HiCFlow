@@ -28,40 +28,39 @@ def main():
 
 
 def invert(infile, region):
+    header = 0
     in_chr = False
-    in_region = False
     region_sequence = []
     region_length = region['end'] - region['start'] + 1
     with pct.open(infile) as f:
         for line in f:
             line = line.strip()
-            if in_chr:
-                for base in line:
-                    if count == region['start']:
-                        in_region = True
-                    if in_region:
-                        region_sequence.append(base)
-                    else:
-                        print(base, end = '' if count % 60 else '\n')
-                        count += 1
-            else:
-                if line.startswith('>'):
-                    # If previous sequence was processed as in_chr
-                    if in_chr:
-                        line = '\n' + line
-                        in_chr = False
-                    elif line.lstrip('>').split()[0] == region['chr']:
-                        in_chr = True
-                        count = 1
+            if line.startswith('>'):
+                # If previous sequence was processed as in_chr
+                if in_chr:
+                    line = '\n' + line
+                    in_chr = False
+                elif line.lstrip('>').split()[0] == region['chr']:
+                    in_chr = True
+                    count = 1
                 print(line)
-            if in_region and len(region_sequence) == region_length:
-                for i in reversed(region_sequence):
-                    print(i, end = '' if count % 60 else '\n')
-                    count += 1
-                in_region = False
-
+            else:
+                if in_chr:
+                    for base in line:
+                        if count == region['start']:
+                            region_sequence.append(base)
+                            if len(region_sequence) == region_length:
+                                for i in reversed(region_sequence):
+                                    print(i, end = '' if count % 60 else '\n')
+                                    count += 1
+                                in_region = False
+                        else:
+                            print(base, end = '' if count % 60 else '\n')
+                            count += 1
+                else:
+                    print(line)
         if in_chr:
-            print('')
+            sys.stdout.write('\n')
 
 
 def region(value):
