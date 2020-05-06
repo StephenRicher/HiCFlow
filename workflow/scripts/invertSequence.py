@@ -14,7 +14,7 @@ def main():
     __version__ = '1.0.0'
 
     parser = pct.make_parser(
-        verbose=True, version=__version__, infile=True, in_type='FASTA',
+        verbose=True, version=__version__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         'infile', metavar='FASTA',
