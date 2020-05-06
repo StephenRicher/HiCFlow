@@ -50,7 +50,9 @@ def invert(infile, region):
                         if count == region['start']:
                             region_sequence.append(base)
                             if len(region_sequence) == region_length:
-                                for i in reversed(region_sequence):
+                                region_sequence = ''.join(region_sequence)
+                                inverted = reverseComplement(region_sequence)
+                                for i in inverted:
                                     print(i, end = '' if count % 60 else '\n')
                                     count += 1
                                 in_region = False
@@ -61,6 +63,13 @@ def invert(infile, region):
                     print(line)
         if in_chr:
             sys.stdout.write('\n')
+
+
+def reverseComplement(sequence):
+    bases = 'ACGTUWSMKRYBDHVNZ'
+    complement_bases = 'TGCAAWSKMYRVHDBNZ'
+    table = str.maketrans(bases, complement_bases)
+    return sequence.upper().translate(table)[::-1]
 
 
 def region(value):
