@@ -1642,8 +1642,9 @@ if not ALLELE_SPECIFIC:
 
     def known_sites(input_known):
         input_known_string = ""
-        for known in input_known:
-            input_known_string += f' --known-sites {known}'
+        if input_known is not None:
+            for known in input_known:
+                input_known_string += f' --known-sites {known}'
         return input_known_string
 
 
