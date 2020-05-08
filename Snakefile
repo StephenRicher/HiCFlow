@@ -1978,7 +1978,7 @@ if not ALLELE_SPECIFIC:
     rule hapCut2:
         input:
             fragments = rules.extractHAIRS.output,
-            vcf = rules.splitVCFS.output
+            vcf = hapCut2Input
         output:
             block = 'allele/hapcut2/{region}/{cell_type}-{region}',
             vcf = 'allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF'
