@@ -84,10 +84,9 @@ else:
     GROUPS = ORIGINAL_GROUPS
     ALLELE_SPECIFIC = False
     if not config['known_sites']:
-        sys.stderr.write(
-            f'\033[31mNo configuration provided for "known_sites" and '
-             'no default available.\n')
-        sys.exit(1)
+        PHASE_MODE = 'BCFTOOLS'
+    else:
+        PHASE_MODE = 'GATK'
 
 GENOMES = load_genomes(config['genome']['table'])
 
@@ -131,6 +130,7 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
             expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
             expand('diffhic/genome/{cell_type}-custom.fa',
                 cell_type=list(CELL_TYPES))]
+
 phase_gatk = [expand('allele/hapcut2/{cell_type}-phased.vcf',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
@@ -899,7 +899,7 @@ rule sumReplicates:
     output:
         f'matrices/{{region}}/{{bin}}/norm/{{group}}-{{region}}-{{bin}}.h5'
     log:
-        'logs/sumReplicates/{group}-{bin}-{region}.h5'
+        'logs/sumReplicates/{group}-{bin}-{region}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1622,6 +1622,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'samtools index -@ {threads} {input} &> {log}'
 
+    # GATK PHASE MODE #
 
     rule createSequenceDictionary:
         input:
@@ -1893,9 +1894,73 @@ if not ALLELE_SPECIFIC:
             '{input} > {output} 2> {log}'
 
 
+    # BCFTOOLS PHASE MODE #
+
+    rule mpileup:
+        input:
+            bam = rules.deduplicate.output.bam,
+            genome = rules.bgzipGenome.output,
+        output:
+            pipe('allele/vcfs/{region}/{cell_type}-{region}-mpileup.bcf')
+        group:
+            'bcftoolsVariants'
+        log:
+            'logs/mpileup/{cell_type}-{region}.log'
+        threads:
+            (THREADS - 4) * 0.5
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools mpileup -q 15 --ignore-RG --count-orphans '
+            '--max-depth 100000 --output-type u -f {input.genome} '
+            '--threads {threads} {input.bam} > {output} 2> {log} '
+
+
+    rule callVariants:
+        input:
+            rules.mpileup.output
+        output:
+            pipe('allele/vcfs/{region}/{cell_type}-{region}-calls.bcf')
+        group:
+            'bcftoolsVariants'
+        log:
+            'logs/callVariants/{cell_type}-{region}.log'
+        threads:
+            (THREADS - 4) * 0.5
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools call --multiallelic-caller --variants-only '
+            '--output-type u --threads {threads} '
+            '{input} > {output} 2> {log}'
+
+
+    rule filterVariants:
+        input:
+            rules.callVariants.output
+        output:
+            'allele/vcfs/{region}/{cell_type}-{region}-filt.vcf'
+        group:
+            'bcftoolsVariants'
+        log:
+            'logs/filterVariants/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools view -i "%QUAL>=20" --output-type v '
+            '{input} > {output} 2> {log}'
+
+
+    def hapCut2Input(wildcards):
+        if PHASE_MODE == 'GATK':
+            return rules.splitVCFS.output
+        else:
+            return rules.filterVariants.output
+
+
     rule extractHAIRS:
         input:
-            vcf = rules.splitVCFS.output,
+            vcf = hapCut2Input,
             bam = rules.deduplicate.output.bam
         output:
             'allele/hapcut2/{region}/{cell_type}-{region}.fragments'
@@ -1998,60 +2063,6 @@ if not ALLELE_SPECIFIC:
             'bcftools concat {input.vcfs} > {output} 2> {log}'
 
 
-    rule mpileup:
-        input:
-            bam = rules.deduplicate.output.bam,
-            genome = rules.bgzipGenome.output,
-        output:
-            pipe('allele/vcfs/{region}/{cell_type}-{region}-mpileup.bcf')
-        group:
-            'bcftoolsVariants'
-        log:
-            'logs/mpileup/{cell_type}-{region}.log'
-        threads:
-            (THREADS - 4) * 0.5
-        conda:
-            f'{ENVS}/bcftools.yaml'
-        shell:
-            'bcftools mpileup -q 15 --ignore-RG --count-orphans '
-            '--max-depth 100000 --output-type u -f {input.genome} '
-            '--threads {threads} {input.bam} > {output} 2> {log} '
-
-
-    rule callVariants:
-        input:
-            rules.mpileup.output
-        output:
-            pipe('allele/vcfs/{region}/{cell_type}-{region}-calls.bcf')
-        group:
-            'bcftoolsVariants'
-        log:
-            'logs/callVariants/{cell_type}-{region}.log'
-        threads:
-            (THREADS - 4) * 0.5
-        conda:
-            f'{ENVS}/bcftools.yaml'
-        shell:
-            'bcftools call --multiallelic-caller --variants-only '
-            '--output-type u --threads {threads} '
-            '{input} > {output} 2> {log}'
-
-
-    rule filterVariants:
-        input:
-            rules.callVariants.output
-        output:
-            'allele/vcfs/{region}/{cell_type}-{region}-filt.bcf'
-        group:
-            'bcftoolsVariants'
-        log:
-            'logs/filterVariants/{cell_type}-{region}.log'
-        conda:
-            f'{ENVS}/bcftools.yaml'
-        shell:
-            'bcftools view -i "%QUAL>=20" --output-type u '
-            '{input} > {output} 2> {log}'
-
 
     rule bcftoolsStats:
         input:
@@ -2067,7 +2078,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'bcftools stats {input} > {output} 2> {log}'
 
-
+    #### NOT USED ###
 
     rule run_hapcompass:
         input:
