@@ -89,7 +89,7 @@ def make_config(insulations, matrix, tads, loops, links, ctcfs, compare,
 
     if flip and not_empty(matrix):
         write_matrix(matrix, cmap=colourmap, depth=depth,
-            vMin=vMin, vMax=vMax, invert=True)
+            vMin=vMin, vMax=vMax, invert=True, compare=compare)
     print('[spacer]')
 
     if insulations is not None:
