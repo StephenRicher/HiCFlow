@@ -58,8 +58,7 @@ def main():
         help = 'Minimum score value for HiC matrices.')
     parser.add_argument(
         '--vMax', type=float,
-        help = 'Minimum score value for matrix. Note: matrices provided in the '
-        '--flip argument have an automatic vmax.')
+        help = 'Maximum score value for matrix.')
 
     args = parser.parse_args()
     func = args.function
