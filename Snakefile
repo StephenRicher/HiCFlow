@@ -1397,7 +1397,7 @@ rule createCompareConfig:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --compare '
+        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --compare --flip '
         '--genes {input.genes} --loops {input.links} '
         '--ctcfs {params.ctcf} --ctcf_orientation {params.ctcf_orientation} '
         '--depth {params.depth} --colourmap {params.colourmap} '
