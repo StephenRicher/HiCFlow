@@ -1,17 +1,16 @@
-
-workdir: /media/stephen/Data/HiC-subsample/analysis/
-threads : 1
+workdir: /home/u/sr467/scratch/projects/HiC-new-pipeline
+threads : 16
 data:
-    samples: /media/stephen/Data/HiC-subsample/config/samples.csv
-    phased_vcf: #/media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
+    samples: /home/u/sr467/scratch/projects/HiC-new-pipeline/config/samples.csv
+    phased_vcf:
 genome :
     table : /media/stephen/Data/HiC-subsample/config/genomes.csv
-    genes : /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
-    ctcf : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
-            /home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
-    ctcf_orient : [/home/stephen/x_db/DBuck/s_richer/genomes/GRCh38/ctcf/MCF-7_CTCF-merged.bed]
+    genes : /home/u/sr467/scratch/projects/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
+    ctcf : [/home/u/sr467/scratch/projects/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
+            /home/u/sr467/scratch/projects/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
+    ctcf_orient : [/home/u/sr467/scratch/projects/genomes/GRCh38/annotation/MCF-7_CTCF-merged.bed]
 protocol:
-    regions: /media/stephen/Data/HiC-subsample/config/regions.bed
+    regions: /home/u/sr467/scratch/projects/HiC-new-pipeline/config/regions.bed
     re1 : Mbo1
     re1_seq : '^GATC'
     re2:
@@ -20,14 +19,14 @@ protocol:
 hicup:
     shortest:
     longest:
+    nofill: True
 HiCcompare:
     fdr: 0.01
     logFC: 0
-gatk:
+fastq_screen : /home/u/sr467/scratch/projects/HiC-new-pipeline/config/fastq_screen.config
+binsize : [1000, 3000, 10000]
 
-fastq_screen : /home/stephen/phd/snakemake/config/fastq_screen.config
-binsize : [5000, 10000, 20000, 50000]
-
-known_sites: ['/media/stephen/Data/HiC-subsample/data/dbsnp_146.hg38.vcf.gz',
-              '/media/stephen/Data/HiC-subsample/data/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
-              '/media/stephen/Data/HiC-subsample/data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+known_sites: ['/home/u/sr467/scratch/projects/genomes/hg38/dbsnp_146.hg38.vcf.gz',
+              '/home/u/sr467/scratch/projects/genomes/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+              '/home/u/sr467/scratch/projects/genomes/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+tmpdir: /home/u/sr467/scratch/tmp
