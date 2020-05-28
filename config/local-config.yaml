@@ -5,7 +5,7 @@ data:
     samples: /media/stephen/Data/HiC-subsample/config/samples.csv
     #phased_vcf: /media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
 genome :
-    table : /media/stephen/Data/HiC-subsample/config/genomes.csv
+    table : /media/stephen/Data/HiC-subsample/config/local-genomes.csv
     genes : /media/stephen/Data/genomes/GRCh38/annotation/gencode.v33.annotation.gff3.gz
     ctcf : [/media/stephen/Data/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep1_grch38.bw.bw,
             /media/stephen/Data/genomes/GRCh38/annotation/wgEncodeUwTfbsMcf7CtcfStdRawRep2_grch38.bw.bw]
