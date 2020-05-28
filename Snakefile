@@ -1165,7 +1165,7 @@ rule createConfig:
         'logs/createConfig/{group}-{region}-{bin}.log'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} --flip '
-        '--insulations {input.insulations} '
+        '--insulations {input.insulations} --log '
         '--loops {input.loops} '
         '--tads {input.tads} '
         '--ctcfs {params.ctcf} '
@@ -1397,7 +1397,7 @@ rule createCompareConfig:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --compare --flip '
+        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --compare '
         '--genes {input.genes} --loops {input.links} '
         '--ctcfs {params.ctcf} --ctcf_orientation {params.ctcf_orientation} '
         '--depth {params.depth} --colourmap {params.colourmap} '
