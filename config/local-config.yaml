@@ -18,8 +18,9 @@ protocol:
     re2_seq:
     arima:
 hicup:
-    shortest:
-    longest:
+    shortest :
+    longest :
+    nofill: True
 HiCcompare:
     fdr: 0.01
     logFC: 0
