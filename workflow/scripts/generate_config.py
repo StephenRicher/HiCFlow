@@ -30,11 +30,21 @@ def main():
         '--loops', nargs = '*', default = None,
         help = 'Loop output.')
     parser.add_argument(
+        '--matrix',
+        help = 'HiC matrix.')
+    parser.add_argument(
+        '--log', default=False, action='store_true',
+        help='Log transform counts of matrix.')
+    parser.add_argument(
         '--compare', default=False, action='store_true',
         help='Generate .ini file for HiC compare.')
     parser.add_argument(
-        '--matrix',
-        help = 'HiC matrix.')
+        '--matrix2',
+        help = 'If --flip argumnet is called, use to plot a different HiC'
+        'matrix as inverted.')
+    parser.add_argument(
+        '--log_matrix2', default=False, action='store_true',
+        help='Log transform counts of matrix 2.')
     parser.add_argument(
         '--links', nargs=2, default=None,
         help = 'UP and DOWN links files showing differential interactions.')
@@ -68,14 +78,15 @@ def main():
     return func(**vars(args))
 
 
-def make_config(insulations, matrix, tads, loops, links, ctcfs, compare,
-                ctcf_orientation, genes, depth, colourmap, vMin, vMax, flip):
+def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
+                links, ctcfs, compare, ctcf_orientation, genes, depth,
+                colourmap, vMin, vMax, flip):
 
 
     print('[spacer]')
     if matrix and not_empty(matrix):
         write_matrix(matrix, cmap=colourmap, depth=depth,
-            vMin=vMin, vMax=vMax, compare=compare)
+            vMin=vMin, vMax=vMax, log=log)
 
     if loops is not None:
         for i, loop in enumerate(loops):
@@ -87,9 +98,12 @@ def make_config(insulations, matrix, tads, loops, links, ctcfs, compare,
             if not_empty(tad):
                 write_tads(tad, i = i)
 
-    if flip and not_empty(matrix):
-        write_matrix(matrix, cmap=colourmap, depth=depth,
-            vMin=vMin, vMax=vMax, invert=True, compare=compare)
+    if flip:
+        inverted_matrix = matrix2 if matrix2 else matrix
+        log_transform = log_matrix2 if matrix2 else log
+        if not_empty(inverted_matrix):
+            write_matrix(inverted_matrix, cmap=colourmap, depth=depth,
+                vMin=vMin, vMax=vMax, invert=True, log=log_transform)
     print('[spacer]')
 
     if insulations is not None:
@@ -136,7 +150,7 @@ def not_empty(path):
 def write_matrix(
         matrix, cmap='Purples',
         depth=1000000, vMin=None, vMax=None,
-        invert=False, compare=False):
+        invert=False, log=False):
 
     if invert:
         depth = int(depth / 2)
@@ -148,7 +162,7 @@ def write_matrix(
               'file_type = hic_matrix']
 
     # Do not log transform compare matrices (which have negative values)
-    if not compare:
+    if log:
         config.append(f'transform = log1p')
     if vMin is not None:
         config.append(f'min_value = {vMin}')
