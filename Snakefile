@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import tempfile
+import itertools
 import pandas as pd
 from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, load_genomes, get_allele_groupings
 
@@ -111,6 +112,9 @@ else:
         group = r'[^-\.\/g]+',
         sample = r'[^-\.\/g]+-\d+'
 
+
+# Generate list of group comparisons - this avoids self comparison
+COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.permutations(list(GROUPS))]
 preQC_mode = ['qc/multiqc', 'qc/multiBamQC', 'qc/filterQC/ditag_length.png']
 HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
@@ -122,9 +126,8 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
                 sample=SAMPLES, ext=['h5', 'gz']),
             expand('qc/hicrep/{region}-{bin}-hicrep.png',
                 region=REGIONS.index, bin=BINS),
-            expand('matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png',
-                region=REGIONS.index, bin=BINS,
-                group1 = list(GROUPS), group2 = list(GROUPS)),
+            expand('matrices/{region}/{bin}/plots/{region}-{bin}-{compare}.png',
+                region=REGIONS.index, bin=BINS, compare = COMPARES),
             expand('matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, group=list(GROUPS)),
             expand('matrices/{region}/{all}-{region}.hic',
@@ -132,8 +135,7 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
             expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
             expand('diffhic/genome/{cell_type}-custom.fa',
                 cell_type=list(CELL_TYPES))]
-
-phase_gatk = [expand('allele/hapcut2/{cell_type}-phased.vcf',
+phase_gatk = [expand('allele/hapcut2/{cell_type}-phased.vcf.gz',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
                 region=REGIONS.index,
@@ -1984,7 +1986,7 @@ if not ALLELE_SPECIFIC:
             vcf = hapCut2Input
         output:
             block = 'allele/hapcut2/{region}/{cell_type}-{region}',
-            vcf = 'allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF'
+            vcf = 'allele/hapcut2/{region}/{cell_type}-{region}.phased.vcf'
         group:
             'hapcut2'
         log:
