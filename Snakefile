@@ -127,6 +127,8 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
                 group1 = list(GROUPS), group2 = list(GROUPS)),
             expand('matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, group=list(GROUPS)),
+            expand('matrices/{region}/{all}-{region}.hic',
+                region=REGIONS.index, all=SAMPLES+list(GROUPS)),
             expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
             expand('diffhic/genome/{cell_type}-custom.fa',
                 cell_type=list(CELL_TYPES))]
@@ -2049,20 +2051,48 @@ if not ALLELE_SPECIFIC:
             '> {output} 2> {log} || touch {output}'
 
 
+    rule compressVCF:
+        input:
+             rules.extractVCF.output
+        output:
+            f'{rules.extractVCF.output}.gz'
+        log:
+            'logs/compressVCF/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools view -O z {input} > {output} 2> {log} || touch {output}'
+
+
+    rule indexVCF:
+        input:
+            rules.compressVCF.output
+        output:
+            f'{rules.compressVCF.output}.csi'
+        log:
+            'logs/indexVCF/{cell_type}-{region}.log'
+        conda:
+            f'{ENVS}/bcftools.yaml'
+        shell:
+            'bcftools index -f {input} 2> {log} || touch {output}'
+
+
     rule mergeVCFsbyRegion:
         input:
+            indexes = expand(
+                'allele/hapcut2/{region}/{{cell_type}}-{region}-best.vcf.gz.csi',
+                region = REGIONS.index),
             vcfs = expand(
-                'allele/hapcut2/{region}/{{cell_type}}-{region}-best.vcf',
+                'allele/hapcut2/{region}/{{cell_type}}-{region}-best.vcf.gz',
                 region = REGIONS.index),
         output:
-            'allele/hapcut2/{cell_type}-phased.vcf'
+            'allele/hapcut2/{cell_type}-phased.vcf.gz'
         log:
             'logs/mergeVCFsbyRegion/{cell_type}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
-            'bcftools concat {input.vcfs} > {output} 2> {log}'
-
+            'bcftools concat --naive {input.vcfs} > {output} 2> {log}'
 
 
     rule bcftoolsStats:
