@@ -33,9 +33,28 @@ missingBins <- function(hic.table) {
 }
 
 
-writeMatrix <- function(hic.table, out) {
+extendBins <- function(hic.table, chr, start, end, binsize) {
+  # Extend table to encompass incomplete start and end ranges
+  end_intervals = seq(max(hic.table$end1, hic.table$end2), end + binsize, binsize)[-1]
+  start_intervals = seq(min(hic.table$start1, hic.table$start2), start - binsize, -binsize)[-1]
+  for (interval in start_intervals) {
+    bin1 = paste(chr, interval, sep='-')
+    bin2 = paste(chr, interval + binsize, sep='-')
+    hic.table[nrow(hic.table) + 1, c("bin1","bin2")]  = list(bin1, bin2)
+  }
+  for (interval in end_intervals) {
+    bin1 = paste(chr, interval, sep='-')
+    bin2 = paste(chr, interval - binsize, sep='-')
+    hic.table[nrow(hic.table) + 1, c("bin1","bin2")]  = list(bin1, bin2)
+  }
+  return(hic.table)
+}
+
+
+writeMatrix <- function(hic.table, out, chr, start, end, binsize) {
   hic.table$bin1 = paste(hic.table$chr1, hic.table$start1, sep='-')
   hic.table$bin2 = paste(hic.table$chr2, hic.table$start2, sep='-')
+  hic.table = extendBins(hic.table, chr, start, end, binsize)
   hic.table = missingBins(hic.table)
   homer <- dcast(hic.table, bin1 ~ bin2, value.var = "Z", fill = 0)
   rows <- homer[,1]
@@ -50,8 +69,10 @@ args = commandArgs(trailingOnly=TRUE)
 
 outdir = args[1]
 chr = args[2]
-binsize = as.integer(args[3])
-matrices = tail(args, -3)
+start = args[3]
+end = args[4]
+binsize = as.integer(args[5])
+matrices = tail(args, -5)
 
 numChanges = as.integer(2.539842873*10^-8 * binsize^2 - 2.871604938*10^-2 * binsize + 3617.620651)
 
@@ -105,14 +126,8 @@ for (matrix1 in matrices) {
       hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
       out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
     
-    
     hic.table = as.data.frame(hic.table)
     hic.table.original = hic.table
-    writeMatrix(hic.table, out_matrix)
+    writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
   }
 }
-
-
-
-
-
