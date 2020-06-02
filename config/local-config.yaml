@@ -2,7 +2,7 @@
 workdir: /media/stephen/Data/HiC-subsample/analysis/
 threads : 1
 data:
-    samples: /media/stephen/Data/HiC-subsample/config/samples.csv
+    samples: /media/stephen/Data/HiC-subsample/config/local-samples.csv
     #phased_vcf: /media/stephen/Data/HiC-subsample/config/phased-vcfs.csv
 genome :
     table : /media/stephen/Data/HiC-subsample/config/local-genomes.csv
@@ -20,7 +20,7 @@ protocol:
 hicup:
     shortest :
     longest :
-    nofill: True
+    nofill: False
 HiCcompare:
     fdr: 0.01
     logFC: 0
