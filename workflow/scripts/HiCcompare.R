@@ -4,6 +4,9 @@ library(reshape2)
 library(HiCcompare)
 #pdf(NULL)
 
+# Prevent scientific notation
+options(scipen=999)
+
 get_group <- function(path) {
   splitpath = gsub('\\..*$', '', basename(path))
   split = strsplit(splitpath, '-')[[1]]
@@ -24,41 +27,38 @@ missingBins <- function(hic.table) {
   # Find any bins not shared in both lists
   # Some intervals may be completely missing from bin1 or bin2 due to missing data.
   # Dummy values must be added here to ensure a square matrix is produced.
-  missingBins = setdiff(union(hic.table$bin1, hic.table$bin2), 
-                        intersect(hic.table$bin1, hic.table$bin2))
+  missingBins = setdiff(union(hic.table$start1, hic.table$start2), 
+                        intersect(hic.table$start1, hic.table$start2))
   for (bin in missingBins) {
-    hic.table[nrow(hic.table) + 1, c("bin1","bin2")]  = list(bin, bin)
+    hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(bin, bin)
   }
   return(hic.table)
 }
 
 
-extendBins <- function(hic.table, chr, start, end, binsize) {
+extendBins <- function(hic.table, start, end, binsize) {
   # Extend table to encompass incomplete start and end ranges
   end_intervals = seq(max(hic.table$end1, hic.table$end2), end + binsize, binsize)[-1]
   start_intervals = seq(min(hic.table$start1, hic.table$start2), start - binsize, -binsize)[-1]
   for (interval in start_intervals) {
-    bin1 = paste(chr, interval, sep='-')
-    bin2 = paste(chr, interval + binsize, sep='-')
-    hic.table[nrow(hic.table) + 1, c("bin1","bin2")]  = list(bin1, bin2)
+    hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(interval, interval + binsize)
   }
   for (interval in end_intervals) {
-    bin1 = paste(chr, interval, sep='-')
-    bin2 = paste(chr, interval - binsize, sep='-')
-    hic.table[nrow(hic.table) + 1, c("bin1","bin2")]  = list(bin1, bin2)
+    hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(interval, interval - binsize)
   }
   return(hic.table)
 }
 
 
 writeMatrix <- function(hic.table, out, chr, start, end, binsize) {
-  hic.table$bin1 = paste(hic.table$chr1, hic.table$start1, sep='-')
-  hic.table$bin2 = paste(hic.table$chr2, hic.table$start2, sep='-')
-  hic.table = extendBins(hic.table, chr, start, end, binsize)
+  hic.table = extendBins(hic.table, start, end, binsize)
   hic.table = missingBins(hic.table)
-  homer <- dcast(hic.table, bin1 ~ bin2, value.var = "Z", fill = 0)
-  rows <- homer[,1]
-  homer[,1] <- NULL
+
+  homer <- dcast(hic.table, start1 ~ start2, value.var = "Z", fill = 0)
+  homer[,1] = paste(chr, homer[,1], sep='-')
+  rows = homer[,1]
+  homer[,1] = NULL
+  colnames(homer) = rows
   homer[lower.tri(homer)] <- t(homer)[lower.tri(homer)]
   homer = cbind.data.frame('HiCMatrix (directory=.)' = rows, 'Regions' = rows, homer)
   write.table(x = homer, file = out, quote = FALSE, sep = "\t", row.names = FALSE)
@@ -69,8 +69,8 @@ args = commandArgs(trailingOnly=TRUE)
 
 outdir = args[1]
 chr = args[2]
-start = args[3]
-end = args[4]
+start = as.integer(args[3])
+end = as.integer(args[4])
 binsize = as.integer(args[5])
 matrices = tail(args, -5)
 
@@ -127,7 +127,7 @@ for (matrix1 in matrices) {
       out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
     
     hic.table = as.data.frame(hic.table)
-    hic.table.original = hic.table
     writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
   }
 }
+
