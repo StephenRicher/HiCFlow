@@ -135,7 +135,7 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
             expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
             expand('diffhic/genome/{cell_type}-custom.fa',
                 cell_type=list(CELL_TYPES))]
-phase_gatk = [expand('allele/hapcut2/{cell_type}-phased.vcf.gz',
+phase_gatk = [expand('allele/hapcut2/{cell_type}-phased.vcf',
                 cell_type=list(CELL_TYPES))] if not ALLELE_SPECIFIC else []
 phase_bcf = [expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
                 region=REGIONS.index,
@@ -1319,14 +1319,14 @@ rule HiCcompare:
         'logs/HiCcompare/{region}-{bin}.log'
     params:
         dir = lambda wc: f'HiCcompare/{wc.region}/{wc.bin}',
-        chr = lambda wc: REGIONS['chr'][wc.region]
-    threads:
-        12
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region]
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
-        '({SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {wildcards.bin} '
-        '{input} || touch {output}) &> {log}'
+        '({SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {params.start} '
+        '{params.end} {wildcards.bin} {input} || touch {output}) &> {log}'
 
 
 rule homerToH5:
@@ -1446,7 +1446,6 @@ rule plotCompare:
     output:
         'matrices/{region}/{bin}/plots/{region}-{bin}-{group1}-vs-{group2}.png'
     params:
-        # Ensure region is 1 bin smaller because it is trimmed by HiCcompare
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
@@ -1716,6 +1715,8 @@ if not ALLELE_SPECIFIC:
             tmp = config['tmpdir'],
             intervals = config['protocol']['regions'],
             java_opts = '-Xmx6G',
+            min_prune = 5, # Increase to speed up
+            downsample = 25, # Decrease to speed up
             extra = ''
         log:
             'logs/gatk/haplotypeCaller/{cell_type}.log'
@@ -1724,6 +1725,8 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk --java-options {params.java_opts} HaplotypeCaller '
             '{params.extra} --input {input.bam} --output {output} '
+            '--max-reads-per-alignment-start {params.downsample} '
+            '--min-pruning {params.min_prune} '
             '--reference {input.ref} --intervals {params.intervals} '
             '--tmp-dir {params.tmp} -ERC GVCF &> {log}'
 
@@ -1986,7 +1989,7 @@ if not ALLELE_SPECIFIC:
             vcf = hapCut2Input
         output:
             block = 'allele/hapcut2/{region}/{cell_type}-{region}',
-            vcf = 'allele/hapcut2/{region}/{cell_type}-{region}.phased.vcf'
+            vcf = 'allele/hapcut2/{region}/{cell_type}-{region}.phased.VCF'
         group:
             'hapcut2'
         log:
@@ -2053,13 +2056,13 @@ if not ALLELE_SPECIFIC:
             '> {output} 2> {log} || touch {output}'
 
 
-    rule compressVCF:
+    rule bgzipVCF:
         input:
              rules.extractVCF.output
         output:
             f'{rules.extractVCF.output}.gz'
         log:
-            'logs/compressVCF/{cell_type}-{region}.log'
+            'logs/bgzipVCF/{cell_type}-{region}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
@@ -2068,9 +2071,9 @@ if not ALLELE_SPECIFIC:
 
     rule indexVCF:
         input:
-            rules.compressVCF.output
+            rules.bgzipVCF.output
         output:
-            f'{rules.compressVCF.output}.csi'
+            f'{rules.bgzipVCF.output}.csi'
         log:
             'logs/indexVCF/{cell_type}-{region}.log'
         conda:
@@ -2079,22 +2082,35 @@ if not ALLELE_SPECIFIC:
             'bcftools index -f {input} 2> {log} || touch {output}'
 
 
+    def validVCFS(wildcards):
+        VCFs = []
+        allVCFs = expand(
+            'allele/hapcut2/{region}/{cell_type}-{region}-best.vcf.gz',
+            region=REGIONS.index, cell_type=wildcards.cell_type)
+        for vcf in allVCFs:
+            if os.path.exists(vcf) and os.path.getsize(vcf) > 0:
+                VCFs.append(vcf)
+        return VCFs
+
+
     rule mergeVCFsbyRegion:
         input:
-            indexes = expand(
-                'allele/hapcut2/{region}/{{cell_type}}-{region}-best.vcf.gz.csi',
-                region = REGIONS.index),
-            vcfs = expand(
+            expand(
                 'allele/hapcut2/{region}/{{cell_type}}-{region}-best.vcf.gz',
-                region = REGIONS.index),
+                region=REGIONS.index),
+            expand(
+                'allele/hapcut2/{region}/{{cell_type}}-{region}-best.vcf.gz.csi',
+                region=REGIONS.index),
+            vcfs = validVCFS
         output:
-            'allele/hapcut2/{cell_type}-phased.vcf.gz'
+            'allele/hapcut2/{cell_type}-phased.vcf'
         log:
             'logs/mergeVCFsbyRegion/{cell_type}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
-            'bcftools concat --naive {input.vcfs} > {output} 2> {log}'
+            'bcftools concat --allow-overlaps {input.vcfs} '
+            '> {output} 2> {log}'
 
 
     rule bcftoolsStats:
