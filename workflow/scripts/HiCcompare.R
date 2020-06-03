@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
 
+library(tidyr)
 library(reshape2)
 library(HiCcompare)
 #pdf(NULL)
@@ -23,37 +24,21 @@ empty_file <- function(file) {
 }
 
 
-missingBins <- function(hic.table) {
-  # Find any bins not shared in both lists
-  # Some intervals may be completely missing from bin1 or bin2 due to missing data.
-  # Dummy values must be added here to ensure a square matrix is produced.
-  missingBins = setdiff(union(hic.table$start1, hic.table$start2), 
-                        intersect(hic.table$start1, hic.table$start2))
-  for (bin in missingBins) {
-    hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(bin, bin)
-  }
-  return(hic.table)
-}
-
-
-extendBins <- function(hic.table, start, end, binsize) {
-  # Extend table to encompass incomplete start and end ranges
-  end_intervals = seq(max(hic.table$end1, hic.table$end2), end + binsize, binsize)[-1]
-  start_intervals = seq(min(hic.table$start1, hic.table$start2), start - binsize, -binsize)[-1]
-  for (interval in start_intervals) {
-    hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(interval, interval + binsize)
-  }
-  for (interval in end_intervals) {
-    hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(interval, interval - binsize)
+addMissingIntervals <- function(hic.table, start, end, binsize) {
+  intervals = full_seq(unique(hic.table$start1), period = binsize)
+  intervals = sort(unique(c(seq(min(intervals), start - binsize, -binsize), 
+                            intervals, seq(max(intervals), end + binsize, binsize))))
+  for (place in c('start1', 'start2')) {
+    for (interval in setdiff(intervals, unique(hic.table[,place]))) {
+      hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(interval, interval)
+    }
   }
   return(hic.table)
 }
 
 
 writeMatrix <- function(hic.table, out, chr, start, end, binsize) {
-  hic.table = extendBins(hic.table, start, end, binsize)
-  hic.table = missingBins(hic.table)
-
+  hic.table = addMissingIntervals(hic.table, start, end, binsize)
   homer <- dcast(hic.table, start1 ~ start2, value.var = "Z", fill = 0)
   homer[,1] = paste(chr, homer[,1], sep='-')
   rows = homer[,1]
@@ -130,4 +115,8 @@ for (matrix1 in matrices) {
     writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
   }
 }
+
+
+
+
 
