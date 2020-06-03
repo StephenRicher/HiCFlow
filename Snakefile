@@ -238,18 +238,6 @@ rule bowtie2Build:
     shell:
         'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
 
-rule reformatGenes:
-    input:
-        config['genome']['genes']
-    output:
-        f'genome/genes.bed'
-    log:
-        f'logs/reformatGenes.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'zcat -f {input} | {SCRIPTS}/reformatGenes.py > {output} 2> {log}'
-
 
 rule fastQC:
     input:
@@ -1035,25 +1023,6 @@ rule detectLoops:
         '&> {log} || touch {output} && touch {output} '
 
 
-# Deprecetad rule - now we build comparison matrices from HiCcompare output see homerToH5
-rule compareMatrices:
-    input:
-        expand('matrices/{{region}}/{{bin}}/ice/{group}-{{region}}-{{bin}}.h5',
-               group = list(GROUPS))
-    output:
-        expand('matrices/{{region}}/{{bin}}/ice/{group1}-vs-{group2}-{{region}}-{{bin}}.h5',
-               group1 = list(GROUPS), group2 = list(GROUPS))
-    log:
-        'logs/compareMatrices/{region}-{bin}.log'
-    params:
-        operation = config['compareMatrices']['operation']
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        '{SCRIPTS}/compareMatrices.py --operation {params.operation} '
-        '{input} &> {log}'
-
-
 rule reformatHomer:
     input:
         'matrices/{region}/{bin}/{method}/{all}-{region}-{bin}.h5'
@@ -1127,6 +1096,8 @@ rule OnTAD:
         chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'matrices/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
+    group:
+        'OnTAD'
     log:
         'logs/OnTAD/{all}-{region}-{bin}.log'
     shell:
@@ -1142,6 +1113,8 @@ rule reformatLinks:
     params:
         region = REGIONS.index,
         start = lambda wildcards: REGIONS['start'][wildcards.region]
+    group:
+        'OnTAD'
     log:
         'logs/reformatLinks/{all}-{region}-{bin}.log'
     shell:
@@ -1156,15 +1129,17 @@ rule createConfig:
         loops = 'matrices/{region}/{bin}/loops/{group}-{region}-{bin}.bedgraph',
         insulations = 'matrices/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
         tads = 'matrices/{region}/{bin}/tads/{group}-{region}-{bin}-ontad.links',
-        genes = rules.reformatGenes.output
+        genes = config['genome']['genes']
     output:
         'matrices/{region}/{bin}/plots/configs/{group}-{region}-{bin}.ini'
-    conda:
-        f'{ENVS}/python3.yaml'
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
-        depth = lambda wc: int(REGIONS['length'][wc.region] / 2),
+        depth = lambda wc: int(REGIONS['length'][wc.region] / 2)
+    group:
+        'plotHiC'
+    conda:
+        f'{ENVS}/python3.yaml'
     log:
         'logs/createConfig/{group}-{region}-{bin}.log'
     shell:
@@ -1189,10 +1164,12 @@ rule plotHiC:
         end = lambda wc: REGIONS['end'][wc.region],
         title = lambda wc: f'"{wc.group} : {wc.region} at {wc.bin} bin size"',
         dpi = 600
-    log:
-        'logs/plotHiC/{group}-{region}-{bin}.log'
+    group:
+        'plotHiC'
     conda:
         f'{ENVS}/pygenometracks.yaml'
+    log:
+        'logs/plotHiC/{group}-{region}-{bin}.log'
     threads:
         12 # Need to ensure it is run 1 at a time!
     shell:
@@ -1334,6 +1311,8 @@ rule homerToH5:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer'
     output:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.h5'
+    group:
+        'HiCcompare'
     log:
         'logs/homerToH5/{group1}-vs-{group2}-{region}-{bin}.log'
     conda:
@@ -1386,7 +1365,7 @@ rule createCompareConfig:
         matrix = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.h5',
         links = ['HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up.links',
                  'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down.links'],
-        genes = rules.reformatGenes.output
+        genes = config['genome']['genes']
     output:
         'matrices/{region}/{bin}/plots/configs/{region}-{bin}-{group1}-vs-{group2}-compare.ini',
     params:
@@ -1396,6 +1375,8 @@ rule createCompareConfig:
         colourmap = config['compareMatrices']['colourmap'],
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax']
+    group:
+        'HiCcompare'
     log:
         'logs/createCompareConfig/{region}-{bin}-{group1}-{group2}.log'
     conda:
@@ -1408,38 +1389,6 @@ rule createCompareConfig:
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
 
-# Deprecetated rule
-rule mergeConfigs:
-    input:
-        links_up = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-up.links',
-            group1 = list(GROUPS), group2 = list(GROUPS)),
-        links_down = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-down.links',
-            group1 = list(GROUPS), group2 = list(GROUPS)),
-        configs = expand(
-            'matrices/{{region}}/{{bin}}/plots/configs/{group}-{{region}}-{{bin}}.ini',
-            group = list(GROUPS))
-    output:
-        expand(
-            'matrices/{{region}}/{{bin}}/plots/configs/{{region}}-{{bin}}-{group1}-vs-{group2}.ini',
-            group1 = list(GROUPS), group2 = list(GROUPS))
-    group:
-        'HiCcompare'
-    log:
-        'logs/mergeConfigs/{region}-{bin}.log'
-    params:
-        prefix = lambda wc: f'matrices/{wc.region}/{wc.bin}/plots/configs/{wc.region}-{wc.bin}-'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/mergeConfigsHiCcompare.py '
-            '--up {input.links_up} '
-            '--down {input.links_down} '
-            '--configs {input.configs} '
-            '--prefix {params.prefix} &> {log}'
-
-
 rule plotCompare:
     input:
         rules.createCompareConfig.output
@@ -1450,12 +1399,14 @@ rule plotCompare:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
         dpi = 600
+    group:
+        'HiCcompare'
+    conda:
+        f'{ENVS}/pygenometracks.yaml'
     log:
         'logs/plotAnalysis/{region}-{bin}-{group1}-vs-{group2}.log'
     threads:
         12 # Need to ensure it is run 1 at a time!
-    conda:
-        f'{ENVS}/pygenometracks.yaml'
     shell:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
         '--region {params.chr}:{params.start}-{params.end} '
@@ -2127,101 +2078,6 @@ if not ALLELE_SPECIFIC:
         shell:
             'bcftools stats {input} > {output} 2> {log}'
 
-    #### NOT USED ###
-
-    rule run_hapcompass:
-        input:
-            vcf = rules.splitVCFS.output,
-            bam = rules.deduplicate.output.bam
-        output:
-            expand(
-                'allele/hapcompass/{{cell_type}}-{{region}}_{ext}',
-                ext = ['MWER_solution.txt', 'reduced_representation.vcf',
-                       'reduced_representation.sam', 'frags.txt',
-                       'phasedSolution.txt', 'reads.sam',])
-        params:
-            dir = 'allele/hapcompass'
-        log:
-            'logs/run_hapcompass/{cell_type}-{region}.log'
-        conda:
-            f'{ENVS}/openjdk.yaml'
-        resources:
-            mem_mb = 120000
-        shell:
-            'java -Xmx120g -jar {SCRIPTS}/hapcompass.jar '
-            '--bam {input.bam} --vcf {input.vcf} --debug '
-            '--output {params.dir}/{wildcards.cell_type}-{wildcards.region} '
-            '&> {log} || touch {output} '
-
-
-    rule extract_best_hapcompass_phasing:
-        input:
-            'allele/hapcompass/{cell_type}-{region}_MWER_solution.txt'
-        output:
-            'allele/hapcompass/{cell_type}-{region}-best.txt'
-        log:
-            'logs/extract_best_hapcompass_phasing/{cell_type}-{region}.log'
-        shell:
-            '{SCRIPTS}/extract_best_hapcompass.sh {input} > {output} 2> {log}'
-
-
-    rule reformat_hapcompass:
-        input:
-            mwer = rules.extract_best_hapcompass_phasing.output,
-            vcf = rules.splitVCFS.output
-        output:
-            'allele/hapcompass/{cell_type}-{region}-best.txt.vcf'
-        log:
-            'logs/reformat_vcf/{cell_type}-{region}.log'
-        conda:
-            f'{ENVS}/openjdk.yaml'
-        shell:
-            'java -jar {SCRIPTS}/hc2vcf.jar {input.mwer} {input.vcf} 2 true '
-            '2> {log} || touch {output}'
-
-
-    rule compress_hapcompass:
-        input:
-             rules.reformat_hapcompass.output
-        output:
-            f'{rules.reformat_hapcompass.output}.gz'
-        log:
-            'logs/compress_hapcompass/{cell_type}-{region}.log'
-        conda:
-            f'{ENVS}/bcftools.yaml'
-        shell:
-            'bcftools view -O z {input} > {output} 2> {log} || touch {output}'
-
-
-    rule index_hapcompass:
-        input:
-            rules.compress_hapcompass.output
-        output:
-            f'{rules.compress_hapcompass.output}.csi'
-        log:
-            'logs/index_hapcompass/{cell_type}-{region}.log'
-        conda:
-            f'{ENVS}/bcftools.yaml'
-        shell:
-            'bcftools index -f {input} 2> {log} || touch {output}'
-
-
-    rule merge_phased_regions:
-        input:
-            vcfs = expand(
-                'allele/hapcompass/{{cell_type}}-{region}-best.txt.vcf.gz',
-                region = REGIONS.index),
-            indexes = expand(
-                'allele/hapcompass/{{cell_type}}-{region}-best.txt.vcf.gz.csi',
-                region = REGIONS.index)
-        output:
-            'allele/hapcompass/{cell_type}-phased.vcf.gz'
-        log:
-            'logs/merge_phased_regions/{cell_type}.log'
-        conda:
-            f'{ENVS}/bcftools.yaml'
-        shell:
-            'bcftools concat --naive {input.vcfs} > {output} 2> {log}'
 
 
 rule multiqc:
