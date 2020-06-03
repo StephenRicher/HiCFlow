@@ -1135,7 +1135,7 @@ rule createConfig:
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
-        depth = lambda wc: int(REGIONS['length'][wc.region] / 2)
+        depth = lambda wc: int(REGIONS['length'][wc.region])
     group:
         'plotHiC'
     conda:
@@ -1143,7 +1143,7 @@ rule createConfig:
     log:
         'logs/createConfig/{group}-{region}-{bin}.log'
     shell:
-        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --flip '
+        '{SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
         '--insulations {input.insulations} --log '
         '--loops {input.loops} '
         '--tads {input.tads} '
@@ -1371,7 +1371,7 @@ rule createCompareConfig:
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
-        depth = lambda wc: int(REGIONS['length'][wc.region] / 2),
+        depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = config['compareMatrices']['colourmap'],
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax']
