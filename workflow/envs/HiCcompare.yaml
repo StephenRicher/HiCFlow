@@ -6,5 +6,6 @@ dependencies:
   - r
   - r-base
   - libblas
+  - r-tidyr
   - r-r.utils
   - bioconductor-hiccompare
