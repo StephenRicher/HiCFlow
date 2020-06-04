@@ -1,6 +1,5 @@
 #!/usr/bin/env Rscript
 
-library(tidyr)
 library(reshape2)
 library(HiCcompare)
 #pdf(NULL)
@@ -25,7 +24,7 @@ empty_file <- function(file) {
 
 
 addMissingIntervals <- function(hic.table, start, end, binsize) {
-  intervals = full_seq(unique(hic.table$start1), period = binsize)
+  intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
   intervals = sort(unique(c(seq(min(intervals), start - binsize, -binsize), 
                             intervals, seq(max(intervals), end + binsize, binsize))))
   for (place in c('start1', 'start2')) {
