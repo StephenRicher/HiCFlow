@@ -1243,9 +1243,9 @@ rule juicerPre:
     conda:
         f'{ENVS}/openjdk.yaml'
     shell:
-        'java -jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
+        '(java -jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
         '-c {params.chr} -r {params.resolutions} '
-        '{input.tsv} {output} {input.chrom_sizes} 2> {log}'
+        '{input.tsv} {output} {input.chrom_sizes} || touch {output}) &> {log}'
 
 
 # Reform for HiCcompare input
@@ -1264,10 +1264,10 @@ rule straw:
     conda:
         f'{ENVS}/hic-straw.yaml'
     shell:
-        '{SCRIPTS}/run-straw.py NONE {input} '
+        '({SCRIPTS}/run-straw.py NONE {input} '
         '{params.chr}:{params.start}:{params.end} '
         '{params.chr}:{params.start}:{params.end} '
-        'BP {wildcards.bin} {output} &> {log}'
+        'BP {wildcards.bin} {output} || touch {output}) &> {log}'
 
 
 rule HiCcompare:
