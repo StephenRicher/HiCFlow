@@ -49,6 +49,15 @@ writeMatrix <- function(hic.table, out, chr, start, end, binsize) {
 }
 
 
+numBins <- function(start, end, binsize) {
+  intervals = length(seq(start, end, binsize))
+  total_bins = intervals^2
+  lower_half = (total_bins - intervals)/2
+  unique_bins =  total_bins - lower_half
+  return(unique_bins)
+}
+
+
 args = commandArgs(trailingOnly=TRUE)
 
 outdir = args[1]
@@ -58,7 +67,7 @@ end = as.integer(args[4])
 binsize = as.integer(args[5])
 matrices = tail(args, -5)
 
-numChanges = as.integer(2.539842873*10^-8 * binsize^2 - 2.871604938*10^-2 * binsize + 3617.620651)
+#numChanges = as.integer(2.539842873*10^-8 * binsize^2 - 2.871604938*10^-2 * binsize + 3617.620651)
 
 # Note this script reruns pairwise groups to more easily define snakemake output
 for (matrix1 in matrices) {
@@ -83,10 +92,13 @@ for (matrix1 in matrices) {
     png(loess_plot)
     dev.off()
     
+    # Number of changes is 1% of unique bins or 300, whichever higher
+    changes = as.integer(max(300, numBins(start, end, binsize) * 0.01))
+    
     # Very sparse matrices can trigger exceptions in filter params
     err = tryCatch(
       expr = {
-        filter_params(hic.table, numChanges = numChanges, Plot = TRUE)
+        filter_params(hic.table, numChanges = changes, Plot = TRUE)
       }, 
       error = function(err) {
         return(NULL)
