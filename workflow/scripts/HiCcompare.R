@@ -87,15 +87,16 @@ for (matrix1 in matrices) {
     }
 
     data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
-
-    hic.table <- hic_loess(data.table, Plot = TRUE, Plot.smooth = FALSE)
+    
     png(loess_plot)
+    hic.table <- hic_loess(data.table, Plot = TRUE, Plot.smooth = FALSE)
     dev.off()
     
     # Number of changes is 1% of unique bins or 300, whichever higher
     changes = as.integer(max(300, numBins(start, end, binsize) * 0.01))
     
     # Very sparse matrices can trigger exceptions in filter params
+    png(filter_plot)
     err = tryCatch(
       expr = {
         filter_params(hic.table, numChanges = changes, Plot = TRUE)
@@ -104,16 +105,17 @@ for (matrix1 in matrices) {
         return(NULL)
       }
     )
+    dev.off()
+    
     if (is.null(err)) {
       print(paste('Skipping', matrix1, matrix2))
       next
     }
     
-    png(filter_plot)
-    dev.off()
-    hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = TRUE)
     png(compare_plot)
+    hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = TRUE)
     dev.off()
+    
     hic.table$abs.adj.M = abs(hic.table$adj.M)
     hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 
