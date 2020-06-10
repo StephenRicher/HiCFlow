@@ -48,7 +48,9 @@ default_config = {
         {'operation' :   'log2ratio'  ,
          'colourmap' :   'bwr'        ,
          'vMin' :        -3           ,
-         'vMax' :        3            ,},
+         'vMax' :        3            ,
+         'smooth':       False         ,
+         'size':         3            ,},
     'binsize':           [5000, 10000],
     'fastq_screen':      None,
     'tmpdir':            tempfile.gettempdir(),
@@ -114,7 +116,7 @@ else:
 
 
 # Generate list of group comparisons - this avoids self comparison
-COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.permutations(list(GROUPS))]
+COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)]
 preQC_mode = ['qc/multiqc', 'qc/multiBamQC', 'qc/filterQC/ditag_length.png']
 HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
@@ -130,8 +132,8 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
                 region=REGIONS.index, bin=BINS, compare = COMPARES),
             expand('matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, group=list(GROUPS)),
-            expand('matrices/{region}/{all}-{region}.hic',
-                region=REGIONS.index, all=SAMPLES+list(GROUPS)),
+            #expand('matrices/{region}/{all}-{region}.hic',
+            #    region=REGIONS.index, all=SAMPLES+list(GROUPS)),
             expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
             expand('diffhic/genome/{cell_type}-custom.fa',
                 cell_type=list(CELL_TYPES))]
@@ -1306,9 +1308,34 @@ rule HiCcompare:
         '{params.end} {wildcards.bin} {input} || touch {output}) &> {log}'
 
 
-rule homerToH5:
+rule applyMedianFilter:
     input:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer'
+    output:
+        'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-smoothed.homer'
+    params:
+        size = config['compareMatrices']['size']
+    group:
+        'HiCcompare'
+    log:
+        'logs/applyMedianFilter/{group1}-vs-{group2}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/smoothHiC.py {input} --size {params.size} '
+        '> {output} 2> {log}'
+
+
+def homer2H5Input(wc):
+    if config['compareMatrices']['smooth']:
+        return rules.applyMedianFilter.output
+    else:
+        return f'HiCcompare/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}.homer'
+
+
+rule homerToH5:
+    input:
+        homer2H5Input
     output:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.h5'
     group:
