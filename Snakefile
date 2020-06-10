@@ -49,7 +49,7 @@ default_config = {
          'colourmap' :   'bwr'        ,
          'vMin' :        -3           ,
          'vMax' :        3            ,
-         'smooth':       False         ,
+         'smooth':       True         ,
          'size':         3            ,},
     'binsize':           [5000, 10000],
     'fastq_screen':      None,
@@ -95,6 +95,7 @@ GENOMES = load_genomes(config['genome']['table'])
 
 
 wildcard_constraints:
+    all = r'[^-\.\/]+',
     cell_type = r'[^-\.\/]+',
     pre_group = r'[^-\.\/g]+',
     pre_sample = r'[^-\.\/g]+-\d+',
@@ -1227,6 +1228,7 @@ def getChromSizes(wildcards):
         all = samples + groups
         if wildcards.all in all:
             type = cell_type
+            break
 
     return expand('genome/chrom_sizes/{cell_type}.chrom.sizes', cell_type=type)
 
@@ -1245,9 +1247,9 @@ rule juicerPre:
     conda:
         f'{ENVS}/openjdk.yaml'
     shell:
-        '(java -jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
+        'java -jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
         '-c {params.chr} -r {params.resolutions} '
-        '{input.tsv} {output} {input.chrom_sizes} || touch {output}) &> {log}'
+        '{input.tsv} {output} {input.chrom_sizes} &> {log}'
 
 
 # Reform for HiCcompare input
@@ -1266,36 +1268,28 @@ rule straw:
     conda:
         f'{ENVS}/hic-straw.yaml'
     shell:
-        '({SCRIPTS}/run-straw.py NONE {input} '
+        '{SCRIPTS}/run-straw.py NONE {input} '
         '{params.chr}:{params.start}:{params.end} '
         '{params.chr}:{params.start}:{params.end} '
-        'BP {wildcards.bin} {output} || touch {output}) &> {log}'
+        'BP {wildcards.bin} {output} &> {log}'
 
 
 rule HiCcompare:
     input:
-        expand('matrices/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-sutm.txt',
-               group = list(GROUPS))
+        'matrices/{region}/{bin}/{group1}-{region}-{bin}-sutm.txt',
+        'matrices/{region}/{bin}/{group2}-{region}-{bin}-sutm.txt'
     output:
-        matrices = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}.homer',
-            group1 = list(GROUPS), group2 = list(GROUPS)),
-        links = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}.links',
-            group1 = list(GROUPS), group2 = list(GROUPS)),
-        loess = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-loess.png',
-            group1 = list(GROUPS), group2 = list(GROUPS)),
-        filter = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-filter_params.png',
-            group1 = list(GROUPS), group2 = list(GROUPS)),
-        compare = expand(
-            'HiCcompare/{{region}}/{{bin}}/{group1}-vs-{group2}-hicCompare.png',
-            group1 = list(GROUPS), group2 = list(GROUPS))
+        matrices = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
+        links = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links',
+        loess = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-loess.png',
+        filter = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-filter_params.png',
+        compare = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-hicCompare.png'
     group:
         'HiCcompare'
     log:
-        'logs/HiCcompare/{region}-{bin}.log'
+        'logs/HiCcompare/{group1}-vs-{group2}-{region}-{bin}.log'
+    threads:
+        12
     params:
         dir = lambda wc: f'HiCcompare/{wc.region}/{wc.bin}',
         chr = lambda wc: REGIONS['chr'][wc.region],
@@ -1304,13 +1298,13 @@ rule HiCcompare:
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
-        '({SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {params.start} '
-        '{params.end} {wildcards.bin} {input} || touch {output}) &> {log}'
+        '{SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {params.start} '
+        '{params.end} {wildcards.bin} {input} &> {log}'
 
 
 rule applyMedianFilter:
     input:
-        'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer'
+        rules.HiCcompare.output.matrices
     output:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-smoothed.homer'
     params:
@@ -1330,7 +1324,7 @@ def homer2H5Input(wc):
     if config['compareMatrices']['smooth']:
         return rules.applyMedianFilter.output
     else:
-        return f'HiCcompare/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}.homer'
+        return rules.HiCcompare.output.matrices
 
 
 rule homerToH5:
@@ -1370,8 +1364,8 @@ rule filterHiCcompare:
     input:
         'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
     output:
-        up = f'HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-up.links',
-        down = f'HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-down.links'
+        up = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up.links',
+        down = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down.links'
     params:
         p_value = config['HiCcompare']['fdr'],
         log_fc = config['HiCcompare']['logFC'],
