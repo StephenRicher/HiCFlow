@@ -14,14 +14,6 @@ get_group <- function(path) {
   return(sample)
 }
 
-empty_file <- function(file) {
-  if (!(file.exists(file)) || (file.info(file)$size == 0)) {
-    return(TRUE)
-  } else {
-    return(FALSE)
-  }
-}
-
 
 addMissingIntervals <- function(hic.table, start, end, binsize) {
   intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
@@ -65,69 +57,58 @@ chr = args[2]
 start = as.integer(args[3])
 end = as.integer(args[4])
 binsize = as.integer(args[5])
-matrices = tail(args, -5)
+matrix1 = args[6]
+matrix2 = args[7]
 
-#numChanges = as.integer(2.539842873*10^-8 * binsize^2 - 2.871604938*10^-2 * binsize + 3617.620651)
+group1 = get_group(matrix1)
+group2 = get_group(matrix2)
 
-# Note this script reruns pairwise groups to more easily define snakemake output
-for (matrix1 in matrices) {
-  for (matrix2 in matrices) {
+loess_plot = paste(outdir, '/', group1, '-vs-', group2, '-loess.png', sep = '')
+filter_plot = paste(outdir, '/', group1, '-vs-', group2, '-filter_params.png', sep = '')
+compare_plot = paste(outdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep = '')
+out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
+out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
 
-    group1 = get_group(matrix1)
-    group2 = get_group(matrix2)
+data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
 
-    loess_plot = paste(outdir, '/', group1, '-vs-', group2, '-loess.png', sep = '')
-    filter_plot = paste(outdir, '/', group1, '-vs-', group2, '-filter_params.png', sep = '')
-    compare_plot = paste(outdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep = '')
-    out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
-    out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
+png(loess_plot)
+hic.table <- hic_loess(data.table, Plot = TRUE, Plot.smooth = FALSE)
+dev.off()
 
-    for (file in c(loess_plot, filter_plot, compare_plot, out_links, out_matrix)) {
-        system(paste('touch', file))
-    }
+# Number of changes is 1% of unique bins or 300, whichever higher
+changes = as.integer(max(300, numBins(start, end, binsize) * 0.01))
 
-    data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
-    
-    png(loess_plot)
-    hic.table <- hic_loess(data.table, Plot = TRUE, Plot.smooth = FALSE)
-    dev.off()
-    
-    # Number of changes is 1% of unique bins or 300, whichever higher
-    changes = as.integer(max(300, numBins(start, end, binsize) * 0.01))
-    
-    # Very sparse matrices can trigger exceptions in filter params
-    png(filter_plot)
-    err = tryCatch(
-      expr = {
-        filter_params(hic.table, numChanges = changes, Plot = TRUE)
-      }, 
-      error = function(err) {
-        return(NULL)
-      }
-    )
-    dev.off()
-    
-    if (is.null(err)) {
-      print(paste('Skipping', matrix1, matrix2))
-      next
-    }
-    
-    png(compare_plot)
-    hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = TRUE)
-    dev.off()
-    
-    hic.table$abs.adj.M = abs(hic.table$adj.M)
-    hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
-
-    # Use absolute M for pyGenomeTracks, add normal M to last column to be read by links2interval script
-    write.table(
-      hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
-      out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
-    
-    hic.table = as.data.frame(hic.table)
-    writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
+# Very sparse matrices can trigger exceptions in filter params
+png(filter_plot)
+err = tryCatch(
+  expr = {
+    filter_params(hic.table, numChanges = changes, Plot = TRUE)
+  }, 
+  error = function(err) {
+    return(NULL)
   }
+)
+dev.off()
+
+if (is.null(err)) {
+  print(paste('Skipping', matrix1, matrix2))
+  next
 }
+
+png(compare_plot)
+hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = TRUE)
+dev.off()
+
+hic.table$abs.adj.M = abs(hic.table$adj.M)
+hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
+
+# Use absolute M for pyGenomeTracks, add normal M to last column to be read by links2interval script
+write.table(
+  hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
+  out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
+
+hic.table = as.data.frame(hic.table)
+writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
 
 
 
