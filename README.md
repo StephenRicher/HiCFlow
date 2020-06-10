@@ -22,15 +22,12 @@ The pipeline utilises the workflow management system Snakemake and automatically
   * [Configuration](#configuration)
   * [Usage](#usage)
   * [Example output](#example-output)
-   * [HiC track](#hic-track)
-   * [HiCcompare track](#hiccompare-track)
-   * [UCSC browser](#ucsc-browser)
-   * [HiCRep](#hicrep)
-   * [MultiQC report](#multiqc-report)
-   * [Custom QC metrics](#custom-qc-metrics)
-  * [Citation](#citation)
-  * [Documentation](#documentation)
-  * [External users](#external-users)
+     * [HiC track](#hic-track)
+     * [HiCcompare track](#hiccompare-track)
+     * [UCSC browser](#ucsc-browser)
+     * [HiCRep](#hicrep)
+     * [MultiQC report](#multiqc-report)
+     * [Custom QC metrics](#custom-qc-metrics)
 
 ## Installation
 
