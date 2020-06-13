@@ -17,8 +17,9 @@ get_group <- function(path) {
 
 addMissingIntervals <- function(hic.table, start, end, binsize) {
   intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
-  intervals = sort(unique(c(seq(min(intervals), start - binsize, -binsize), 
-                            intervals, seq(max(intervals), end + binsize, binsize))))
+  # Add a 2 bin buffer to each side
+  intervals = sort(unique(c(seq(min(intervals), start - (2*binsize), -binsize),
+                            intervals, seq(max(intervals), end + (2*binsize), binsize))))
   for (place in c('start1', 'start2')) {
     for (interval in setdiff(intervals, unique(hic.table[,place]))) {
       hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(interval, interval)
@@ -80,20 +81,8 @@ changes = as.integer(max(300, numBins(start, end, binsize) * 0.01))
 
 # Very sparse matrices can trigger exceptions in filter params
 png(filter_plot)
-err = tryCatch(
-  expr = {
-    filter_params(hic.table, numChanges = changes, Plot = TRUE)
-  }, 
-  error = function(err) {
-    return(NULL)
-  }
-)
+try(filter_params(hic.table, numChanges = changes, Plot = TRUE))
 dev.off()
-
-if (is.null(err)) {
-  print(paste('Skipping', matrix1, matrix2))
-  next
-}
 
 png(compare_plot)
 hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = TRUE)
@@ -109,8 +98,3 @@ write.table(
 
 hic.table = as.data.frame(hic.table)
 writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
-
-
-
-
-
