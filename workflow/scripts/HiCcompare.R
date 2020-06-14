@@ -20,6 +20,7 @@ addMissingIntervals <- function(hic.table, start, end, binsize) {
   # Add a 2 bin buffer to each side
   intervals = sort(unique(c(seq(min(intervals), start - (2*binsize), -binsize),
                             intervals, seq(max(intervals), end + (2*binsize), binsize))))
+  intervals = intervals[!intervals < 0]
   for (place in c('start1', 'start2')) {
     for (interval in setdiff(intervals, unique(hic.table[,place]))) {
       hic.table[nrow(hic.table) + 1, c("start1","start2")]  = list(interval, interval)
