@@ -149,9 +149,9 @@ if not ALLELE_SPECIFIC and config['phase']:
     phase = [expand('allele/hapcut2/{cell_type}-phased.vcf',
         cell_type=list(CELL_TYPES))]
     if PHASE_MODE == 'BCFTOOLS':
-        phase.append(
-            expand('qc/variant_quality/{cell_type}-{region}-bcftoolsStats.txt',
-                region=REGIONS.index, cell_type=list(CELL_TYPES)))
+        phase.append(expand(
+            'qc/variant_quality/{region}/{cell_type}-{region}-bcftoolsStats.txt',
+            region=REGIONS.index, cell_type=list(CELL_TYPES)))
 else:
     phase = []
 
