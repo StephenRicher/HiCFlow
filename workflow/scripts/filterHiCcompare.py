@@ -1,40 +1,27 @@
 #!/usr/bin/env python3
 
+""" Filter interactions of HiCcompare by absolute log fold change and p value.
+    Optionally write UP and DOWN interactions to different files.
+"""
+
 import sys
-import pyCommonTools as pct
+import logging
+import argparse
+import fileinput
 from contextlib import ExitStack
 
-def main():
+__version__ = '1.0.0'
 
-    __version__ = '1.0.0'
 
-    parser = pct.make_parser(
-        verbose=True, version=__version__, infile=True,
-        in_type='LINKS')
-
-    parser.add_argument(
-        '-p', '--p_value', default=0.05, type=float,
-        help='P-value threshold for filtering interactions.')
-    parser.add_argument(
-        '-m', '--log_fc', default=0, type=float,
-        help='Absolute log FC threshold for filtering interactions.')
-    parser.add_argument(
-        '--up', metavar='OUT_UP', help='Output file for UP LINKS file.')
-    parser.add_argument(
-        '--down', metavar='OUT_DOWN', help='Output file for DOWN LINKS file.')
-    parser.set_defaults(function=filter_links)
-
-    return (pct.execute(parser))
-
-def filter_links(infile, up, down, log_fc, p_value):
+def main(file, up, down, log_fc=0, p_value=0.05, **kwargs):
 
     with ExitStack() as stack:
 
-        f = stack.enter_context(pct.open(infile))
-        out_up = stack.enter_context(pct.open(up, 'w'))
-        out_down = stack.enter_context(pct.open(down, 'w'))
+        fh = stack.enter_context(fileinput.input(file))
+        out_up = stack.enter_context(open(up, 'w')) if up else sys.stderr
+        out_down = stack.enter_context(open(down, 'w')) if down else sys.stderr
 
-        for line in f:
+        for line in fh:
             line_split = line.split()
             p_adj = float(line_split[9])
             m_adj = float(line_split[8])
@@ -45,5 +32,47 @@ def filter_links(infile, up, down, log_fc, p_value):
                 else:
                     out_down.write(line)
 
-if __name__ == "__main__":
-    main()
+
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'file', metavar='FILE', nargs='?', default=[],
+        help='Output file of HiCcompare (default: stdin)')
+    custom.add_argument(
+        '--p_value', default=0.05, type=float,
+        help='P-value threshold for filtering  (default: %(default)s)')
+    custom.add_argument(
+        '--log_fc', default=0, type=float,
+        help='Absolute log FC threshold for filtering (default: %(default)s)')
+    custom.add_argument(
+        '--up', default=None,
+        help='Output file for UP interactions (default: stderr)')
+    custom.add_argument(
+        '--down', default=None,
+        help='Output file for DOWN interactions (default: stderr)')
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format = '%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
+
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

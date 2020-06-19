@@ -2,7 +2,7 @@ channels :
   - conda-forge
   - bioconda
   - defaults
-channel_priority: 
+channel_priority:
   - true
 dependencies:
-  - multiqc
+  - multiqc = 1.9

@@ -8,39 +8,15 @@ __email__ = 'sr467@bath.ac.uk'
 __license__ = 'MIT'
 __version__ = '1.0.0'
 
+
 import os
 import sys
-import pyCommonTools as pct
-from timeit import default_timer as timer
+import logging
+import argparse
 
 
-def main():
+def main(truncater, mapper, filter, deduplicator, **kwargs):
 
-    parser = pct.make_parser(verbose=True, version=__version__)
-
-    requiredNamed = parser.add_argument_group(
-        'required named arguments')
-    requiredNamed.add_argument(
-        '--truncater', required=True,
-        help='Truncater summary file.')
-    requiredNamed.add_argument(
-        '--mapper', required=True,
-        help='Mapper summary file.')
-    requiredNamed.add_argument(
-        '--filter', required=True,
-        help='Filter summary file.')
-    requiredNamed.add_argument(
-        '--deduplicator', required=True,
-        help='Deduplicator summary file.')
-
-    parser.set_defaults(function=combine)
-
-    return (pct.execute(parser))
-
-
-def combine(truncater, mapper, filter, deduplicator):
-
-    log = pct.create_logger()
     write_header()
     trunc = process_summary(truncater)
     map = process_summary(mapper)
@@ -85,7 +61,7 @@ def write_header():
 
 def process_summary(summary):
     with open(summary) as f:
-        next(f) # Skip header
+        next(f)  # Skip header
         sample1 = next(f).strip().split()
         try:
             sample2 = next(f).strip().split()
@@ -95,10 +71,45 @@ def process_summary(summary):
     return sample1, sample2
 
 
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    requiredNamed = custom.add_argument_group(
+        'required named arguments')
+    requiredNamed.add_argument(
+        '--truncater', required=True,
+        help='Truncater summary file.')
+    requiredNamed.add_argument(
+        '--mapper', required=True,
+        help='Mapper summary file.')
+    requiredNamed.add_argument(
+        '--filter', required=True,
+        help='Filter summary file.')
+    requiredNamed.add_argument(
+        '--deduplicator', required=True,
+        help='Deduplicator summary file.')
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format = '%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
+
+
 if __name__ == '__main__':
-    log = pct.create_logger()
-    start = timer()
-    RC = main()
-    end = timer()
-    log.info(f'Total time elapsed: {end - start} seconds.')
-    sys.exit(RC)
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

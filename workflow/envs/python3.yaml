@@ -3,7 +3,6 @@ channels :
 dependencies :
   - python=3
   - pip:
-    - pyCommonTools>=2.1.0
     - numpy
     - pandas
     - scipy

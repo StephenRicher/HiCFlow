@@ -14,8 +14,8 @@ import re
 import sys
 import glob
 import shutil
-import pyCommonTools as pct
-
+import logging
+import argparse
 
 def get_filepath(dir, pattern):
     return glob.glob(os.path.join(dir, pattern))[0]
@@ -37,15 +37,14 @@ def move_file(source, destination=None, stderr=False):
 def set_zip(output, ext='.gz'):
     """ Return True is output file should be compressed. """
 
-    log = pct.create_logger()
     zip_out = False
     if output is None:
-        log.info('Uncompressed output will be written to stdout.')
+        logging.info('Uncompressed output will be written to stdout.')
     elif output.endswith(ext):
         zip_out = True
-        log.info(f'Compressed output will be written to {output}.')
+        logging.info(f'Compressed output will be written to {output}.')
     else:
-        log.info(f'Uncompressed output will be written to {output}.')
+        logging.info(f'Uncompressed output will be written to {output}.')
 
     return zip_out
 

@@ -4,36 +4,20 @@
 
 import re
 import sys
+import logging
 import argparse
-import pyCommonTools as pct
-from timeit import default_timer as timer
+import fileinput
+
+__version__ = '1.0.0'
 
 
-def main():
-
-    __version__ = '1.0.0'
-
-    parser = pct.make_parser(
-        verbose=True, version=__version__,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        'infile', metavar='FASTA',
-        help='Input genome reference in FASTA format.')
-    parser.add_argument(
-        'region', metavar='CHR:START-END', type=region,
-        help='Region to invert in 1-based coordinates.')
-    parser.set_defaults(function=invert)
-
-    return (pct.execute(parser))
-
-
-def invert(infile, region):
+def main(file, region, **kwargs):
     header = 0
     in_chr = False
     region_sequence = []
     region_length = region['end'] - region['start'] + 1
-    with pct.open(infile) as f:
-        for line in f:
+    with fileinput.input(file) as fh:
+        for line in fh:
             line = line.strip()
             if line.startswith('>'):
                 # If previous sequence was processed as in_chr
@@ -53,11 +37,11 @@ def invert(infile, region):
                                 region_sequence = ''.join(region_sequence)
                                 inverted = reverseComplement(region_sequence)
                                 for i in inverted:
-                                    print(i, end = '' if count % 60 else '\n')
+                                    print(i, end='' if count % 60 else '\n')
                                     count += 1
                                 in_region = False
                         else:
-                            print(base, end = '' if count % 60 else '\n')
+                            print(base, end='' if count % 60 else '\n')
                             count += 1
                 else:
                     print(line)
@@ -75,7 +59,7 @@ def reverseComplement(sequence):
 def region(value):
     ''' Validate input for region argument '''
 
-    pattern = re.compile('^[^\s]+:[0-9]+-[0-9]+$')
+    pattern = re.compile(r'^[^\s]+:[0-9]+-[0-9]+$')
     if not pattern.match(value):
         raise argparse.ArgumentTypeError(
             f'Expected format is CHR:START-END e.g chr:1-100')
@@ -93,10 +77,37 @@ def region(value):
         return region
 
 
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'file', metavar='FASTA', nargs='?', default=[],
+        help='Input genome reference in FASTA format (default: stdin)')
+    custom.add_argument(
+        'region', metavar='CHR:START-END', type=region,
+        help='Region to invert in 1-based coordinates.')
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format = '%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
+
+
 if __name__ == '__main__':
-    log = pct.create_logger()
-    start = timer()
-    RC = main()
-    end = timer()
-    log.info(f'Total time elapsed: {end - start} seconds.')
-    sys.exit(RC)
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

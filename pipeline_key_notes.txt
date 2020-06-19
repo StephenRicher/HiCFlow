@@ -4,7 +4,6 @@ Review MultiQC update for HiCExplorer module update - see MultiQC v1.9
 ## Manual fixes ##
 
 hicup_deduplicate
-hicup_filter
 multiqc - hicup module
 multiqc - hicexplorer module
 
@@ -19,3 +18,12 @@ If not None: start allele specific pipeline
 If None:
   - Generate normal bowtie2 index
   - Don't run snpsplit
+
+
+If you had an additional binsize to the analysis after a run through
+make sure you run snakemake -R juicerPre to regenerate the .hic files with the
+new bin incorporated
+
+# TO DO
+
+# Need to rerun HiCcompare on cluster when internet is back online (now environment has tidyr)

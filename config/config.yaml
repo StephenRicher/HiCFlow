@@ -1,9 +1,8 @@
-
 workdir: /home/u/sr467/scratch/projects/HiC-new-pipeline
 threads : 16
 data:
     samples: /home/u/sr467/scratch/projects/HiC-new-pipeline/config/cluster-samples.csv
-    phased_vcf: /home/u/sr467/scratch/projects/HiC-new-pipeline/config/cluster-phased-vcfs.csv
+    #phased_vcf: /home/u/sr467/scratch/projects/HiC-new-pipeline/config/cluster-phased-vcfs.csv
 genome :
     table : /home/u/sr467/scratch/projects/HiC-new-pipeline/config/genomes.csv
     genes : /home/u/sr467/scratch/projects/genomes/GRCh38/annotation/gencode.v33.annotation.bed
@@ -24,10 +23,25 @@ hicup:
 HiCcompare:
     fdr: 0.01
     logFC: 0
+compareMatrices:
+    colourmap: bwr
+    vMin: -1.96
+    vMax: 1.96
+    size: 3
+phase: True
+gatk:
+    true_snp1: '/home/u/sr467/scratch/projects/genomes/hg38/hapmap_3.3.hg38.vcf.gz'
+    true_snp2: '/home/u/sr467/scratch/projects/genomes/hg38/1000G_omni2.5.hg38.vcf.gz'
+    nontrue_snp: '/home/u/sr467/scratch/projects/genomes/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz'
+    known: '/home/u/sr467/scratch/projects/genomes/hg38/dbsnp_146.hg38.vcf.gz'
+    true_indel: '/home/u/sr467/scratch/projects/genomes/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz'
+    known: ['/home/u/sr467/scratch/projects/genomes/hg38/dbsnp_146.hg38.vcf.gz',
+            '/home/u/sr467/scratch/projects/genomes/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+            '/home/u/sr467/scratch/projects/genomes/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+
+
 fastq_screen : /home/u/sr467/scratch/projects/HiC-new-pipeline/config/fastq_screen.config
-#binsize : [1000, 3000, 10000]
-binsize : [5000, 10000, 50000]
-known_sites: ['/home/u/sr467/scratch/projects/genomes/hg38/dbsnp_146.hg38.vcf.gz',
-              '/home/u/sr467/scratch/projects/genomes/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
-              '/home/u/sr467/scratch/projects/genomes/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+binsize : [1000, 3000, 5000, 10000, 25000]
+#binsize : [5000, 10000, 25000, 50000]
+
 tmpdir: /home/u/sr467/scratch/tmp
