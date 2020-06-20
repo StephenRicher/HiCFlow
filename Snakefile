@@ -91,7 +91,7 @@ else:
     SAMPLES = ORIGINAL_SAMPLES
     GROUPS = ORIGINAL_GROUPS
     ALLELE_SPECIFIC = False
-    if config['gatk']['known']:
+    if config['gatk']['all_known']:
         PHASE_MODE = 'GATK'
     else:
         PHASE_MODE = 'BCFTOOLS'
@@ -366,7 +366,7 @@ if config['fastq_screen'] is not None:
         threads:
             THREADS
         wrapper:
-            "0.49.0/bio/fastq_screen"
+            "0.51.0/bio/fastq_screen"
 
 
 rule fastQCTrimmed:
@@ -1623,7 +1623,7 @@ if not ALLELE_SPECIFIC:
             recal_table = 'gatk/baseRecalibrator/{cell_type}.recal.table'
         params:
             tmp = config['tmpdir'],
-            known = known_sites(config['gatk']['known']),
+            known = known_sites(config['gatk']['all_known']),
             extra = ''
         log:
             'logs/gatk/baseRecalibrator/{cell_type}.log'
@@ -1759,7 +1759,7 @@ if not ALLELE_SPECIFIC:
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/VariantRecalibrator/{cell_type}-SNP.log'
+            'logs/gatk/variantRecalibrator/{cell_type}-SNP.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1792,7 +1792,7 @@ if not ALLELE_SPECIFIC:
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/VariantRecalibrator/{cell_type}-INDEL.log'
+            'logs/gatk/variantRecalibrator/{cell_type}-INDEL.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:

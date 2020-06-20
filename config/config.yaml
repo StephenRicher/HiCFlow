@@ -35,9 +35,9 @@ gatk:
     nontrue_snp: '/home/u/sr467/scratch/projects/genomes/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz'
     known: '/home/u/sr467/scratch/projects/genomes/hg38/dbsnp_146.hg38.vcf.gz'
     true_indel: '/home/u/sr467/scratch/projects/genomes/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz'
-    known: ['/home/u/sr467/scratch/projects/genomes/hg38/dbsnp_146.hg38.vcf.gz',
-            '/home/u/sr467/scratch/projects/genomes/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
-            '/home/u/sr467/scratch/projects/genomes/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+    all_known: ['/home/u/sr467/scratch/projects/genomes/hg38/dbsnp_146.hg38.vcf.gz',
+                '/home/u/sr467/scratch/projects/genomes/hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+                '/home/u/sr467/scratch/projects/genomes/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
 
 
 fastq_screen : /home/u/sr467/scratch/projects/HiC-new-pipeline/config/fastq_screen.config
