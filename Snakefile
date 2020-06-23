@@ -879,7 +879,7 @@ rule readCountNormalise:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicNormalize --matrices {input} '
+        'hicNormalize --matrices {input} --setToZeroThreshold 1.0 '
         '--outFileName {output} --normalize {params.method} '
         '&> {log} || touch {output} '
 
@@ -916,7 +916,7 @@ rule IceMatrix:
     shell:
         '{SCRIPTS}/hic_correct.sh -p {output.plot} '
         '-o {output.matrix} -u {params.upper_threshold} '
-        '-i {params.iternum} -@ 1 {input} &> {log} || touch {output}'
+        '-i {params.iternum} {input} &> {log} || touch {output}'
 
 
 rule distanceNormalise:
@@ -2046,6 +2046,7 @@ if not ALLELE_SPECIFIC:
 
 
     def validVCFS(wildcards):
+        """ Remove empty files which break bcftools concat. """
         VCFs = []
         allVCFs = expand(
             'allele/hapcut2/{region}/{cell_type}-{region}-best.vcf.gz',
