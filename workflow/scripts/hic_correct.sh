@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
 
 main() {
-    threads=1
     iternum=1000
     upper_threshold=5
-    while getopts ':p:o:u:i:@:' flag; do
+    while getopts ':p:o:u:i:' flag; do
         case "${flag}" in
             p) readonly diagnostic_plot="${OPTARG}" ;;
             o) readonly corrected_matrix="${OPTARG}" ;;
             u) upper_threshold="${OPTARG}" ;;
             i) iternum="${OPTARG}" ;;
-            @) threads="${OPTARG}" ;;
             *) usage ;;
         esac
     done
-    readonly threads
     readonly iternum
     readonly upper_threshold
     shift "$((OPTIND-1))"
