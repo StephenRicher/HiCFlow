@@ -367,7 +367,7 @@ if config['fastq_screen'] is not None:
         threads:
             THREADS
         wrapper:
-            "0.51.0/bio/fastq_screen"
+            "0.49.0/bio/fastq_screen"
 
 
 rule fastQCTrimmed:
@@ -1870,9 +1870,15 @@ if not ALLELE_SPECIFIC:
     rule mpileup:
         input:
             bam = rules.deduplicate.output.bam,
+            bam_index = rules.indexMergedBam.output,
             genome = rules.bgzipGenome.output,
         output:
             pipe('allele/vcfs/{region}/{cell_type}-{region}-mpileup.bcf')
+        params:
+            region = REGIONS.index,
+            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
+            start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
+            end = lambda wildcards: REGIONS['end'][wildcards.region]
         group:
             'bcftoolsVariants'
         log:
@@ -1883,6 +1889,7 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/bcftools.yaml'
         shell:
             'bcftools mpileup -q 15 --ignore-RG --count-orphans '
+            '--regions {params.chr}:{params.start}-{params.end} '
             '--max-depth 100000 --output-type u -f {input.genome} '
             '--threads {threads} {input.bam} > {output} 2> {log} '
 
