@@ -44,7 +44,8 @@ default_config = {
          'nofill' :      False        ,},
     'HiCcompare':
         {'fdr' :         0.05         ,
-         'logFC' :       1            ,},
+         'logFC' :       1            ,
+         'multi' :       False        ,},
     'compareMatrices':
         {'colourmap' :   'bwr'        ,
          'vMin' :        -1.96        ,
@@ -109,7 +110,8 @@ wildcard_constraints:
     rep = r'\d+',
     read = r'R[12]',
     bin = r'\d+',
-    mode = r'SNP|INDEL'
+    mode = r'SNP|INDEL',
+    compare = r'HiCcompare|multiHiCcompare'
 
 if ALLELE_SPECIFIC:
     wildcard_constraints:
@@ -143,7 +145,7 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('qc/hicrep/{region}-{bin}-hicrep.png',
                 region=REGIONS.index, bin=BINS),
-            expand('matrices/{region}/{bin}/plots/{compare}-{region}-{bin}.png',
+            expand('matrices/{region}/{bin}/plots/HiCcompare/{compare}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, compare = COMPARES),
             expand('matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, group=list(GROUPS)),
@@ -152,6 +154,13 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
             expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
             expand('diffhic/genome/{cell_type}-custom.fa',
                 cell_type=list(CELL_TYPES))]
+
+# Run multiHiCcompare if set
+if config['HiCcompare']['multi']:
+    HiC_mode.append(
+        expand('matrices/{region}/{bin}/plots/multiHiCcompare/{compare}-{region}-{bin}.png',
+        region=REGIONS.index, bin=BINS, compare = COMPARES))
+
 if not ALLELE_SPECIFIC and config['phase']:
     phase = [expand('allele/hapcut2/{cell_type}-phased.vcf',
         cell_type=list(CELL_TYPES))]
@@ -861,14 +870,14 @@ rule buildBaseMatrix:
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
-rule meregValidHiC:
+rule mergeValidHiC:
     input:
         expand('matrices/{region}/{{sample}}-{region}.bam',
             region=REGIONS.index)
     output:
         'mapped/{sample}-validHiC.bam'
     log:
-        'logs/meregValidHiC/{sample}.log'
+        'logs/mergeValidHiC/{sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
@@ -1299,39 +1308,10 @@ rule straw:
         '{params.chr}:{params.start}:{params.end} '
         'BP {wildcards.bin} {output} &> {log}'
 
-
-#rule HiCcompare2:
-#    input:
-#        'matrices/{region}/{bin}/{group1}-{region}-{bin}-sutm.txt',
-#        'matrices/{region}/{bin}/{group2}-{region}-{bin}-sutm.txt'
-#    output:
-#        matrix = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
-#        links = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
-#    group:
-#        'HiCcompare'
-#    log:
-#        'logs/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
-#    threads:
-#        12 # Need to ensure it is run 1 at a time!
-#    params:
-#        dir = lambda wc: f'HiCcompare/{wc.region}/{wc.bin}',
-#        chr = lambda wc: REGIONS['chr'][wc.region],
-#        start = lambda wc: REGIONS['start'][wc.region] + 1,
-#        end = lambda wc: REGIONS['end'][wc.region]
-#    conda:
-#        f'{ENVS}/HiCcompare.yaml'
-#    shell:
-#        '{SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {params.start} '
-#        '{params.end} {wildcards.bin} {input} &> {log}'
-
 rule HiCcompare:
     input:
-        group1 = lambda wildcards: expand(
-            'matrices/{{region}}/{{bin}}/{group1}-{rep}-{{region}}-{{bin}}-sutm.txt',
-            group1=wildcards.group1, rep=GROUPS[wildcards.group1]),
-        group2 = lambda wildcards: expand(
-            'matrices/{{region}}/{{bin}}/{group2}-{rep}-{{region}}-{{bin}}-sutm.txt',
-            group2=wildcards.group2, rep=GROUPS[wildcards.group2])
+        'matrices/{region}/{bin}/{group1}-{region}-{bin}-sutm.txt',
+        'matrices/{region}/{bin}/{group2}-{region}-{bin}-sutm.txt'
     output:
         matrix = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
         links = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
@@ -1347,6 +1327,35 @@ rule HiCcompare:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region]
     conda:
+        f'{ENVS}/HiCcompare.yaml'
+    shell:
+        '{SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {params.start} '
+        '{params.end} {wildcards.bin} {input} &> {log}'
+
+
+rule multiHiCcompare:
+    input:
+        group1 = lambda wildcards: expand(
+            'matrices/{{region}}/{{bin}}/{group1}-{rep}-{{region}}-{{bin}}-sutm.txt',
+            group1=wildcards.group1, rep=GROUPS[wildcards.group1]),
+        group2 = lambda wildcards: expand(
+            'matrices/{{region}}/{{bin}}/{group2}-{rep}-{{region}}-{{bin}}-sutm.txt',
+            group2=wildcards.group2, rep=GROUPS[wildcards.group2])
+    output:
+        matrix = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
+        links = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
+    group:
+        'HiCcompare'
+    log:
+        'logs/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
+    threads:
+        12 # Need to ensure it is run 1 at a time!
+    params:
+        dir = lambda wc: f'multiHiCcompare/{wc.region}/{wc.bin}',
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region]
+    conda:
         f'{ENVS}/multiHiCcompare.yaml'
     shell:
         '{SCRIPTS}/multiHiCcompare.R {params.dir} {params.chr} {params.start} '
@@ -1355,15 +1364,15 @@ rule HiCcompare:
 
 rule applyMedianFilter:
     input:
-        rules.HiCcompare.output.matrix
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}.homer'
     output:
-        'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-smoothed.homer'
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}-smoothed.homer'
     params:
         size = config['compareMatrices']['size']
     group:
         'HiCcompare'
     log:
-        'logs/applyMedianFilter/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/applyMedianFilter/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1371,22 +1380,15 @@ rule applyMedianFilter:
         '> {output} 2> {log}'
 
 
-def homer2H5Input(wc):
-    if config['compareMatrices']['size'] > 1:
-        return rules.applyMedianFilter.output
-    else:
-        return rules.HiCcompare.output.matrix
-
-
 rule homerToH5:
     input:
-        homer2H5Input
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}-smoothed.homer'
     output:
-        'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.h5'
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}.h5'
     group:
         'HiCcompare'
     log:
-        'logs/homerToH5/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1396,17 +1398,17 @@ rule homerToH5:
 
 rule filterHiCcompare:
     input:
-        'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}.links'
     output:
-        up = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up.links',
-        down = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down.links'
+        up = '{compare}/{region}/{bin}/{group1}-vs-{group2}-up.links',
+        down = '{compare}/{region}/{bin}/{group1}-vs-{group2}-down.links'
     params:
         p_value = config['HiCcompare']['fdr'],
         log_fc = config['HiCcompare']['logFC'],
     group:
         'HiCcompare'
     log:
-        'logs/filterHiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/filterHiCcompare/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1417,11 +1419,11 @@ rule filterHiCcompare:
 
 rule createCompareConfig:
     input:
-        matrix = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.h5',
-        links = ['HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up.links',
-                 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down.links'],
+        matrix = '{compare}/{region}/{bin}/{group1}-vs-{group2}.h5',
+        links = ['{compare}/{region}/{bin}/{group1}-vs-{group2}-up.links',
+                 '{compare}/{region}/{bin}/{group1}-vs-{group2}-down.links'],
     output:
-        'matrices/{region}/{bin}/plots/configs/{group1}-vs-{group2}-compare.ini',
+        'matrices/{region}/{bin}/plots/configs/{group1}-vs-{group2}-{compare}.ini',
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
@@ -1433,7 +1435,7 @@ rule createCompareConfig:
     group:
         'HiCcompare'
     log:
-        'logs/createCompareConfig/{region}/{bin}/{group1}-{group2}.log'
+        'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1460,7 +1462,7 @@ rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'matrices/{region}/{bin}/plots/{group1}-vs-{group2}-{region}-{bin}.png'
+        'matrices/{region}/{bin}/plots/{compare}/{group1}-vs-{group2}-{region}-{bin}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = round_down,
@@ -1472,7 +1474,7 @@ rule plotCompare:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotAnalysis/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     threads:
         12 # Need to ensure it is run 1 at a time!
     shell:
