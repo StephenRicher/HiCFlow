@@ -114,11 +114,15 @@ wildcard_constraints:
 if ALLELE_SPECIFIC:
     wildcard_constraints:
         group = r'[^-\.\/]+_g\d+',
+        group1 = r'[^-\.\/]+_g\d+',
+        group2 = r'[^-\.\/]+_g\d+',
         sample = r'[^-\.\/]+_g\d+-\d+',
         all = r'[^-\.\/]+_g\d+|[^-\.\/]+_g\d+-\d+'
 else:
     wildcard_constraints:
         group = r'[^-\.\/g]+',
+        group1 = r'[^-\.\/g]+',
+        group2 = r'[^-\.\/g]+',
         sample = r'[^-\.\/g]+-\d+',
         all = r'[^-\.\/]+|[^-\.\/]+-\d+'
 
