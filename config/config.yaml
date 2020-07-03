@@ -28,7 +28,7 @@ compareMatrices:
     vMin: -1.96
     vMax: 1.96
     size: 3
-phase: True
+phase: False
 gatk:
     true_snp1: '/home/u/sr467/scratch/projects/genomes/hg38/hapmap_3.3.hg38.vcf.gz'
     true_snp2: '/home/u/sr467/scratch/projects/genomes/hg38/1000G_omni2.5.hg38.vcf.gz'
