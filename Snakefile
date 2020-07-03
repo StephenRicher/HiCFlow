@@ -133,7 +133,7 @@ else:
 COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)]
 
 preQC_mode = ['qc/multiqc', 'qc/multiBamQC', 'qc/filterQC/ditag_length.png']
-HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.png',
+HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('matrices/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS),
@@ -145,9 +145,9 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('qc/hicrep/{region}-{bin}-hicrep.png',
                 region=REGIONS.index, bin=BINS),
-            expand('matrices/{region}/{bin}/plots/HiCcompare/{compare}-{region}-{bin}.png',
+            expand('plots/{region}/{bin}/HiCcompare/{compare}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, compare = COMPARES),
-            expand('matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png',
+            expand('plots/{region}/{bin}/matrices/{group}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, group=list(GROUPS)),
             expand('matrices/{region}/{all}-{region}.hic',
                 region=REGIONS.index, all=SAMPLES+list(GROUPS)),
@@ -158,7 +158,7 @@ HiC_mode = [expand('matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.
 # Run multiHiCcompare if set
 if config['HiCcompare']['multi']:
     HiC_mode.append(
-        expand('matrices/{region}/{bin}/plots/multiHiCcompare/{compare}-{region}-{bin}.png',
+        expand('plots/{region}/{bin}/multiHiCcompare/{compare}-{region}-{bin}.png',
         region=REGIONS.index, bin=BINS, compare = COMPARES))
 
 if not ALLELE_SPECIFIC and config['phase']:
@@ -977,7 +977,7 @@ rule plotMatrix:
     input:
         rules.distanceNormalise.output
     output:
-        'matrices/{region}/{bin}/plots/matrices/{all}-{region}-{bin}.png'
+        'plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1168,7 +1168,7 @@ rule createConfig:
         insulations = 'matrices/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
         tads = 'matrices/{region}/{bin}/tads/{group}-{region}-{bin}-ontad.links',
     output:
-        'matrices/{region}/{bin}/plots/configs/{group}-{region}-{bin}.ini'
+        'plots/{region}/{bin}/configs/{group}-{region}-{bin}.ini'
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
@@ -1195,7 +1195,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'matrices/{region}/{bin}/plots/{group}-{region}-{bin}.png'
+        'plots/{region}/{bin}/matrices/{group}-{region}-{bin}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1423,7 +1423,7 @@ rule createCompareConfig:
         links = ['{compare}/{region}/{bin}/{group1}-vs-{group2}-up.links',
                  '{compare}/{region}/{bin}/{group1}-vs-{group2}-down.links'],
     output:
-        'matrices/{region}/{bin}/plots/configs/{group1}-vs-{group2}-{compare}.ini',
+        'plots/{region}/{bin}/configs/{group1}-vs-{group2}-{compare}.ini',
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
@@ -1462,7 +1462,7 @@ rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'matrices/{region}/{bin}/plots/{compare}/{group1}-vs-{group2}-{region}-{bin}.png'
+        'plots/{region}/{bin}/{compare}/{group1}-vs-{group2}-{region}-{bin}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = round_down,
