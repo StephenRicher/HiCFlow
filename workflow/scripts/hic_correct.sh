@@ -23,25 +23,14 @@ main() {
     | grep "mad threshold" | awk '{print $NF}')
 
     if [ -z "${lower_threshold}" ]; then
-      fail "No valid lower threshold detected."
+      >&2 echo "No valid lower threshold detected."
+      exit 1
     fi
 
     hicCorrectMatrix correct \
         --matrix "${input}" --correctionMethod ICE --iterNum "${iternum}" \
         --filterThreshold "${lower_threshold}" "${upper_threshold}" \
         --outFileName "${corrected_matrix}"
-}
-
-
-fail() {
-    local red='\033[0;31m'
-    local no_colour='\033[0m'
-
-    tput setaf 1
-    >&2 echo "Error in "${0}": "${FUNCNAME[1]}"."
-    all_empty "${@}" || >&2 echo "${1}"
-    tput sgr0
-    exit "${2-1}"
 }
 
 main "${@}"
