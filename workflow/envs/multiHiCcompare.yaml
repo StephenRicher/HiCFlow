@@ -1,0 +1,10 @@
+channels:
+  - r
+  - bioconda
+  - conda-forge
+dependencies:
+  - r
+  - r-base
+  - libblas
+  - r-r.utils
+  - bioconductor-multihiccompare
