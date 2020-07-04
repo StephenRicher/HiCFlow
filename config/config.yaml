@@ -23,6 +23,7 @@ hicup:
 HiCcompare:
     fdr: 0.01
     logFC: 0
+    multi: True
 compareMatrices:
     colourmap: bwr
     vMin: -1.96

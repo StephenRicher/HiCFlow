@@ -48,8 +48,8 @@ default_config = {
          'multi' :       False        ,},
     'compareMatrices':
         {'colourmap' :   'bwr'        ,
-         'vMin' :        -1.96        ,
-         'vMax' :        1.96         ,
+         'vMin' :        -2.5         ,
+         'vMax' :        2.5          ,
          'size':         1            ,},
     'gatk':
         {'true_snp1' :   None         ,
@@ -111,6 +111,7 @@ wildcard_constraints:
     read = r'R[12]',
     bin = r'\d+',
     mode = r'SNP|INDEL',
+    set = r'all|sig',
     compare = r'HiCcompare|multiHiCcompare'
 
 if ALLELE_SPECIFIC:
@@ -145,8 +146,8 @@ HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('qc/hicrep/{region}-{bin}-hicrep.png',
                 region=REGIONS.index, bin=BINS),
-            expand('plots/{region}/{bin}/HiCcompare/{compare}-{region}-{bin}.png',
-                region=REGIONS.index, bin=BINS, compare = COMPARES),
+            expand('plots/{region}/{bin}/HiCcompare/{compare}-{region}-{bin}-{set}.png',
+                region=REGIONS.index, bin=BINS, compare=COMPARES, set=['all', 'sig']),
             expand('plots/{region}/{bin}/matrices/{group}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, group=list(GROUPS)),
             expand('matrices/{region}/{all}-{region}.hic',
@@ -158,8 +159,8 @@ HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
 # Run multiHiCcompare if set
 if config['HiCcompare']['multi']:
     HiC_mode.append(
-        expand('plots/{region}/{bin}/multiHiCcompare/{compare}-{region}-{bin}.png',
-        region=REGIONS.index, bin=BINS, compare = COMPARES))
+        expand('plots/{region}/{bin}/multiHiCcompare/{compare}-{region}-{bin}-{set}.png',
+        region=REGIONS.index, bin=BINS, compare=COMPARES, set=['all', 'sig']))
 
 if not ALLELE_SPECIFIC and config['phase']:
     phase = [expand('allele/hapcut2/{cell_type}-phased.vcf',
@@ -1313,8 +1314,8 @@ rule HiCcompare:
         'matrices/{region}/{bin}/{group1}-{region}-{bin}-sutm.txt',
         'matrices/{region}/{bin}/{group2}-{region}-{bin}-sutm.txt'
     output:
-        matrix = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
-        links = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
+        all = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
+        sig = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer'
     group:
         'HiCcompare'
     log:
@@ -1342,8 +1343,8 @@ rule multiHiCcompare:
             'matrices/{{region}}/{{bin}}/{group2}-{rep}-{{region}}-{{bin}}-sutm.txt',
             group2=wildcards.group2, rep=GROUPS[wildcards.group2])
     output:
-        matrix = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
-        links = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
+        all = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
+        sig = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer'
     group:
         'HiCcompare'
     log:
@@ -1366,7 +1367,7 @@ rule applyMedianFilter:
     input:
         '{compare}/{region}/{bin}/{group1}-vs-{group2}.homer'
     output:
-        '{compare}/{region}/{bin}/{group1}-vs-{group2}-smoothed.homer'
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}-all.homer'
     params:
         size = config['compareMatrices']['size']
     group:
@@ -1382,13 +1383,13 @@ rule applyMedianFilter:
 
 rule homerToH5:
     input:
-        '{compare}/{region}/{bin}/{group1}-vs-{group2}-smoothed.homer'
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.homer'
     output:
-        '{compare}/{region}/{bin}/{group1}-vs-{group2}.h5'
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5'
     group:
         'HiCcompare'
     log:
-        'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1419,11 +1420,9 @@ rule filterHiCcompare:
 
 rule createCompareConfig:
     input:
-        matrix = '{compare}/{region}/{bin}/{group1}-vs-{group2}.h5',
-        links = ['{compare}/{region}/{bin}/{group1}-vs-{group2}-up.links',
-                 '{compare}/{region}/{bin}/{group1}-vs-{group2}-down.links'],
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5',
     output:
-        'plots/{region}/{bin}/configs/{group1}-vs-{group2}-{compare}.ini',
+        'plots/{region}/{bin}/configs/{group1}-vs-{group2}-{compare}-{set}.ini',
     params:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
@@ -1435,12 +1434,12 @@ rule createCompareConfig:
     group:
         'HiCcompare'
     log:
-        'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}.log'
+        'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}-{set}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_config.py --matrix {input.matrix} --compare '
-        '--genes {params.genes} --loops {input.links} '
+        '{SCRIPTS}/generate_config.py --matrix {input} --compare '
+        '--genes {params.genes} '#--loops {input.links} '
         '--ctcfs {params.ctcf} --ctcf_orientation {params.ctcf_orientation} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
@@ -1462,7 +1461,7 @@ rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'plots/{region}/{bin}/{compare}/{group1}-vs-{group2}-{region}-{bin}.png'
+        'plots/{region}/{bin}/{compare}/{group1}-vs-{group2}-{region}-{bin}-{set}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = round_down,
@@ -1474,7 +1473,7 @@ rule plotCompare:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.log'
     threads:
         12 # Need to ensure it is run 1 at a time!
     shell:

@@ -76,13 +76,19 @@ dev.off()
 
 hicexp <- hic_exactTest(hicexp, p.method = 'fdr', parallel = FALSE)
 
-# Extract all results as paired bed format
+# Extract ALL results as paired bed format and write to HOMER
 hic.table = as.data.frame(
   topDirs(hicexp, logfc_cutoff = 0, 
           logcpm_cutoff = 0, p.adj_cutoff = 1, 
           D_cutoff = 0, alpha = 1, return_df = "pairedbed"))
 out_matrix = paste(outdir, '/', unique(groups)[1], '-vs-', unique(groups)[2], '.homer', sep = '')
 writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
+
+# Extract SIGNIFICANT results as paired bed format and write to HOMER
+hic.table.sig = as.data.frame(
+  topDirs(hicexp, p.adj_cutoff = 0.05, return_df = 'pairedbed'))
+out_sig = paste(outdir, '/', unique(groups)[1], '-vs-', unique(groups)[2], '-sig.homer', sep = '')
+writeMatrix(hic.table.sig, out_sig, chr, start, end, binsize)
 
 
 td <- topDirs(hicexp, logfc_cutoff = 1, logcpm_cutoff = 0.5, 

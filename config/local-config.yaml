@@ -24,10 +24,11 @@ hicup:
 HiCcompare:
     fdr: 0.01
     logFC: 0
+    multi: True
 compareMatrices:
     colourmap: bwr
-    vMin: -1.96
-    vMax: 1.96
+    vMin: -2.5
+    vMax: 2.5
     size: 3
 phase: False
 gatk:
