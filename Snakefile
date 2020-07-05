@@ -182,7 +182,7 @@ else:
 
 rule all:
     input:
-        #preQC_mode,
+        preQC_mode,
         HiC_mode,
         phase,
         validBAM
