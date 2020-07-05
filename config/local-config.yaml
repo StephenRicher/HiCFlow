@@ -22,7 +22,7 @@ hicup:
     longest : 850
     nofill: False
 HiCcompare:
-    fdr: 0.01
+    fdr: 0.1
     logFC: 0
     multi: True
 compareMatrices:
