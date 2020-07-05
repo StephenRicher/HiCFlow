@@ -12,20 +12,12 @@ split_name <- function(path) {
   return(list('group' = split[1], 'rep' = split[2]))
 }
 
-writeMatrix <- function(hic.table, out, chr, start, end, binsize, var) {
-  hic.table = addMissingIntervals(hic.table, start, end, binsize)
-  homer <- dcast(hic.table, start1 ~ start2, value.var = var, fill = 0)
-  homer[,1] = paste(chr, homer[,1], sep='-')
-  rows = homer[,1]
-  homer[,1] = NULL
-  colnames(homer) = rows
-  homer[lower.tri(homer)] <- t(homer)[lower.tri(homer)]
-  homer = cbind.data.frame('HiCMatrix (directory=.)' = rows, 'Regions' = rows, homer)
-  write.table(x = homer, file = out, quote = FALSE, sep = "\t", row.names = FALSE)
-}
-
 addMissingIntervals <- function(hic.table, start, end, binsize) {
-  intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
+  if (nrow(hic.table) == 0) {
+    intervals = seq(start, end, binsize)
+  } else {
+    intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
+  }
   # Add a 2 bin buffer to each side
   intervals = sort(unique(c(seq(min(intervals), start - (2*binsize), -binsize),
                             intervals, seq(max(intervals), end + (2*binsize), binsize))))
@@ -36,6 +28,18 @@ addMissingIntervals <- function(hic.table, start, end, binsize) {
     }
   }
   return(hic.table)
+}
+
+writeMatrix <- function(hic.table, out, chr, start, end, binsize, var) {
+  hic.table = addMissingIntervals(hic.table, start, end, binsize)
+  homer <- dcast(hic.table, start1 ~ start2, value.var = var, fill = 0)
+  homer[,1] = paste(chr, homer[,1], sep='-')
+  rows = homer[,1]
+  homer[,1] = NULL
+  colnames(homer) = rows
+  homer[lower.tri(homer)] <- t(homer)[lower.tri(homer)]
+  homer = cbind.data.frame('HiCMatrix (directory=.)' = rows, 'Regions' = rows, homer)
+  write.table(x = homer, file = out, quote = FALSE, sep = "\t", row.names = FALSE)
 }
 
 args = commandArgs(trailingOnly=TRUE)

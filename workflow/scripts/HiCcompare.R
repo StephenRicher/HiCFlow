@@ -16,7 +16,11 @@ get_group <- function(path) {
 
 
 addMissingIntervals <- function(hic.table, start, end, binsize) {
-  intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
+  if (nrow(hic.table) == 0) {
+    intervals = seq(start, end, binsize)
+  } else {
+    intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
+  }
   # Add a 2 bin buffer to each side
   intervals = sort(unique(c(seq(min(intervals), start - (2*binsize), -binsize),
                             intervals, seq(max(intervals), end + (2*binsize), binsize))))
@@ -113,3 +117,5 @@ hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
   out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
+
+
