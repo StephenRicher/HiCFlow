@@ -16,7 +16,7 @@ get_group <- function(path) {
 
 
 addMissingIntervals <- function(hic.table, start, end, binsize) {
-  intervals = seq(min(hic.table$start1, start), max(hic.table$start1, end), binsize)
+  intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
   # Add a 2 bin buffer to each side
   intervals = sort(unique(c(seq(min(intervals), start - (2*binsize), -binsize),
                             intervals, seq(max(intervals), end + (2*binsize), binsize))))
@@ -30,9 +30,9 @@ addMissingIntervals <- function(hic.table, start, end, binsize) {
 }
 
 
-writeMatrix <- function(hic.table, out, chr, start, end, binsize) {
+writeMatrix <- function(hic.table, out, chr, start, end, binsize, var) {
   hic.table = addMissingIntervals(hic.table, start, end, binsize)
-  homer <- dcast(hic.table, start1 ~ start2, value.var = 'adj.M', fill = 0)
+  homer <- dcast(hic.table, start1 ~ start2, value.var = var, fill = 0)
   homer[,1] = paste(chr, homer[,1], sep='-')
   rows = homer[,1]
   homer[,1] = NULL
@@ -59,8 +59,9 @@ chr = args[2]
 start = as.integer(args[3])
 end = as.integer(args[4])
 binsize = as.integer(args[5])
-matrix1 = args[6]
-matrix2 = args[7]
+fdr = as.double(args[6])
+matrix1 = args[7]
+matrix2 = args[8]
 
 group1 = get_group(matrix1)
 group2 = get_group(matrix2)
@@ -88,6 +89,23 @@ png(compare_plot)
 hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = TRUE)
 dev.off()
 
+hic.table = as.data.frame(hic.table)
+
+# Write matrix of logFC values
+out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
+writeMatrix(hic.table, out_matrix, chr, start, end, binsize, 'adj.M')
+
+# Write matrix of of significant FDR values
+out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
+writeMatrix(hic.table[hic.table$p.adj <= fdr,], out_sig, chr, start, end, binsize, 'adj.M')
+
+# Write matrix of signed inverted adjusted P values
+hic.table$scale.p.adj = 1 - as.double(hic.table$p.adj)
+hic.table$sign.p.adj = ifelse(hic.table$adj.M > 0, hic.table$scale.p.adj, -hic.table$scale.p.adj)
+out_fdr = paste(outdir, '/', group1, '-vs-', group2, '-fdr.homer', sep = '')
+writeMatrix(hic.table, out_fdr, chr, start, end, binsize, "sign.p.adj")
+
+
 hic.table$abs.adj.M = abs(hic.table$adj.M)
 hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 
@@ -95,13 +113,3 @@ hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
   out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
-
-# Write ALL results and write to HOMER
-out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
-hic.table = as.data.frame(hic.table)
-writeMatrix(hic.table, out_matrix, chr, start, end, binsize)
-
-# Extract SIGNIFICANT results and write to HOMER
-out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
-hic.table.sig = hic.table[hic.table$p.adj <= 0.05,]
-writeMatrix(hic.table.sig, out_sig, chr, start, end, binsize)

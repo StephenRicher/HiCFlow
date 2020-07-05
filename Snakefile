@@ -111,7 +111,7 @@ wildcard_constraints:
     read = r'R[12]',
     bin = r'\d+',
     mode = r'SNP|INDEL',
-    set = r'all|sig',
+    set = r'logFC|sig|fdr',
     compare = r'HiCcompare|multiHiCcompare'
 
 if ALLELE_SPECIFIC:
@@ -146,8 +146,9 @@ HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('qc/hicrep/{region}-{bin}-hicrep.png',
                 region=REGIONS.index, bin=BINS),
-            expand('plots/{region}/{bin}/HiCcompare/{compare}-{region}-{bin}-{set}.png',
-                region=REGIONS.index, bin=BINS, compare=COMPARES, set=['all', 'sig']),
+            expand('plots/{region}/{bin}/HiCcompare/{set}/{compare}-{region}-{bin}-{set}.png',
+                region=REGIONS.index, bin=BINS, compare=COMPARES,
+                set=['logFC', 'sig', 'fdr']),
             expand('plots/{region}/{bin}/matrices/{group}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, group=list(GROUPS)),
             expand('matrices/{region}/{all}-{region}.hic',
@@ -159,8 +160,9 @@ HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
 # Run multiHiCcompare if set
 if config['HiCcompare']['multi']:
     HiC_mode.append(
-        expand('plots/{region}/{bin}/multiHiCcompare/{compare}-{region}-{bin}-{set}.png',
-        region=REGIONS.index, bin=BINS, compare=COMPARES, set=['all', 'sig']))
+        expand('plots/{region}/{bin}/multiHiCcompare/{set}/{compare}-{region}-{bin}-{set}.png',
+        region=REGIONS.index, bin=BINS, compare=COMPARES,
+        set=['logFC', 'sig', 'fdr']))
 
 if not ALLELE_SPECIFIC and config['phase']:
     phase = [expand('allele/hapcut2/{cell_type}-phased.vcf',
@@ -180,7 +182,7 @@ else:
 
 rule all:
     input:
-        preQC_mode,
+        #preQC_mode,
         HiC_mode,
         phase,
         validBAM
@@ -1315,7 +1317,8 @@ rule HiCcompare:
         'matrices/{region}/{bin}/{group2}-{region}-{bin}-sutm.txt'
     output:
         all = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
-        sig = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer'
+        sig = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
+        fdr = 'HiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer'
     group:
         'HiCcompare'
     log:
@@ -1326,12 +1329,13 @@ rule HiCcompare:
         dir = lambda wc: f'HiCcompare/{wc.region}/{wc.bin}',
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region]
+        end = lambda wc: REGIONS['end'][wc.region],
+        fdr = config['HiCcompare']['fdr']
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
         '{SCRIPTS}/HiCcompare.R {params.dir} {params.chr} {params.start} '
-        '{params.end} {wildcards.bin} {input} &> {log}'
+        '{params.end} {wildcards.bin} {params.fdr} {input} &> {log}'
 
 
 rule multiHiCcompare:
@@ -1344,7 +1348,8 @@ rule multiHiCcompare:
             group2=wildcards.group2, rep=GROUPS[wildcards.group2])
     output:
         all = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
-        sig = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer'
+        sig = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
+        fdr = 'multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer'
     group:
         'HiCcompare'
     log:
@@ -1355,19 +1360,21 @@ rule multiHiCcompare:
         dir = lambda wc: f'multiHiCcompare/{wc.region}/{wc.bin}',
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region]
+        end = lambda wc: REGIONS['end'][wc.region],
+        fdr = config['HiCcompare']['fdr']
     conda:
         f'{ENVS}/multiHiCcompare.yaml'
     shell:
         '{SCRIPTS}/multiHiCcompare.R {params.dir} {params.chr} {params.start} '
-        '{params.end} {wildcards.bin} {input.group1} {input.group2} &> {log}'
+        '{params.end} {wildcards.bin} {params.fdr} '
+        '{input.group1} {input.group2} &> {log}'
 
 
 rule applyMedianFilter:
     input:
         '{compare}/{region}/{bin}/{group1}-vs-{group2}.homer'
     output:
-        '{compare}/{region}/{bin}/{group1}-vs-{group2}-all.homer'
+        '{compare}/{region}/{bin}/{group1}-vs-{group2}-logFC.homer'
     params:
         size = config['compareMatrices']['size']
     group:
@@ -1428,8 +1435,8 @@ rule createCompareConfig:
         ctcf = config['genome']['ctcf'],
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = config['compareMatrices']['colourmap'],
-        vMin = config['compareMatrices']['vMin'],
-        vMax = config['compareMatrices']['vMax'],
+        vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
+        vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
         genes = config['genome']['genes']
     group:
         'HiCcompare'
@@ -1457,16 +1464,27 @@ def round_up(wc):
     return end - (end%bin) + bin
 
 
+def title(wc):
+    title = f'"{wc.group1} vs {wc.group2} - {wc.region} at {wc.bin} bin size - '
+    if wc.set == 'sig':
+        threshold = config['HiCcompare']['fdr']
+        title += f'adj. logFC (FDR <= {threshold})"'
+    elif wc.set == 'logFC':
+        title += 'adj. logFC"'
+    else:
+        title += 'FDR"'
+    return title
+
 rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'plots/{region}/{bin}/{compare}/{group1}-vs-{group2}-{region}-{bin}-{set}.png'
+        'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{bin}-{set}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = round_down,
         end = round_up,
-        title = '"{group1} vs {group2} - {region} at {bin} bin size"',
+        title = title,
         dpi = 600
     group:
         'HiCcompare'
