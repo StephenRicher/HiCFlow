@@ -16,7 +16,7 @@ get_group <- function(path) {
 
 
 addMissingIntervals <- function(hic.table, start, end, binsize) {
-  intervals = seq(min(hic.table$start1), max(hic.table$start1), binsize)
+  intervals = seq(min(hic.table$start1, start), max(hic.table$start1, end), binsize)
   # Add a 2 bin buffer to each side
   intervals = sort(unique(c(seq(min(intervals), start - (2*binsize), -binsize),
                             intervals, seq(max(intervals), end + (2*binsize), binsize))))
