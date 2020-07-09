@@ -6,7 +6,7 @@ import sys
 import tempfile
 import itertools
 import pandas as pd
-from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, load_genomes, get_allele_groupings
+from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, load_genomes, get_allele_groupings, load_coords
 
 BASE = workflow.basedir
 
@@ -60,6 +60,7 @@ default_config = {
          'known' :       None         ,
          'all_known':    None         ,},
     'binsize':           [5000, 10000],
+    'plot_coordinates':  None,
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
@@ -129,9 +130,11 @@ else:
         sample = r'[^-\.\/g]+-\d+',
         all = r'[^-\.\/]+|[^-\.\/]+-\d+'
 
-
 # Generate list of group comparisons - this avoids self comparison
 COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)]
+
+# Generate dictionart of plot coordinates, may be multple per region
+COORDS = load_coords([config['plot_coordinates'], config['protocol']['regions']])
 
 preQC_mode = ['qc/multiqc', 'qc/multiBamQC', 'qc/filterQC/ditag_length.png']
 HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
@@ -146,23 +149,18 @@ HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('qc/hicrep/{region}-{bin}-hicrep.png',
                 region=REGIONS.index, bin=BINS),
-            expand('plots/{region}/{bin}/HiCcompare/{set}/{compare}-{region}-{bin}-{set}.png',
-                region=REGIONS.index, bin=BINS, compare=COMPARES,
-                set=['logFC', 'sig', 'fdr']),
-            expand('plots/{region}/{bin}/matrices/{group}-{region}-{bin}.png',
-                region=REGIONS.index, bin=BINS, group=list(GROUPS)),
+            [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
+                coords=COORDS[region], bin=BINS, compare=COMPARES, region=region,
+                tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare'],
+                set=['logFC', 'sig', 'fdr']) for region in COORDS.keys()],
+            [expand('plots/{region}/{bin}/matrices/{group}-{region}-{coords}-{bin}.png',
+                coords=COORDS[region], bin=BINS, region=region,
+                group=list(GROUPS)) for region in COORDS.keys()],
             expand('matrices/{region}/{all}-{region}.hic',
                 region=REGIONS.index, all=SAMPLES+list(GROUPS)),
             expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
             expand('diffhic/genome/{cell_type}-custom.fa',
                 cell_type=list(CELL_TYPES))]
-
-# Run multiHiCcompare if set
-if config['HiCcompare']['multi']:
-    HiC_mode.append(
-        expand('plots/{region}/{bin}/multiHiCcompare/{set}/{compare}-{region}-{bin}-{set}.png',
-        region=REGIONS.index, bin=BINS, compare=COMPARES,
-        set=['logFC', 'sig', 'fdr']))
 
 if not ALLELE_SPECIFIC and config['phase']:
     phase = [expand('allele/hapcut2/{cell_type}-phased.vcf',
@@ -1198,7 +1196,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/matrices/{group}-{region}-{bin}.png'
+        'plots/{region}/{bin}/matrices/{group}-{region}-{coord}-{bin}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1210,12 +1208,12 @@ rule plotHiC:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{region}/{bin}/{group}.log'
+        'logs/plotHiC/{region}/{bin}/{group}-{coord}.log'
     threads:
         12 # Need to ensure it is run 1 at a time!
     shell:
         'pyGenomeTracks --tracks {input} '
-        '--region {params.chr}:{params.start}-{params.end} '
+        '--region {wildcards.coord} '
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
@@ -1479,11 +1477,8 @@ rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{bin}-{set}.png'
+        'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}.png'
     params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = round_down,
-        end = round_up,
         title = title,
         dpi = 600
     group:
@@ -1491,12 +1486,12 @@ rule plotCompare:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.log'
+        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}.log'
     threads:
         12 # Need to ensure it is run 1 at a time!
     shell:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
-        '--region {params.chr}:{params.start}-{params.end} '
+        '--region {wildcards.coord} '
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'

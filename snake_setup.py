@@ -131,6 +131,18 @@ def load_regions(regions_file):
     return regions
 
 
+def load_coords(files):
+    """ Read plot coordinates from plot coordinate and region BED file. """
+    coords = defaultdict(list)
+    for file in files:
+        if not file:
+            continue
+        with open(file) as fh:
+            for line in fh:
+                chr, start, end, region = line.strip().split()
+                coords[region].append(f'{chr}:{start}-{end}')
+    return coords
+
 def load_vcf_paths(phased_vcfs, samples):
 
     vcfs = pd.read_table(
