@@ -47,8 +47,7 @@ default_config = {
          'logFC' :       1            ,
          'multi' :       False        ,},
     'compareMatrices':
-        {'colourmap' :   'bwr'        ,
-         'vMin' :        -2.5         ,
+        {'vMin' :        -2.5         ,
          'vMax' :        2.5          ,
          'size':         1            ,},
     'gatk':
@@ -64,6 +63,7 @@ default_config = {
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
+    'colourmap':         'Purples',
 }
 
 config = set_config(config, default_config)
@@ -157,10 +157,7 @@ HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
                 coords=COORDS[region], bin=BINS, region=region,
                 group=list(GROUPS)) for region in COORDS.keys()],
             expand('matrices/{region}/{all}-{region}.hic',
-                region=REGIONS.index, all=SAMPLES+list(GROUPS)),
-            expand('diffhic/bams/{sample}.bam', sample=SAMPLES),
-            expand('diffhic/genome/{cell_type}-custom.fa',
-                cell_type=list(CELL_TYPES))]
+                region=REGIONS.index, all=SAMPLES+list(GROUPS))]
 
 if not ALLELE_SPECIFIC and config['phase']:
     phase = [expand('allele/hapcut2/{cell_type}-phased.vcf',
@@ -1174,7 +1171,8 @@ rule createConfig:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
         depth = lambda wc: int(REGIONS['length'][wc.region]),
-        genes = config['genome']['genes']
+        genes = config['genome']['genes'],
+        colourmap = config['colourmap']
     group:
         'plotHiC'
     conda:
@@ -1184,7 +1182,7 @@ rule createConfig:
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
         '--insulations {input.insulations} --log '
-        '--loops {input.loops} '
+        '--loops {input.loops} --colourmap {params.colourmap} '
         '--tads {input.tads} '
         '--ctcfs {params.ctcf} '
         '--ctcf_orientation {params.ctcf_orientation} '
@@ -1432,7 +1430,7 @@ rule createCompareConfig:
         ctcf_orientation = config['genome']['ctcf_orient'],
         ctcf = config['genome']['ctcf'],
         depth = lambda wc: int(REGIONS['length'][wc.region]),
-        colourmap = config['compareMatrices']['colourmap'],
+        colourmap = 'bwr',
         vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
         vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
         genes = config['genome']['genes']
@@ -1495,57 +1493,6 @@ rule plotCompare:
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
-
-
-rule modifyBam:
-    input:
-        rules.buildBaseMatrix.output.bam
-    output:
-        'diffhic/bams/{region}/{sample}-{region}.bam'
-    params:
-        region = REGIONS.index,
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region],
-        end = lambda wc: REGIONS['end'][wc.region]
-    log:
-        'logs/modifyBam/{region}/{sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        '{SCRIPTS}/modify_bams.sh '
-        '-r {wildcards.region} -c {params.chr} '
-        '-s {params.start} -e {params.end} {input} '
-        '> {output} 2> {log} || touch {output}'
-
-
-rule mergeBamByRegion:
-    input:
-        expand('diffhic/bams/{region}/{{sample}}-{region}.bam',
-            region = REGIONS.index)
-    output:
-        'diffhic/bams/{sample}.bam'
-    log:
-        'logs/mergeBamByRegion/{sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools merge -n {output} {input} 2> {log}'
-
-
-rule createCustomGenome:
-    input:
-        genome = rules.bgzipGenome.output,
-        index = rules.indexGenome.output,
-        regions = config['protocol']['regions']
-    output:
-        'diffhic/genome/{cell_type}-custom.fa'
-    log:
-        'logs/createCustomGenome/{cell_type}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        '{SCRIPTS}/create_custom_genome.sh {input.regions} {input.genome} '
-        '> {output} 2> {log}'
 
 
 if not ALLELE_SPECIFIC:
