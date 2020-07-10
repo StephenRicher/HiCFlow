@@ -140,7 +140,7 @@ def load_coords(files):
         with open(file) as fh:
             for line in fh:
                 chr, start, end, region = line.strip().split()
-                coords[region].append(f'{chr}:{start}-{end}')
+                coords[region].append(f'{chr}_{start}_{end}')
     return coords
 
 def load_vcf_paths(phased_vcfs, samples):
