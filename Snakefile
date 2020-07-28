@@ -1690,31 +1690,61 @@ if not ALLELE_SPECIFIC:
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'gatk/{cell_type}-g.vcf.gz'
+            'gatk/split/{cell_type}-{region}-g.vcf.gz'
         params:
-            tmp = config['tmpdir'],
+            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
+            start = lambda wildcards: REGIONS['start'][wildcards.region],
+            end = lambda wildcards: REGIONS['end'][wildcards.region],
             intervals = config['protocol']['regions'],
             java_opts = '-Xmx6G',
             min_prune = 2, # Increase to speed up
             downsample = 50, # Decrease to speed up
+            tmp = config['tmpdir'],
             extra = ''
         log:
-            'logs/gatk/haplotypeCaller/{cell_type}.log'
+            'logs/gatk/haplotypeCaller/{cell_type}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
             'gatk --java-options {params.java_opts} HaplotypeCaller '
             '{params.extra} --input {input.bam} --output {output} '
             '--max-reads-per-alignment-start {params.downsample} '
-            '--min-pruning {params.min_prune} '
-            '--reference {input.ref} --intervals {params.intervals} '
+            '--min-pruning {params.min_prune} --reference {input.ref} '
+            '--intervals {params.chr}:{params.start}-{params.end} '
             '--tmp-dir {params.tmp} -ERC GVCF &> {log}'
 
 
-    # Possibly should combine gvcfs
+    def gatherVCFsInput(wc):
+        input = ''
+        gvcfs = expand('gatk/split/{cell_type}-{region}-g.vcf.gz',
+            region=REGIONS.index, cell_type=wc.cell_type)
+        for gvcf in gvcfs:
+            input += f' -I {gvcf}'
+        return input
+
+
+    rule gatherVCFs:
+        input:
+            expand('gatk/split/{{cell_type}}-{region}-g.vcf.gz',
+                region=REGIONS.index)
+        output:
+            'gatk/{cell_type}-g.vcf.gz'
+        params:
+            gvcfs = gatherVCFsInput,
+            java_opts = '-Xmx4G',
+            extra = '',  # optional
+        log:
+            'logs/gatk/gatherGVCFs/{cell_type}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+             'gatk --java-options {params.java_opts} GatherVcfs '
+             '{params.gvcfs} -O {output} &> {log}'
+
+
     rule genotypeGVCFs:
         input:
-            gvcf = rules.haplotypeCaller.output,
+            gvcf = rules.gatherVCFs.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
