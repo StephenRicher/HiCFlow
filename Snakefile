@@ -1695,8 +1695,8 @@ if not ALLELE_SPECIFIC:
             tmp = config['tmpdir'],
             intervals = config['protocol']['regions'],
             java_opts = '-Xmx6G',
-            min_prune = 5, # Increase to speed up
-            downsample = 25, # Decrease to speed up
+            min_prune = 2, # Increase to speed up
+            downsample = 50, # Decrease to speed up
             extra = ''
         log:
             'logs/gatk/haplotypeCaller/{cell_type}.log'
