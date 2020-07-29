@@ -1990,6 +1990,11 @@ if not ALLELE_SPECIFIC:
             bam = rules.deduplicate.output.bam
         output:
             'allele/hapcut2/{region}/{cell_type}-{region}.fragments'
+        params:
+            region = REGIONS.index,
+            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
+            start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
+            end = lambda wildcards: REGIONS['end'][wildcards.region]
         group:
             'hapcut2'
         log:
@@ -1998,6 +2003,7 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/hapcut2.yaml'
         shell:
             'extractHAIRS --hic 1 --bam {input.bam} '
+            '--region {params.chr}:{params.start}-{params.end} '
             '--VCF {input.vcf} --out {output} &> {log}'
 
 
