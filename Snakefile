@@ -104,8 +104,8 @@ GENOMES = load_genomes(config['genome']['table'])
 
 wildcard_constraints:
     cell_type = r'[^-\.\/]+',
-    pre_group = r'[^-\.\/g]+',
-    pre_sample = r'[^-\.\/g]+-\d+',
+    pre_group = r'[^-\.\/a]+',
+    pre_sample = r'[^-\.\/a]+-\d+',
     region = rf'{"|".join(REGIONS.index)}',
     allele = r'[12]',
     rep = r'\d+',
@@ -1190,15 +1190,24 @@ rule createConfig:
         '--depth {params.depth} > {output} 2> {log}'
 
 
+def setRegion(wc):
+    """ Replace underscores with : and - for valid --region argument. """
+    region = list(wc.coord)
+    # Find indices of all underscores
+    inds = [i for i,c in enumerate(region) if c == '_']
+    # Replace penultimate and last underscore with : and -
+    region[inds[-1]] = '-'
+    region[inds[-2]] = ':'
+    return ''.join(region)
+
+
 rule plotHiC:
     input:
         rules.createConfig.output
     output:
         'plots/{region}/{bin}/matrices/{group}-{region}-{coord}-{bin}.png'
     params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
+        region = setRegion,
         title = '"{group} : {region} at {bin} bin size"',
         dpi = 600
     group:
@@ -1211,7 +1220,7 @@ rule plotHiC:
         12 # Need to ensure it is run 1 at a time!
     shell:
         'pyGenomeTracks --tracks {input} '
-        '--region {wildcards.coord} '
+        '--region {params.region} '
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
@@ -1478,6 +1487,7 @@ rule plotCompare:
         'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}.png'
     params:
         title = title,
+        region = setRegion,
         dpi = 600
     group:
         'HiCcompare'
@@ -1489,7 +1499,7 @@ rule plotCompare:
         12 # Need to ensure it is run 1 at a time!
     shell:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
-        '--region {wildcards.coord} '
+        '--region {params.region} '
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
