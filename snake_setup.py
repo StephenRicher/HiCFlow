@@ -74,9 +74,9 @@ def load_samples(samples_file):
     if not samples['cell_type'].str.match(r'[^-\.\/]+').all():
         sys.exit(f'Invalid cell_type definition in {samples_file}.\n'
             'Cell types must not contain the following characters: - . /')
-    if not samples['group'].str.match(r'[^-\.\/g]+').all():
+    if not samples['group'].str.match(r'[^-\.\/a]+').all():
         sys.exit(f'Invalid group definition in {samples_file}.\n'
-            'Groups must not contain the following characters: - / . g')
+            'Groups must not contain the following characters: - / . a')
     if not samples['rep'].str.match(r'\d+').all():
         sys.exit(f'Invalid replicate definition in {samples_file}.\n'
             'Replicates must only contain integers.')
