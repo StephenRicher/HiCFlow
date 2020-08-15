@@ -106,7 +106,7 @@ wildcard_constraints:
     cell_type = r'[^-\.\/]+',
     pre_group = r'[^-\.\/g]+',
     pre_sample = r'[^-\.\/g]+-\d+',
-    region = r'[^-\.\/]+',
+    region = rf'{"|".join(REGIONS.index)}',
     allele = r'[12]',
     rep = r'\d+',
     read = r'R[12]',
@@ -117,17 +117,17 @@ wildcard_constraints:
 
 if ALLELE_SPECIFIC:
     wildcard_constraints:
-        group = r'[^-\.\/]+_g\d+',
-        group1 = r'[^-\.\/]+_g\d+',
-        group2 = r'[^-\.\/]+_g\d+',
-        sample = r'[^-\.\/]+_g\d+-\d+',
-        all = r'[^-\.\/]+_g\d+|[^-\.\/]+_g\d+-\d+'
+        group = r'[^-\.\/]+_a\d+',
+        group1 = r'[^-\.\/]+_a\d+',
+        group2 = r'[^-\.\/]+_a\d+',
+        sample = r'[^-\.\/]+_a\d+-\d+',
+        all = r'[^-\.\/]+_a\d+|[^-\.\/]+_a\d+-\d+'
 else:
     wildcard_constraints:
-        group = r'[^-\.\/g]+',
-        group1 = r'[^-\.\/g]+',
-        group2 = r'[^-\.\/g]+',
-        sample = r'[^-\.\/g]+-\d+',
+        group = r'[^-\.\/a]+',
+        group1 = r'[^-\.\/a]+',
+        group2 = r'[^-\.\/a]+',
+        sample = r'[^-\.\/a]+-\d+',
         all = r'[^-\.\/]+|[^-\.\/]+-\d+'
 
 # Generate list of group comparisons - this avoids self comparison
@@ -674,9 +674,9 @@ rule mergeSNPsplit:
         'snpsplit/{pre_group}-{rep}.dedup.G{allele}_G{allele}.bam',
         'snpsplit/{pre_group}-{rep}.dedup.G{allele}_UA.bam'
     output:
-        'snpsplit/merged/{pre_group}_g{allele}-{rep}.dedup.bam'
+        'snpsplit/merged/{pre_group}_a{allele}-{rep}.dedup.bam'
     log:
-        'logs/mergeSNPsplit/{pre_group}_g{allele}-{rep}.log'
+        'logs/mergeSNPsplit/{pre_group}_a{allele}-{rep}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -1993,7 +1993,7 @@ if not ALLELE_SPECIFIC:
         params:
             region = REGIONS.index,
             chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-            start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
+            start = lambda wildcards: REGIONS['start'][wildcards.region],
             end = lambda wildcards: REGIONS['end'][wildcards.region]
         group:
             'hapcut2'
