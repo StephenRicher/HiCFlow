@@ -177,8 +177,8 @@ def get_allele_groupings(samples):
         sample = sample.split('-')
         group = sample[0]
         rep = sample[1]
-        allele_samples.extend([f'{group}_g1-{rep}', f'{group}_g2-{rep}'])
-        allele_groups[f'{group}_g1'].append(rep)
-        allele_groups[f'{group}_g2'].append(rep)
+        allele_samples.extend([f'{group}_a1-{rep}', f'{group}_a2-{rep}'])
+        allele_groups[f'{group}_a1'].append(rep)
+        allele_groups[f'{group}_a2'].append(rep)
 
     return allele_groups, allele_samples
