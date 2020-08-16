@@ -1173,8 +1173,6 @@ rule createConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         genes = config['genome']['genes'],
         colourmap = config['colourmap']
-    group:
-        'plotHiC'
     conda:
         f'{ENVS}/python3.yaml'
     log:
@@ -1210,16 +1208,14 @@ rule plotHiC:
         region = setRegion,
         title = '"{group} : {region} at {bin} bin size"',
         dpi = 600
-    group:
-        'plotHiC'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
         'logs/plotHiC/{region}/{bin}/{group}-{coord}.log'
     threads:
-        12 # Need to ensure it is run 1 at a time!
+        THREADS
     shell:
-        'pyGenomeTracks --tracks {input} '
+        'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
         '--region {params.region} '
         '--outFileName {output} '
         '--title {params.title} '
@@ -1489,14 +1485,12 @@ rule plotCompare:
         title = title,
         region = setRegion,
         dpi = 600
-    group:
-        'HiCcompare'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
         'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}.log'
     threads:
-        12 # Need to ensure it is run 1 at a time!
+        THREADS
     shell:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
         '--region {params.region} '
