@@ -1746,9 +1746,27 @@ if not ALLELE_SPECIFIC:
              '{params.gvcfs} -O {output} &> {log}'
 
 
+    rule indexFeatureFile:
+        input:
+            rules.gatherVCFs.output
+        output:
+            f'{rules.gatherVCFs.output}.tbi'
+        params:
+            java_opts = '-Xmx4G',
+            extra = '',  # optional
+        log:
+            'logs/gatk/indexFeatureFile/{cell_type}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+             'gatk --java-options {params.java_opts} IndexFeatureFile '
+             '-F {input} &> {log}'
+
+
     rule genotypeGVCFs:
         input:
             gvcf = rules.gatherVCFs.output,
+            gvcf_idex = rules.indexFeatureFile.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
