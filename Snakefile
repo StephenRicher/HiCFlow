@@ -1501,7 +1501,6 @@ rule plotCompare:
 
 if not ALLELE_SPECIFIC:
 
-    # Need to add IndexFeature for each input feature provided in config
     rule mergeBamByCellType:
         input:
             lambda wildcards: expand('mapped/{pre_sample}.pair.bam',
@@ -1760,7 +1759,7 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/gatk.yaml'
         shell:
              'gatk --java-options {params.java_opts} IndexFeatureFile '
-             '-F {input} &> {log}'
+             '-I {input} &> {log}'
 
 
     rule genotypeGVCFs:
