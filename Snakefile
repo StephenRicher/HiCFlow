@@ -23,13 +23,11 @@ default_config = {
     'workdir':           workflow.basedir,
     'tmpdir':            tempfile.gettempdir(),
     'data':
-        {'samples':      ''         ,
-         'phased_vcf':   None       ,},
-    'genome':
-        {'table':        None        ,
-         'genes':        None        ,
-         'ctcf_orient':  None        ,},
-    'tracks':            {}          ,
+        {'samples':      ''          ,
+         'phased_vcf':   None        ,},
+    'genome':            ''          ,
+    'bigWig':            {}          ,
+    'bed':               {}          ,
     'protocol':
         {'regions':      ''          ,
          're1':          'enzyme'    ,
@@ -107,7 +105,7 @@ else:
     phase = []
     PHASE_MODE = None
 
-GENOMES = load_genomes(config['genome']['table'])
+GENOMES = load_genomes(config['genome'])
 
 wildcard_constraints:
     cell_type = r'[^-\.\/]+',
@@ -384,7 +382,7 @@ if config['fastq_screen'] is not None:
         threads:
             THREADS
         wrapper:
-            "0.49.0/bio/fastq_screen"
+            "0.60.0/bio/fastq_screen"
 
 
 rule fastQCTrimmed:
@@ -1112,8 +1110,10 @@ rule reformatLinks:
 def getTracks(wc):
     """ Build track command for generate config """
     command = ''
-    for title, track in config['tracks'].items():
-        command += f'--tracks {title},{track} '
+    for title, track in config['bigWig'].items():
+        command += f'--bigWig {title},{track} '
+    for title, track in config['bed'].items():
+        command += f'--bed {title},{track} '
     return command
 
 rule createConfig:
@@ -1125,10 +1125,8 @@ rule createConfig:
     output:
         'plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{bin}.ini'
     params:
-        ctcf_orientation = config['genome']['ctcf_orient'],
         tracks = getTracks,
         depth = lambda wc: int(REGIONS['length'][wc.region]),
-        genes = config['genome']['genes'],
         colourmap = config['colourmap']
     conda:
         f'{ENVS}/python3.yaml'
@@ -1139,8 +1137,6 @@ rule createConfig:
         '--insulations {input.insulations} --log '
         '--loops {input.loops} --colourmap {params.colourmap} '
         '--tads {input.tads} {params.tracks} '
-        '--ctcf_orientation {params.ctcf_orientation} '
-        '--genes {params.genes} '
         '--depth {params.depth} > {output} 2> {log}'
 
 
@@ -1393,13 +1389,11 @@ rule createCompareConfig:
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}.ini',
     params:
-        ctcf_orientation = config['genome']['ctcf_orient'],
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
         tracks = getTracks,
         vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
         vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
-        genes = config['genome']['genes']
     group:
         'HiCcompare'
     log:
@@ -1408,8 +1402,7 @@ rule createCompareConfig:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input} --compare '
-        '--genes {params.genes} '
-        '{params.tracks} --ctcf_orientation {params.ctcf_orientation} '
+        '{params.tracks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 

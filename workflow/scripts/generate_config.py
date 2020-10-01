@@ -49,16 +49,15 @@ def main():
         '--links', nargs=2, default=None,
         help = 'UP and DOWN links files showing differential interactions.')
     parser.add_argument(
-        '--tracks', metavar='TITLE,FILE', default=[],
+        '--bigWig', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
-        help='Add title and track files as comma seperated pairs.'
+        help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--ctcf_orientation',
-        help = 'CTCF orientations in BED format.')
-    parser.add_argument(
-        '--genes',
-        help = 'Genes in BED format.')
+        '--bed', metavar='TITLE,FILE', default=[],
+        type=commaPair, action='append',
+        help='Add title and bed files as comma seperated pairs.'
+        'Call multiple times to add more files.')
     parser.add_argument(
         '--depth', type = int, default = 1000000,
         help = 'HiC matrix depth.')
@@ -91,8 +90,8 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                links, tracks, compare, ctcf_orientation, genes, depth,
-                colourmap, vMin, vMax, flip):
+                links, bigWig, bed, compare,
+                depth, colourmap, vMin, vMax, flip):
 
 
     print('[spacer]')
@@ -139,18 +138,16 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
 
 
     print('# End Sample Specific')
-    for title, file in tracks:
+    for title, file in bigWig:
         if not_empty(file):
-            write_tracks(file=file, title=title)
+            write_bigwig(file=file, title=title)
         print('[spacer]')
 
-    if ctcf_orientation is not None and not_empty(ctcf_orientation):
-        write_ctcf_direction(ctcf_orientation = ctcf_orientation)
+    for title, file in bed:
+        if not_empty(file):
+            write_bed(file=file, title=title)
         print('[spacer]')
 
-    if genes and not_empty(genes):
-        write_genes(genes = genes)
-        print('[spacer]')
     print('[x-axis]')
 
 
@@ -255,9 +252,9 @@ def get_links_groups(path):
     return base[0], base[2]
 
 
-def write_tracks(file, title):
+def write_bigwig(file, title):
 
-    print(f'[Track - {title}]',
+    print(f'[BigWig - {title}]',
           f'file = {file}',
           f'title = {title}',
           f'min_value = 0',
@@ -269,20 +266,11 @@ def write_tracks(file, title):
           f'file_type = bigwig',
           f'overlay_previous = no', sep = '\n')
 
-def write_ctcf_direction(ctcf_orientation):
-    print(f'[CTCF orientation]',
-          f'file = {ctcf_orientation}',
-          f'title = CTCF orientation',
-          f'color = Reds',
-          f'fontsize = 8',
-          f'type = genes',
-          f'height = 3',
-          f'file_type = bed',
-          f'labels = true', sep = '\n')
 
-def write_genes(genes):
-    print(f'[Genes]',
-          f'file = {genes}',
+def write_bed(file, title):
+    print(f'[Bed - {title}]',
+          f'file = {file}',
+          f'title = {title}',
           f'type = genes',
           f'height = 3',
           f'file_type = bed',
