@@ -59,20 +59,23 @@ numBins <- function(start, end, binsize) {
 args = commandArgs(trailingOnly=TRUE)
 
 outdir = args[1]
-chr = args[2]
-start = as.integer(args[3])
-end = as.integer(args[4])
-binsize = as.integer(args[5])
-fdr = as.double(args[6])
-matrix1 = args[7]
-matrix2 = args[8]
+qcdir = args[2]
+chr = args[3]
+start = as.integer(args[4])
+end = as.integer(args[5])
+binsize = as.integer(args[6])
+fdr = as.double(args[7])
+matrix1 = args[8]
+matrix2 = args[9]
+
+dir.create(qcdir)
 
 group1 = get_group(matrix1)
 group2 = get_group(matrix2)
 
-loess_plot = paste(outdir, '/', group1, '-vs-', group2, '-loess.png', sep = '')
-filter_plot = paste(outdir, '/', group1, '-vs-', group2, '-filter_params.png', sep = '')
-compare_plot = paste(outdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep = '')
+loess_plot = paste(qcdir, '/', group1, '-vs-', group2, '-loess.png', sep = '')
+filter_plot = paste(qcdir, '/', group1, '-vs-', group2, '-filter_params.png', sep = '')
+compare_plot = paste(qcdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep = '')
 out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
 
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
