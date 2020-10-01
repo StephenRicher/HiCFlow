@@ -25,13 +25,14 @@ The pipeline utilises the workflow management system Snakemake and automatically
      * [HiC track](#hic-track)
      * [HiCcompare track](#hiccompare-track)
      * [UCSC browser](#ucsc-browser)
+  * [Quality Control](#quality-control)
      * [HiCRep](#hicrep)
      * [MultiQC report](#multiqc-report)
-     * [Custom QC metrics](#custom-qc-metrics)
+     * [Other QC metrics](#custom-qc-metrics)
 
 ## Installation
 
-HiCflow works with python >=3.6 and requires Snakemake.
+HiCflow works with python >=3.6 and requires [Snakemake](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html).
 
 The HiCflow repository can be downloaded from github as follows:
 
@@ -52,22 +53,32 @@ Add usage.
 ### HiC track
 
 HiCflow utilises pyGenomeTracks to plot annotated HiC tracks with nested TAD domains, loops and TAD insulation scores. ChIP data and orientation of CTCF sites can also be provided.
-![HiC plot example](./README_files/HB2_WT-GNG12_AS1_DIRAS3-10000.png)
+![HiC plot example](./README_files/AS-chr3L-3L_5500000_6000000-3000.png)
 
 ### HiCcompare track
 
 HiCflow uses HiCcompare to produce joint normalised Z-score subtraction matrices between pairs of samples. Statistically significant changes are highlighted as points on the subtraction matrix.
-![HiCcompare example](./README_files/GNG12_AS1_DIRAS3-10000-HB2_WT-vs-HB2_TSS_KO.png)
+![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC.png)
 
 ### UCSC browser
 
 Add example
 
-### HiCRep
-
-HiCflow uses HiCRep to assess sample-reproducibility by calculating the stratum-adjusted correlation coefficient between all pairwise samples.
-![HiCRep example](./README_files/GNG12_AS1_DIRAS3-10000-hicrep.png)
+## Quality Control
 
 ### MultiQC report
 
 HiCflow utilises MultiQC to aggregate the QC and metric report across all samples and all compatible tools used in the pipeline. An example MultiQC report produced by HiCflow is shown [here](./README_files/multiqc_report.html).  
+
+### HiCRep
+
+HiCflow uses HiCRep to assess sample-reproducibility by calculating the stratum-adjusted correlation coefficient between all pairwise samples.
+![HiCRep example](./README_files/chr3L-1000-hicrep.png)
+
+### Other QC Metrics
+
+#### Insert Size Distribution
+![InsertSize](./README_files/insert_size_frequency.png)
+
+#### Ditag Length
+![Ditag Length](./README_files/ditag_length.png)
