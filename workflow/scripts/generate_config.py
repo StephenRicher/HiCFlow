@@ -49,8 +49,10 @@ def main():
         '--links', nargs=2, default=None,
         help = 'UP and DOWN links files showing differential interactions.')
     parser.add_argument(
-        '--ctcfs', nargs = '+', default = None,
-        help = 'CTCF position in bigWig format.')
+        '--tracks', metavar='TITLE,FILE', default=[],
+        type=commaPair, action='append',
+        help='Add title and track files as comma seperated pairs.'
+        'Call multiple times to add more files.')
     parser.add_argument(
         '--ctcf_orientation',
         help = 'CTCF orientations in BED format.')
@@ -78,8 +80,18 @@ def main():
     return func(**vars(args))
 
 
+def commaPair(value):
+    ''' Split command seperated pair and return as dictionary '''
+
+    value = value.split(',')
+    title = value[0].strip()
+    track = value[1].strip()
+
+    return (title, track)
+
+
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                links, ctcfs, compare, ctcf_orientation, genes, depth,
+                links, tracks, compare, ctcf_orientation, genes, depth,
                 colourmap, vMin, vMax, flip):
 
 
@@ -127,10 +139,9 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
 
 
     print('# End Sample Specific')
-    if ctcfs is not None:
-        for i, ctcf in enumerate(ctcfs):
-            if not_empty(ctcf):
-                write_ctcf(ctcf = ctcf, i = i)
+    for title, file in tracks:
+        if not_empty(file):
+            write_tracks(file=file, title=title)
         print('[spacer]')
 
     if ctcf_orientation is not None and not_empty(ctcf_orientation):
@@ -244,24 +255,19 @@ def get_links_groups(path):
     return base[0], base[2]
 
 
-def write_ctcf(ctcf, i,
-    colours = ['#FF000080', '#0000FF80', '#00FF0080' ]):
-    colour = colours[i]
-    overlay = 'share-y' if i > 0 else 'no'
+def write_tracks(file, title):
 
-    print(f'[CTCF - Rep {i}]',
-          f'file = {ctcf}',
-          f'title = CTCF',
-          f'color = {colour}',
+    print(f'[Track - {title}]',
+          f'file = {file}',
+          f'title = {title}',
           f'min_value = 0',
-          f'max_value = 3',
-          f'height = 4',
+          f'height = 3',
           f'number_of_bins = 500',
           f'nans_to_zeros = True',
           f'summary_method = mean',
           f'show_data_range = true',
           f'file_type = bigwig',
-          f'overlay_previous = {overlay}', sep = '\n')
+          f'overlay_previous = no', sep = '\n')
 
 def write_ctcf_direction(ctcf_orientation):
     print(f'[CTCF orientation]',
