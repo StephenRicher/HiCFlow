@@ -63,6 +63,7 @@ default_config = {
     'phase':             True,
     'createValidBam':    False,
     'colourmap':         'Purples',
+    'multiQCconfig':     None,
 }
 
 config = set_config(config, default_config)
@@ -2141,6 +2142,12 @@ if not ALLELE_SPECIFIC:
             'bcftools stats {input} > {output} 2> {log}'
 
 
+def multiQCconfig():
+    if config['multiQCconfig']:
+        return f'--config {config["multiQCconfig"]}'
+    else:
+        return ''
+
 
 rule multiqc:
     input:
@@ -2161,11 +2168,11 @@ rule multiqc:
                 region=REGIONS.index, cell_type=CELL_TYPES) if PHASE_MODE=='BCFTOOLS' else []]
     output:
         directory('qc/multiqc')
+    params:
+        config = multiQCconfig()
     log:
         'logs/multiqc/multiqc.log'
     conda:
         f'{ENVS}/multiqc.yaml'
     shell:
-        'multiqc --outdir {output} --force '
-        '--config {BASE}/config/multiqc_config.yaml {input} '
-        '&> {log}'
+        'multiqc --outdir {output} --force {params.config} {input} &> {log}'
