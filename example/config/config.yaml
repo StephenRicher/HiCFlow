@@ -1,0 +1,38 @@
+workdir: example/analysis/
+data:
+    samples: ../config/samples.csv
+genome : ../config/genomes.csv
+
+bigWig :
+    CP190 : ../genome/CP190-dm6.bw    # GSM762836
+    Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
+    CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
+bed :
+    Genes : ../genome/BDGP6.28.99.genes.bed
+
+protocol:
+    regions: ../config/regions.bed
+    re1 : DpnII
+    re1_seq : '^GATC'
+    re2:
+    re2_seq:
+    arima: False
+plot_coordinates: ../config/plot_coordinates.bed
+hicup:
+    shortest: 150
+    longest: 850
+    nofill: False
+HiCcompare:
+    fdr: 0.1
+    logFC: 0
+    multi: True
+compareMatrices:
+    vMin: -1.96
+    vMax: 1.96
+    size: 3
+phase : True
+colourmap : 'Purples'
+createValidBam: False
+binsize : [1000, 3000]
+multiQCconfig : ../config/multiqc_config.yaml
+fastq_screen :
