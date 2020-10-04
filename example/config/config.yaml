@@ -18,6 +18,13 @@ protocol:
     re2_seq:
     arima: False
 plot_coordinates: ../config/plot_coordinates.bed
+cutadapt:
+    forwardAdapter: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+    reverseAdapter: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+    overlap: 6
+    minimumLength: 20
+    qualityCutoff: 20
+    GCcontent: 43
 hicup:
     shortest: 150
     longest: 850

@@ -35,6 +35,14 @@ default_config = {
          're2':          None        ,
          're2_seq':      None        ,
          'arima':        False       ,},
+    'cutadapt':
+        {'forwardAdapter': 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA',
+         'reverseAdapter': 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT',
+         'overlap':         3                                 ,
+         'errorRate':       0.1                               ,
+         'minimumLength':   0                                 ,
+         'qualityCutoff':  '0,0'                              ,
+         'GCcontent':       50                                ,},
     'hicup':
         {'shortest' :    150          ,
          'longest' :     850          ,
@@ -332,8 +340,13 @@ rule cutadapt:
     group:
         'cutadapt'
     params:
-        others = '--minimum-length 20 --quality-cutoff 20 --discard-trimmed '
-        '--gc-content 46 --overlap 6 --error-rate 0.1'
+        forwardAdapter = config['cutadapt']['forwardAdapter'],
+        reverseAdapter = config['cutadapt']['reverseAdapter'],
+        overlap = config['cutadapt']['overlap'],
+        errorRate = config['cutadapt']['errorRate'],
+        minimumLength = config['cutadapt']['minimumLength'],
+        qualityCutoff = config['cutadapt']['qualityCutoff'],
+        GCcontent = config['cutadapt']['GCcontent']
     log:
         'logs/cutadapt/{pre_sample}.log'
     conda:
@@ -341,10 +354,12 @@ rule cutadapt:
     threads:
         THREADS
     shell:
-        'cutadapt '
-        '-a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA '
-        '-A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT '
-        '{params.others} --cores {threads} '
+        'cutadapt -a {params.forwardAdapter} -A {params.reverseAdapter} '
+        '--overlap {params.overlap} --error-rate {params.errorRate} '
+        '--minimum-length {params.minimumLength} '
+        '--quality-cutoff {params.qualityCutoff} '
+        '--gc-content {params.GCcontent} '
+        '--discard-trimmed --cores {threads} '
         '-o {output.trimmed[0]} -p {output.trimmed[1]} {input} '
         '> {output.qc} 2> {log}'
 
