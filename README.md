@@ -24,11 +24,11 @@ The pipeline utilises the workflow management system Snakemake and automatically
   * [Example output](#example-output)
      * [HiC track](#hic-track)
      * [HiCcompare track](#hiccompare-track)
-     * [UCSC browser](#ucsc-browser)
   * [Quality Control](#quality-control)
      * [HiCRep](#hicrep)
      * [MultiQC report](#multiqc-report)
      * [Other QC metrics](#custom-qc-metrics)
+  * [References](#references)
 
 ## Installation
 
@@ -40,13 +40,135 @@ The HiCflow repository can be downloaded from github as follows:
 $ git clone https://github.com/StephenRicher/HiC-pipeline.git
 ```
 
-## Configuration
+## Configuring HiCFlow
 
-Add configuration
+The HiCFlow pipeline is fully controlled through a single configuration file that describes parameter settings and paths to relevant files in the system.
+HiCFlow is bundled with a fully configured small Hi-C dataset ([Wang et al., 2018](https://www.nature.com/articles/s41467-017-02526-9)) to test and serve as a template for configuring other datasets.
+The configuration file for this example dataset is shown below and can be found at `example/config/config.yaml`.
+
+**Note:** If relative file paths are provided in the configuration file then these are **relative to the working directory**.
+The working directory itself (defined by workdir) is relative to the directory snakemake is executed in.
+If not set, the working directory defaults to the directory containg the Snakefile.
+Relative paths can be confusing, they are used here to ensure the example dataset works for all users.
+If in doubt simply provide absolute paths.
+
+```bash
+# Specify output directory - either absolute path or relative to Snakefile.
+# If using relative paths for subsequent files, these should be relative to
+# this workding directory.
+workdir: example/analysis/
+
+# CSV file with cell type, experimental group, replicate number,
+# read (forward/reverse) and path each FASTQ files.
+data:  ../config/samples.csv
+
+# Bed file of genomic regions to perform HiC analysis.
+# These may be whole chromosomes for normal HiC or specific capture regions
+# for region capture HiC.
+regions: ../config/regions.bed
+
+# FASTA references to align data. Must specify a reference for each cell type
+# defined in config['data'].
+genome :
+    S2Rplus : ../genome/BDGP6.28.fa.gz
+
+# Set True to perform phasing and haplotype assembly pipeline.
+phase : True
+
+# Phased VCF file for allele specific analysis. Must specify a VCF for each
+# cell type defined in config['data']. If not set then run normal HiC mode.
+# The HiCFlow phasing pipeline (see above) outputs a phased VCF for each cell
+# type which is valid input here.
+phased_vcf:
+    #S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
+
+# List of binsizes to analyse HiC data at different resolutions.
+# The first binsize defines the base resolution, all subsequence bin sizes
+# must be whole divisible by the base bin size e.g. [1000, 1500] is invalid.
+binsize : [1000, 3000]
+
+# Parameters for cutadapt - see https://cutadapt.readthedocs.io/en/stable/guide.html
+cutadapt:
+    forwardAdapter: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+    reverseAdapter: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+    overlap: 6
+    errorRate: 0.1
+    minimumLength: 20
+    qualityCutoff: 20
+    GCcontent: 43
+
+# Parameters for hicup - see https://www.bioinformatics.babraham.ac.uk/projects/hicup/read_the_docs/html/index.html
+hicup:
+    re1 : DpnII
+    re1_seq : '^GATC'
+    shortest: 150
+    longest: 850
+    re2:
+    re2_seq:
+    arima: False
+    nofill: False
+
+# Bigwig tracks for plotting below HiC plots.
+bigWig :
+    CP190 : ../genome/CP190-dm6.bw    # GSM762836
+    Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
+    CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
+# BED tracks for plotting with HiC plots.
+bed :
+    Genes : ../genome/BDGP6.28.99.genes.bed
+
+# BED file for creating plots of additional viewpoints in addition to those
+# defined config['protocol']['regions'].
+plot_coordinates: ../config/plot_coordinates.bed
+
+# Matplotlib colour map for HiC plots
+colourmap : 'Purples'
+
+HiCcompare:
+    fdr: 0.1 # FDR threshold for significant differential interactions.
+    logFC: 0 # Fold-change threshold for significant differential interactions.
+    multi: True # Run multiHiCcompare when replicates are available.
+
+compareMatrices:
+    vMin: -1.96 # Mimimum logFC value for colour scale.
+    vMax: 1.96  # Maximum logFC value for colour scale.
+    size: 3     # Size of median filter to denoise comparison matrix.
+
+# Output a BAM file containing only valid HiC read pairs within defined regions.
+createValidBam: False
+
+# Configuration file for customising multiQC output report.
+multiQCconfig : ../config/multiqc_config.yaml
+
+# Configuration file of paths to genome indexes for FastQ Screen.
+# See template in example/config/fastq_screen.config
+fastq_screen :
+
+```
 
 ## Usage
 
-Add usage.
+Once Snakemake is installed the example dataset can be processed using the following command.
+This command should be run from the HiCFlow base directory, containing the Snakefile.
+
+```bash
+$ snakemake --use-conda --cores 4 --configfile example/config/config.yaml
+```
+
+This command will first install all of the relevant Conda environments within the defined working directory (`example/analysis/`).
+This may take some time.
+The pipeline should then run to completion producing the same figures as shown in the example output below.
+Alteratively, you may also want to install the Conda environments in a custom directory.
+This is useful when you are running multiple independent analyses and do not wish to repeatedly install the same Conda environments.
+
+```bash
+$ snakemake --use-conda --conda-prefix /path/envs/ --cores 4 --configfile example/config/config.yaml
+```
+
+### Cluster Execution
+All Snakemake based pipelines, including HiCFlow, are compatible with cluster environments.
+Consult the official Snakemake documentation [here](https://snakemake.readthedocs.io/en/v5.25.0/executing/cli.html#profiles) to learn more about running HiCFlow on your particular cluster environment.
+
 
 ## Example output
 
@@ -59,10 +181,6 @@ HiCflow utilises pyGenomeTracks to plot annotated HiC tracks with nested TAD dom
 
 HiCflow uses HiCcompare to produce joint normalised Z-score subtraction matrices between pairs of samples. Statistically significant changes are highlighted as points on the subtraction matrix.
 ![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC.png)
-
-### UCSC browser
-
-Add example
 
 ## Quality Control
 
@@ -82,3 +200,8 @@ HiCflow uses HiCRep to assess sample-reproducibility by calculating the stratum-
 
 #### Ditag Length
 ![Ditag Length](./README_files/ditag_length.png)
+
+###### References
+Qi Wang, Qiu Sun, Daniel M. Czajkowsky, and Zhifeng Shao. Sub-kb Hi-C in D.
+melanogaster reveals conserved characteristics of TADs between insect and mammalian
+cells. Nature Communications, 2018. ISSN 20411723. doi: 10.1038/s41467-017-02526-9.
