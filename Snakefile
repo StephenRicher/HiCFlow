@@ -6,7 +6,7 @@ import sys
 import tempfile
 import itertools
 import pandas as pd
-from snake_setup import set_config, load_samples, get_grouping, load_regions, load_vcf_paths, load_genomes, get_allele_groupings, load_coords
+from snake_setup import set_config, load_samples, get_grouping, load_regions, get_allele_groupings, load_coords
 
 BASE = workflow.basedir
 
@@ -22,9 +22,8 @@ if not config:
 default_config = {
     'workdir':           workflow.basedir,
     'tmpdir':            tempfile.gettempdir(),
-    'data':
-        {'samples':      ''          ,
-         'phased_vcf':   None        ,},
+    'data':              ''          ,
+    'phased_vcf':        None        ,
     'genome':            ''          ,
     'bigWig':            {}          ,
     'bed':               {}          ,
@@ -85,16 +84,14 @@ BINS = config['binsize']
 BASE_BIN = BINS[0]
 
 # Read path to samples in pandas
-samples = load_samples(config['data']['samples'])
+samples = load_samples(config['data'])
 
 # Extract groups and replicates.
 ORIGINAL_SAMPLES, ORIGINAL_GROUPS, CELL_TYPES = get_grouping(samples)
 
 REGIONS = load_regions(config['protocol']['regions'])
 
-if config['data']['phased_vcf']:
-    PHASED_VCFS = load_vcf_paths(config['data']['phased_vcf'], samples)
-    workdir: config['workdir'] + '/allele'
+if config['phased_vcf']:
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
     ALLELE_SPECIFIC = True
 else:
@@ -113,12 +110,10 @@ else:
     phase = []
     PHASE_MODE = None
 
-GENOMES = load_genomes(config['genome'])
-
 wildcard_constraints:
-    cell_type = r'[^-\.\/]+',
-    pre_group = r'[^-\.\/a]+',
-    pre_sample = r'[^-\.\/a]+-\d+',
+    cell_type = rf'{"|".join(CELL_TYPES)}',
+    pre_group = rf'{"|".join(ORIGINAL_GROUPS)}',
+    pre_sample = rf'{"|".join(ORIGINAL_SAMPLES)}',
     region = rf'{"|".join(REGIONS.index)}',
     allele = r'[12]',
     rep = r'\d+',
@@ -126,27 +121,17 @@ wildcard_constraints:
     bin = r'\d+',
     mode = r'SNP|INDEL',
     set = r'logFC|sig|fdr',
-    compare = r'HiCcompare|multiHiCcompare'
-
-if ALLELE_SPECIFIC:
-    wildcard_constraints:
-        group = r'[^-\.\/]+_a\d+',
-        group1 = r'[^-\.\/]+_a\d+',
-        group2 = r'[^-\.\/]+_a\d+',
-        sample = r'[^-\.\/]+_a\d+-\d+',
-        all = r'[^-\.\/]+_a\d+|[^-\.\/]+_a\d+-\d+'
-else:
-    wildcard_constraints:
-        group = r'[^-\.\/a]+',
-        group1 = r'[^-\.\/a]+',
-        group2 = r'[^-\.\/a]+',
-        sample = r'[^-\.\/a]+-\d+',
-        all = r'[^-\.\/]+|[^-\.\/]+-\d+'
+    compare = r'HiCcompare|multiHiCcompare',
+    group = rf'{"|".join(GROUPS)}',
+    group1 = rf'{"|".join(GROUPS)}',
+    group2 = rf'{"|".join(GROUPS)}',
+    sample = rf'{"|".join(SAMPLES)}',
+    all = rf'{"|".join(SAMPLES + list(GROUPS))}'
 
 # Generate list of group comparisons - this avoids self comparison
 COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)]
 
-# Generate dictionart of plot coordinates, may be multple per region
+# Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords([config['plot_coordinates'], config['protocol']['regions']])
 
 preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png']
@@ -188,8 +173,8 @@ rule all:
 if ALLELE_SPECIFIC:
     rule maskPhased:
         input:
-            genome = lambda wc: GENOMES[wc.cell_type],
-            vcf = lambda wc: PHASED_VCFS[wc.cell_type]
+            genome = lambda wc: config['genome'][wc.cell_type],
+            vcf = lambda wc: config['phased_vcf'][wc.cell_type]
         output:
             'dat/genome/masked/{cell_type}.fa'
         log:
@@ -204,7 +189,7 @@ if ALLELE_SPECIFIC:
 
 rule vcf2SNPsplit:
     input:
-        vcf = lambda wc: PHASED_VCFS[wc.cell_type]
+        vcf = lambda wc: config['phased_vcf'][wc.cell_type]
     output:
         'snpsplit/{cell_type}-snpsplit.txt'
     log:
@@ -217,7 +202,7 @@ rule vcf2SNPsplit:
 
 rule bgzipGenome:
     input:
-        lambda wc: GENOMES[wc.cell_type]
+        lambda wc: config['genome'][wc.cell_type]
     output:
         'dat/genome/{cell_type}.fa.gz'
     log:

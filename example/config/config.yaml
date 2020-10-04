@@ -1,7 +1,13 @@
 workdir: example/analysis/
-data:
-    samples: ../config/samples.csv
-genome : ../config/genomes.csv
+data:  ../config/samples.csv
+
+phase : True
+
+genome :
+    S2Rplus : ../genome/BDGP6.28.fa.gz
+
+phased_vcf:
+    # S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
 
 bigWig :
     CP190 : ../genome/CP190-dm6.bw    # GSM762836
@@ -9,6 +15,7 @@ bigWig :
     CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
 bed :
     Genes : ../genome/BDGP6.28.99.genes.bed
+plot_coordinates: ../config/plot_coordinates.bed
 
 protocol:
     regions: ../config/regions.bed
@@ -17,28 +24,34 @@ protocol:
     re2:
     re2_seq:
     arima: False
-plot_coordinates: ../config/plot_coordinates.bed
+
 cutadapt:
     forwardAdapter: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
     reverseAdapter: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
     overlap: 6
+    errorRate: 0.1
     minimumLength: 20
     qualityCutoff: 20
     GCcontent: 43
+
 hicup:
     shortest: 150
     longest: 850
     nofill: False
+
+colourmap : 'Purples'
+
 HiCcompare:
     fdr: 0.1
     logFC: 0
     multi: True
+
 compareMatrices:
     vMin: -1.96
     vMax: 1.96
     size: 3
-phase : True
-colourmap : 'Purples'
+
+
 createValidBam: False
 binsize : [1000, 3000]
 multiQCconfig : ../config/multiqc_config.yaml

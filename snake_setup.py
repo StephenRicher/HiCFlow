@@ -143,31 +143,6 @@ def load_coords(files):
                 coords[region].append(f'{chr}_{start}_{end}')
     return coords
 
-def load_vcf_paths(phased_vcfs, samples):
-
-    vcfs = pd.read_table(
-        phased_vcfs, squeeze=True,
-        names=['cell_type', 'path'],
-        index_col='cell_type',sep = ',')
-
-    if not vcfs.index.str.match(r'[^-\.\/]+').all():
-        sys.exit(f'Invalid cell_type definition in {phased_vcfs}.\n'
-            'Cell types must not contain the following characters: - . /')
-
-    if len(vcfs.index.difference(samples.index.get_level_values('cell_type'))):
-        sys.exit(f'Differing cell types given in {phased_vcfs} compared '
-                 'to samples file.')
-
-    return vcfs
-
-
-def load_genomes(genomes_path):
-    genomes = pd.read_table(
-        genomes_path, squeeze=True,
-        names=['cell_type', 'path'],
-        index_col='cell_type', sep = ',')
-    return genomes
-
 
 def get_allele_groupings(samples):
 
