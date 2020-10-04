@@ -1,9 +1,9 @@
 cell_type,group,rep,read,path
-S2Rplus,G1S,1,R1,../data/G1S-1-R1-all.fastq.gz
-S2Rplus,G1S,1,R2,../data/G1S-1-R2-all.fastq.gz
-S2Rplus,G1S,2,R1,../data/G1S-2-R1-all.fastq.gz
-S2Rplus,G1S,2,R2,../data/G1S-2-R2-all.fastq.gz
-S2Rplus,AS,1,R1,../data/AS-1-R1-all.fastq.gz
-S2Rplus,AS,1,R2,../data/AS-1-R2-all.fastq.gz
-S2Rplus,AS,2,R1,../data/AS-2-R1-all.fastq.gz
-S2Rplus,AS,2,R2,../data/AS-2-R2-all.fastq.gz
+S2Rplus,G1S,1,R1,../data/G1S-1-R1.fastq.gz
+S2Rplus,G1S,1,R2,../data/G1S-1-R2.fastq.gz
+S2Rplus,G1S,2,R1,../data/G1S-2-R1.fastq.gz
+S2Rplus,G1S,2,R2,../data/G1S-2-R2.fastq.gz
+S2Rplus,AS,1,R1,../data/AS-1-R1.fastq.gz
+S2Rplus,AS,1,R2,../data/AS-1-R2.fastq.gz
+S2Rplus,AS,2,R1,../data/AS-2-R1.fastq.gz
+S2Rplus,AS,2,R2,../data/AS-2-R2.fastq.gz

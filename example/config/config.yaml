@@ -1,30 +1,38 @@
+# Specify output directory - either absolute path or relative to Snakefile.
+# If using relative paths for subsequent files, these should be relative to
+# this workding directory.
 workdir: example/analysis/
+
+# CSV file with cell type, experimental group, replicate number,
+# read (forward/reverse) and path each FASTQ files.
 data:  ../config/samples.csv
 
-phase : True
+# Bed file of genomic regions to perform HiC analysis.
+# These may be whole chromosomes for normal HiC or specific capture regions
+# for region capture HiC.
+regions: ../config/regions.bed
 
+# FASTA references to align data. Must specify a reference for each cell type
+# defined in config['data'].
 genome :
     S2Rplus : ../genome/BDGP6.28.fa.gz
 
+# Set True to perform phasing and haplotype assembly pipeline.
+phase : True
+
+# Phased VCF file for allele specific analysis. Must specify a VCF for each
+# cell type defined in config['data']. If not set then run normal HiC mode.
+# The HiCFlow phasing pipeline (see above) outputs a phased VCF for each cell
+# type which is valid input here.
 phased_vcf:
-    # S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
+    #S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
 
-bigWig :
-    CP190 : ../genome/CP190-dm6.bw    # GSM762836
-    Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
-    CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
-bed :
-    Genes : ../genome/BDGP6.28.99.genes.bed
-plot_coordinates: ../config/plot_coordinates.bed
+# List of binsizes to analyse HiC data at different resolutions.
+# The first binsize defines the base resolution, all subsequence bin sizes
+# must be whole divisible by the base bin size e.g. [1000, 1500] is invalid.
+binsize : [1000, 3000]
 
-protocol:
-    regions: ../config/regions.bed
-    re1 : DpnII
-    re1_seq : '^GATC'
-    re2:
-    re2_seq:
-    arima: False
-
+# Parameters for cutadapt - see https://cutadapt.readthedocs.io/en/stable/guide.html
 cutadapt:
     forwardAdapter: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
     reverseAdapter: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
@@ -34,25 +42,49 @@ cutadapt:
     qualityCutoff: 20
     GCcontent: 43
 
+# Parameters for hicup - see https://www.bioinformatics.babraham.ac.uk/projects/hicup/read_the_docs/html/index.html
 hicup:
+    re1 : DpnII
+    re1_seq : '^GATC'
     shortest: 150
     longest: 850
+    re2:
+    re2_seq:
+    arima: False
     nofill: False
 
+# Bigwig tracks for plotting below HiC plots.
+bigWig :
+    CP190 : ../genome/CP190-dm6.bw    # GSM762836
+    Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
+    CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
+# BED tracks for plotting with HiC plots.
+bed :
+    Genes : ../genome/BDGP6.28.99.genes.bed
+
+# BED file for creating plots of additional viewpoints in addition to those
+# defined config['protocol']['regions'].
+plot_coordinates: ../config/plot_coordinates.bed
+
+# Matplotlib colour map for HiC plots
 colourmap : 'Purples'
 
 HiCcompare:
-    fdr: 0.1
-    logFC: 0
-    multi: True
+    fdr: 0.1 # FDR threshold for significant differential interactions.
+    logFC: 0 # Fold-change threshold for significant differential interactions.
+    multi: True # Run multiHiCcompare when replicates are available.
 
 compareMatrices:
-    vMin: -1.96
-    vMax: 1.96
-    size: 3
+    vMin: -1.96 # Mimimum logFC value for colour scale.
+    vMax: 1.96  # Maximum logFC value for colour scale.
+    size: 3     # Size of median filter to denoise comparison matrix.
 
-
+# Output a BAM file containing only valid HiC read pairs within defined regions.
 createValidBam: False
-binsize : [1000, 3000]
+
+# Configuration file for customising multiQC output report.
 multiQCconfig : ../config/multiqc_config.yaml
+
+# Configuration file of paths to genome indexes for FastQ Screen.
+# See template in example/config/fastq_screen.config
 fastq_screen :

@@ -27,13 +27,7 @@ default_config = {
     'genome':            ''          ,
     'bigWig':            {}          ,
     'bed':               {}          ,
-    'protocol':
-        {'regions':      ''          ,
-         're1':          'enzyme'    ,
-         're1_seq':      ''          ,
-         're2':          None        ,
-         're2_seq':      None        ,
-         'arima':        False       ,},
+    'regions':           ''          ,
     'cutadapt':
         {'forwardAdapter': 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA',
          'reverseAdapter': 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT',
@@ -43,9 +37,14 @@ default_config = {
          'qualityCutoff':  '0,0'                              ,
          'GCcontent':       50                                ,},
     'hicup':
-        {'shortest' :    150          ,
-         'longest' :     850          ,
-         'nofill' :      False        ,},
+        {'shortest' :    150     ,
+         'longest' :     850     ,
+         're1':          'enzyme',
+         're1_seq':      ''      ,
+         're2':          None    ,
+         're2_seq':      None    ,
+         'arima':        False   ,
+         'nofill' :      False   ,},
     'HiCcompare':
         {'fdr' :         0.05         ,
          'logFC' :       1            ,
@@ -75,10 +74,7 @@ config = set_config(config, default_config)
 
 workdir: config['workdir']
 THREADS = workflow.cores
-RE1 = config['protocol']['re1']
-RE1_SEQ = config['protocol']['re1_seq']
-RE2 = config['protocol']['re2']
-RE2_SEQ = config['protocol']['re2_seq']
+RE1 = config["hicup"]["re1"]
 READS = ['R1', 'R2']
 BINS = config['binsize']
 BASE_BIN = BINS[0]
@@ -89,7 +85,7 @@ samples = load_samples(config['data'])
 # Extract groups and replicates.
 ORIGINAL_SAMPLES, ORIGINAL_GROUPS, CELL_TYPES = get_grouping(samples)
 
-REGIONS = load_regions(config['protocol']['regions'])
+REGIONS = load_regions(config['regions'])
 
 if config['phased_vcf']:
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
@@ -132,7 +128,7 @@ wildcard_constraints:
 COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)]
 
 # Generate dictionary of plot coordinates, may be multple per region
-COORDS = load_coords([config['plot_coordinates'], config['protocol']['regions']])
+COORDS = load_coords([config['plot_coordinates'], config['regions']])
 
 preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png']
 HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
@@ -299,7 +295,7 @@ rule hicupTruncate:
                      'dat/fastq/truncated/{pre_sample}-R2.trunc.fastq.gz'],
         summary = 'qc/hicup/{pre_sample}-truncate-summary.txt'
     params:
-        re1_seq = RE1_SEQ,
+        re1_seq = config['hicup']['re1_seq'],
         fill = '--nofill' if config['hicup']['nofill'] else ''
     threads:
         2 if THREADS > 2 else THREADS
@@ -397,17 +393,26 @@ rule fastQCTrimmed:
         '0.49.0/bio/fastqc'
 
 
+def setOptionalDigestParams(wc):
+    command = ''
+    if config['hicup']['arima']:
+        command += '--arima '
+    if config['hicup']['re2_seq']:
+        command += f'--re2 {config["hicup"]["re2_seq"]} '
+    if config['hicup']['re2']:
+        command += f'--re2_name {config["hicup"]["re2"]} '
+    return command
+
+
 rule hicupDigest:
     input:
         rules.bgzipGenome.output
     output:
         f'dat/genome/digest/{{cell_type}}-{RE1}-hicup-digest.txt.gz'
     params:
-        re1 = RE1,
-        re1_seq = RE1_SEQ,
-        re2 = f'--re2_name {RE2}' if RE2 else '',
-        re2_seq = '--re2 {RE2_SEQ}' if RE2_SEQ else '',
-        arima = '--arima' if config['protocol']['arima'] else ''
+        re1 = config['hicup']['re1'],
+        re1_seq = config['hicup']['re1_seq'],
+        optional = setOptionalDigestParams
     log:
         'logs/hicupDigest/{cell_type}.log'
     conda:
@@ -416,7 +421,7 @@ rule hicupDigest:
         '{SCRIPTS}/hicup/hicupDigest.py '
         '--output {output} --genome {wildcards.cell_type} '
         '--re1 {params.re1_seq} --re1_name {params.re1} '
-        '{params.arima} {params.re2_seq} {params.re2} {input} &> {log}'
+        '{params.optional} {input} &> {log}'
 
 
 def hicupMapIndex(wildcards):
@@ -469,7 +474,7 @@ rule digest:
     output:
         f'dat/genome/digest/{{cell_type}}-{RE1}-pyHiCtools-digest.txt'
     params:
-        re1_seq = RE1_SEQ
+        re1_seq = config['hicup']['re1_seq']
     log:
         f'logs/digest/{{cell_type}}-{RE1}.log'
     conda:
@@ -1652,7 +1657,7 @@ if not ALLELE_SPECIFIC:
             chr = lambda wildcards: REGIONS['chr'][wildcards.region],
             start = lambda wildcards: REGIONS['start'][wildcards.region],
             end = lambda wildcards: REGIONS['end'][wildcards.region],
-            intervals = config['protocol']['regions'],
+            intervals = config['regions'],
             java_opts = '-Xmx6G',
             min_prune = 2, # Increase to speed up
             downsample = 50, # Decrease to speed up
