@@ -37,7 +37,7 @@ HiCflow works with python >=3.6 and requires [Snakemake](https://snakemake.readt
 The HiCflow repository can be downloaded from github as follows:
 
 ```bash
-$ git clone https://github.com/StephenRicher/HiC-pipeline.git
+$ git clone https://github.com/StephenRicher/HiCFlow.git
 ```
 
 ## Configuring HiCFlow
