@@ -20,14 +20,29 @@ def main(truncater, mapper, filter, deduplicator, **kwargs):
     write_header()
     trunc = process_summary(truncater)
     map = process_summary(mapper)
-    filt = process_summary(filter)[0]
-    dedup = process_summary(deduplicator)[0]
-    filename = os.path.basename(dedup[0])
+
+    filename = os.path.basename('-'.join(trunc[0][0].split('-')[:2]))
+
+    if filter:
+        filt = process_summary(filter)[0]
+        percent_valid = (float(filt[2])/float(filt[1])) * 100
+    else:
+        filt = [filename, 0, 0,	0, 0, 0, 0,	0,	0, 0, 0, 0, 0]
+        percent_valid = 0
+
+    if deduplicator:
+        dedup = process_summary(deduplicator)[0]
+        percent_uniques = (float(dedup[2])/float(dedup[1])) * 100
+        percent_unique_trans = (float(dedup[5])/float(dedup[1])) * 100
+        percent_passed = (float(dedup[2])/float(trunc[0][1])) * 100
+    else:
+        dedup =  [filename, 0, 0, 0, 0,	0]
+        percent_uniques = 0
+        percent_unique_trans = 0
+        percent_passed = 0
+
     percent_mapped = (float(map[0][10])/float(map[0][1])) * 100
-    percent_valid = (float(filt[2])/float(filt[1])) * 100
-    percent_uniques = (float(dedup[2])/float(dedup[1])) * 100
-    percent_unique_trans = (float(dedup[5])/float(dedup[1])) * 100
-    percent_passed = (float(dedup[2])/float(trunc[0][1])) * 100
+
     print(filename, trunc[0][1], trunc[1][1],
           trunc[0][4], trunc[1][4], trunc[0][2], trunc[1][2],
           trunc[0][6], trunc[1][6], map[0][2], map[1][2],
@@ -78,17 +93,13 @@ def parse_arguments():
     requiredNamed = custom.add_argument_group(
         'required named arguments')
     requiredNamed.add_argument(
-        '--truncater', required=True,
-        help='Truncater summary file.')
+        '--truncater', required=True, help='Truncater summary file.')
     requiredNamed.add_argument(
-        '--mapper', required=True,
-        help='Mapper summary file.')
+        '--mapper', required=True, help='Mapper summary file.')
     requiredNamed.add_argument(
-        '--filter', required=True,
-        help='Filter summary file.')
+        '--filter', help='Filter summary file.')
     requiredNamed.add_argument(
-        '--deduplicator', required=True,
-        help='Deduplicator summary file.')
+        '--deduplicator', help='Deduplicator summary file.')
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)

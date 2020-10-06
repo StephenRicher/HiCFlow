@@ -36,15 +36,14 @@ default_config = {
          'minimumLength':   0                                 ,
          'qualityCutoff':  '0,0'                              ,
          'GCcontent':       50                                ,},
-    'hicup':
-        {'shortest' :    150     ,
-         'longest' :     850     ,
-         're1':          'enzyme',
-         're1_seq':      ''      ,
-         're2':          None    ,
-         're2_seq':      None    ,
-         'arima':        False   ,
-         'nofill' :      False   ,},
+    'restrictionSeqs':      ''      ,
+    'HiCParams':
+        {'minDistance':          300  ,
+         'maxLibraryInsertSize': 1000 ,
+         'removeSelfLigation':   True ,
+         'keepSelfCircles':      False,
+         'skipDuplicationCheck': False,
+         'nofill':               False,},
     'HiCcompare':
         {'fdr' :         0.05         ,
          'logFC' :       1            ,
@@ -74,7 +73,6 @@ config = set_config(config, default_config)
 
 workdir: config['workdir']
 THREADS = workflow.cores
-RE1 = config["hicup"]["re1"]
 READS = ['R1', 'R2']
 BINS = config['binsize']
 BASE_BIN = BINS[0]
@@ -185,15 +183,15 @@ if ALLELE_SPECIFIC:
 
 rule vcf2SNPsplit:
     input:
-        vcf = lambda wc: config['phased_vcf'][wc.cell_type]
+        lambda wc: config['phased_vcf'][wc.cell_type]
     output:
         'snpsplit/{cell_type}-snpsplit.txt'
     log:
         'logs/vcf2SNPsplit/{cell_type}.log'
     conda:
-        f'{ENVS}/coreutils.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatSNPsplit.sh {input} > {output} 2> {log}'
+        '{SCRIPTS}/reformatSNPsplit.py {input} > {output} 2> {log}'
 
 
 rule bgzipGenome:
@@ -282,10 +280,11 @@ rule reformatFastQC:
     log:
         'logs/reformatFastQC/{single}.raw.log'
     conda:
-        f'{ENVS}/coreutils.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/modifyFastQC.sh {input} {output} '
+        '{SCRIPTS}/modifyFastQC.py {input} {output} '
         '{wildcards.single} &> {log}'
+
 
 rule hicupTruncate:
     input:
@@ -295,8 +294,8 @@ rule hicupTruncate:
                      'dat/fastq/truncated/{pre_sample}-R2.trunc.fastq.gz'],
         summary = 'qc/hicup/{pre_sample}-truncate-summary.txt'
     params:
-        re1_seq = config['hicup']['re1_seq'],
-        fill = '--nofill' if config['hicup']['nofill'] else ''
+        re1 = list(config['restrictionSeqs'].values())[0],
+        fill = '--nofill' if config['HiCParams']['nofill'] else ''
     threads:
         2 if THREADS > 2 else THREADS
     log:
@@ -307,7 +306,7 @@ rule hicupTruncate:
         '{SCRIPTS}/hicup/hicupTruncate.py {params.fill} '
         '--output {output.truncated} '
         '--summary {output.summary} '
-        '--re1 {params.re1_seq} '
+        '--re1 {params.re1} '
         '--threads {threads} {input} &> {log}'
 
 
@@ -355,10 +354,10 @@ rule reformatCutadapt:
     log:
         'logs/reformatCutadapt/{pre_sample}.log'
     conda:
-        f'{ENVS}/coreutils.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
-        'awk -v sample={wildcards.pre_sample} -f {SCRIPTS}/modifyCutadapt.awk '
-        '{input} > {output} 2> {log}'
+        '{SCRIPTS}/modifyCutadapt.py {wildcards.pre_sample} {input} '
+        '> {output} 2> {log}'
 
 
 if config['fastq_screen'] is not None:
@@ -391,37 +390,6 @@ rule fastQCTrimmed:
         'logs/fastqc_trimmed/{single}.log'
     wrapper:
         '0.49.0/bio/fastqc'
-
-
-def setOptionalDigestParams(wc):
-    command = ''
-    if config['hicup']['arima']:
-        command += '--arima '
-    if config['hicup']['re2_seq']:
-        command += f'--re2 {config["hicup"]["re2_seq"]} '
-    if config['hicup']['re2']:
-        command += f'--re2_name {config["hicup"]["re2"]} '
-    return command
-
-
-rule hicupDigest:
-    input:
-        rules.bgzipGenome.output
-    output:
-        f'dat/genome/digest/{{cell_type}}-{RE1}-hicup-digest.txt.gz'
-    params:
-        re1 = config['hicup']['re1'],
-        re1_seq = config['hicup']['re1_seq'],
-        optional = setOptionalDigestParams
-    log:
-        'logs/hicupDigest/{cell_type}.log'
-    conda:
-        f'{ENVS}/hicup.yaml'
-    shell:
-        '{SCRIPTS}/hicup/hicupDigest.py '
-        '--output {output} --genome {wildcards.cell_type} '
-        '--re1 {params.re1_seq} --re1_name {params.re1} '
-        '{params.optional} {input} &> {log}'
 
 
 def hicupMapIndex(wildcards):
@@ -472,15 +440,15 @@ rule digest:
     input:
         rules.bgzipGenome.output
     output:
-        f'dat/genome/digest/{{cell_type}}-{RE1}-pyHiCtools-digest.txt'
+        f'dat/genome/digest/{{cell_type}}-pyHiCtools-digest.txt'
     params:
-        re1_seq = config['hicup']['re1_seq']
+        reSeq = list(config['restrictionSeqs'].values())[0]
     log:
-        f'logs/digest/{{cell_type}}-{RE1}.log'
+        f'logs/digest/{{cell_type}}.log'
     conda:
         f'{ENVS}/pyHiCTools.yaml'
     shell:
-        'pyHiCTools digest --restriction {params.re1_seq} <(zcat -f {input}) '
+        'pyHiCTools digest --restriction {params.reSeq} <(zcat -f {input}) '
         '> {output} 2> {log}'
 
 
@@ -510,8 +478,8 @@ def processHiC_digest(wildcards):
         if wildcards.pre_sample in samples:
             type = cell_type
 
-    return expand('dat/genome/digest/{cell_type}-{re1}-pyHiCtools-digest.txt',
-        cell_type=type, re1=RE1)
+    return expand('dat/genome/digest/{cell_type}-pyHiCtools-digest.txt',
+        cell_type=type)
 
 
 rule processHiC:
@@ -566,64 +534,10 @@ rule plotQC:
         '{SCRIPTS}/plotQC.R {params.outdir} {input} 2> {log}'
 
 
-def getHicupDigest(wildcards):
-    """ Retrieve hicup filter digest file associated with pre_sample. """
-
-    for cell_type, samples in CELL_TYPES.items():
-        if wildcards.pre_sample in samples:
-            type = cell_type
-
-    return expand('dat/genome/digest/{cell_type}-{re1}-hicup-digest.txt.gz',
-        cell_type=type, re1=RE1)
-
-
-rule hicupFilter:
-    input:
-        bam = rules.hicupMap.output.mapped,
-        digest = getHicupDigest
-    output:
-        filtered = 'dat/mapped/{pre_sample}.filt.bam',
-        summary = 'qc/hicup/{pre_sample}-filter-summary.txt',
-        rejects = directory('qc/hicup/{pre_sample}-ditag_rejects')
-    params:
-        shortest = config['hicup']['shortest'],
-        longest = config['hicup']['longest']
-    log:
-        'logs/hicupFilter/{pre_sample}.log'
-    conda:
-        f'{ENVS}/hicup.yaml'
-    shell:
-        '{SCRIPTS}/hicup/hicupFilter.py '
-        '--output {output.filtered} '
-        '--digest {input.digest} '
-        '--outdir {output.rejects} '
-        '--summary {output.summary} '
-        '--shortest {params.shortest} '
-        '--longest {params.longest} {input.bam} &> {log}'
-
-
-rule hicupDeduplicate:
-    input:
-        rules.hicupFilter.output.filtered
-    output:
-        deduplicated = 'dat/mapped/{pre_sample}.dedup.bam',
-        summary = 'qc/hicup/{pre_sample}-deduplicate-summary.txt',
-    log:
-        'logs/hicupDeduplicate/{pre_sample}.log'
-    conda:
-        f'{ENVS}/hicup.yaml'
-    shell:
-        '{SCRIPTS}/hicup/hicupDeduplicate.py '
-        '--output {output.deduplicated} '
-        '--summary {output.summary} {input} &> {log}'
-
-
 rule mergeHicupQC:
     input:
         truncater = rules.hicupTruncate.output.summary,
-        mapper = rules.hicupMap.output.summary,
-        filter = rules.hicupFilter.output.summary,
-        deduplicator = rules.hicupDeduplicate.output.summary
+        mapper = rules.hicupMap.output.summary
     output:
         'qc/hicup/HiCUP_summary_report-{pre_sample}.txt'
     log:
@@ -631,12 +545,8 @@ rule mergeHicupQC:
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
-        '{SCRIPTS}/hicup/mergeHicupSummary.py '
-        '--truncater {input.truncater} '
-        '--mapper {input.mapper}  '
-        '--filter {input.filter}  '
-        '--deduplicator {input.deduplicator} '
-        '> {output} 2> {log}'
+        '{SCRIPTS}/hicup/mergeHicupSummary.py --truncater {input.truncater} '
+        '--mapper {input.mapper} > {output} 2> {log}'
 
 
 def SNPsplit_input(wildcards):
@@ -651,10 +561,10 @@ def SNPsplit_input(wildcards):
 
 rule SNPsplit:
     input:
-        bam = rules.hicupDeduplicate.output.deduplicated,
+        bam = rules.hicupMap.output.mapped,
         snps = SNPsplit_input
     output:
-        expand('snpsplit/{{pre_sample}}.dedup.{ext}',
+        expand('snpsplit/{{pre_sample}}.pair.{ext}',
             ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
                    'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
                    'UA_UA.bam', 'allele_flagged.bam'])
@@ -674,7 +584,7 @@ rule mergeSNPsplit:
         'snpsplit/{pre_group}-{rep}.dedup.G{allele}_G{allele}.bam',
         'snpsplit/{pre_group}-{rep}.dedup.G{allele}_UA.bam'
     output:
-        'snpsplit/merged/{pre_group}_a{allele}-{rep}.dedup.bam'
+        'snpsplit/merged/{pre_group}_a{allele}-{rep}.pair.bam'
     log:
         'logs/mergeSNPsplit/{pre_group}_a{allele}-{rep}.log'
     conda:
@@ -685,7 +595,7 @@ rule mergeSNPsplit:
 
 rule sortBam:
     input:
-        rules.hicupDeduplicate.output.deduplicated
+        rules.hicupMap.output.mapped
     output:
         'dat/mapped/{pre_sample}.sort.bam'
     params:
@@ -764,9 +674,9 @@ rule samtoolsFlagstat:
 
 def split_input(wildcards):
     if ALLELE_SPECIFIC:
-        return 'snpsplit/merged/{sample}.dedup.bam'
+        return 'snpsplit/merged/{sample}.pair.bam'
     else:
-        return f'dat/mapped/{wildcards.sample}.dedup.bam'
+        return f'dat/mapped/{wildcards.sample}.pair.bam'
 
 
 rule splitPairedReads:
@@ -788,9 +698,58 @@ rule splitPairedReads:
         '> {output} 2> {log}'
 
 
+rule findRestSites:
+    input:
+        rules.bgzipGenome.output
+    output:
+        'dat/genome/{cell_type}-{re}-restSites.bed'
+    params:
+        reSeq = lambda wc: config['restrictionSeqs'][wc.re].replace('^', '')
+    log:
+        'logs/findRestSites/{cell_type}-{re}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicFindRestSite --fasta {input} --searchPattern {params.reSeq} '
+        '--outFile {output} &> {log}'
+
+
+def getRestSites(wildcards):
+    """ Retrieve restSite files associated with sample. """
+
+    for cell_type, samples in CELL_TYPES.items():
+        if ALLELE_SPECIFIC:
+            groups, samples = get_allele_groupings(samples)
+        if wildcards.sample in samples:
+            type = cell_type
+            break
+
+    return expand('dat/genome/{cell_type}-{re}-restSites.bed',
+        cell_type=type, re=config['restrictionSeqs'].keys())
+
+
+def getRestrictionSeqs(wc):
+    enzymes = ''
+    for enzyme in config['restrictionSeqs'].values():
+        enzyme = enzyme.replace('^', '')
+        enzymes += f'{enzyme} '
+    return enzymes
+
+
+def getDanglingSequences(wc):
+    danglingSequences = ''
+    for enzyme in config['restrictionSeqs'].values():
+        sequence = enzyme.replace('^', '')
+        cutIndex = enzyme.index('^')
+        danglingSequence = sequence[cutIndex:len(sequence) - cutIndex]
+        danglingSequences += f'{danglingSequence} '
+    return danglingSequences
+
+
 rule buildBaseMatrix:
     input:
-        expand('dat/mapped/split/{{sample}}-{read}.hic.bam', read=READS)
+        bams = expand('dat/mapped/split/{{sample}}-{read}.hic.bam', read=READS),
+        restSites = getRestSites
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
         bam = 'dat/matrix/{region}/{sample}-{region}.bam',
@@ -798,9 +757,17 @@ rule buildBaseMatrix:
     params:
         bin = BASE_BIN,
         region = REGIONS.index,
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-        start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
-        end = lambda wildcards: REGIONS['end'][wildcards.region]
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region],
+        reSeqs = getRestrictionSeqs,
+        danglingSequences = getDanglingSequences,
+        removeSelfLigation = (
+            '--removeSelfLigation' if config['HiCParams']['removeSelfLigation'] else ''),
+        keepSelfCircles = (
+            '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
+        skipDuplicationCheck = (
+            '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
@@ -808,14 +775,15 @@ rule buildBaseMatrix:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicBuildMatrix --samFiles {input} '
+        'hicBuildMatrix --samFiles {input.bams} '
         '--region {params.chr}:{params.start}-{params.end} '
-        '--binSize {params.bin} '
-        '--outFileName {output.hic} '
-        '--outBam {output.bam} '
-        '--QCfolder {output.qc} '
-        '--skipDuplicationCheck '
-        '--threads {threads} '
+        '--restrictionCutFile {input.restSites} '
+        '--restrictionSequence {params.reSeqs} '
+        '--danglingSequence {params.danglingSequences} '
+        '{params.removeSelfLigation} {params.keepSelfCircles} '
+        '{params.skipDuplicationCheck} --binSize {params.bin} '
+        '--outFileName {output.hic} --outBam {output.bam} '
+        '--QCfolder {output.qc} --threads {threads} '
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
@@ -1034,10 +1002,11 @@ rule reformatNxN3p:
         region = REGIONS.index,
     log:
         'logs/reformatNxN3p/{sample}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatNxN3p.sh '
-        '-r {wildcards.region} -b {wildcards.bin} {input}'
-        '> {output} 2> {log}'
+        '{SCRIPTS}/reformatNxN3p.py {wildcards.bin} {wildcards.region} '
+        '<(zcat {input}) > {output} 2> {log}'
 
 
 rule HiCRep:
@@ -1068,8 +1037,11 @@ rule reformatNxN:
         'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.nxn.tsv'
     log:
         'logs/reformatNxN/{region}/{bin}/{all}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatNxN.sh {input} > {output} 2> {log} || touch {output}'
+        '{SCRIPTS}/reformatNxN.py <(zcat {input}) '
+        '> {output} 2> {log} || touch {output}'
 
 
 rule OnTAD:
@@ -1106,10 +1078,10 @@ rule reformatLinks:
     log:
         'logs/reformatLinks/{region}/{bin}/{all}.log'
     conda:
-        f'{ENVS}/coreutils.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatOnTAD.sh {params.start} {wildcards.bin} {input} '
-        '> {output} 2> {log} || touch {output}'
+        '{SCRIPTS}/reformatLinks.py {params.start} {wildcards.bin} {input} '
+        '> {output} 2> {log}'
 
 
 def getTracks(wc):
@@ -2039,9 +2011,9 @@ if not ALLELE_SPECIFIC:
         log:
             'logs/extractBestPhase/{region}/{cell_type}.log'
         conda:
-            f'{ENVS}/coreutils.yaml'
+            f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/extractBestHapcut2.sh {input} > {output} 2> {log}'
+            '{SCRIPTS}/extractBestHapcut2.py {input} > {output} 2> {log}'
 
 
     rule extractVCF:
