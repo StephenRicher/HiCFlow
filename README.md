@@ -97,15 +97,18 @@ cutadapt:
     qualityCutoff: 20
     GCcontent: 43
 
-# Parameters for hicup - see https://www.bioinformatics.babraham.ac.uk/projects/hicup/read_the_docs/html/index.html
-hicup:
-    re1 : DpnII
-    re1_seq : '^GATC'
-    shortest: 150
-    longest: 850
-    re2:
-    re2_seq:
-    arima: False
+
+# List of restriction sequence in order of protocol usage. Cut site is denoted
+# using the '^' symbol. Ensure restriction enzyme names are given as strings.
+restrictionSeqs:
+    'DpnII' : '^GATC'
+
+HiCParams:
+    minDistance: 300
+    maxLibraryInsertSize: 1000
+    removeSelfLigation: True
+    keepSelfCircles: False
+    skipDuplicationCheck: False
     nofill: False
 
 # Bigwig tracks for plotting below HiC plots.
