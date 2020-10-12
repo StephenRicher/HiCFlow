@@ -5,4 +5,4 @@ channels :
 channel_priority:
   - true
 dependencies :
-  - hapcut2 >= 1.3.2
+  - hapcut2 == 1.3.2

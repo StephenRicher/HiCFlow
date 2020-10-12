@@ -2,8 +2,7 @@ channels :
   - conda-forge
   - bioconda
   - defaults
-channel_priority: 
+channel_priority:
   - true
 dependencies :
-  - samtools=1.10
-
+  - samtools = 1.10

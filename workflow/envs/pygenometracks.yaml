@@ -2,7 +2,7 @@ channels :
   - conda-forge
   - bioconda
   - defaults
-channel_priority: 
-  - true
+channel_priority: strict
 dependencies :
-  - pygenometracks
+  - pygenometracks == 3.5
+  - python >= 3.7
