@@ -762,8 +762,10 @@ rule buildBaseMatrix:
         end = lambda wc: REGIONS['end'][wc.region],
         reSeqs = getRestrictionSeqs,
         danglingSequences = getDanglingSequences,
+        #removeSelfLigation = (
+        #    '--removeSelfLigation' if config['HiCParams']['removeSelfLigation'] else ''),
         removeSelfLigation = (
-            '--removeSelfLigation' if config['HiCParams']['removeSelfLigation'] else ''),
+            'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
         keepSelfCircles = (
             '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
         skipDuplicationCheck = (
@@ -779,12 +781,13 @@ rule buildBaseMatrix:
         '--region {params.chr}:{params.start}-{params.end} '
         '--restrictionCutFile {input.restSites} '
         '--restrictionSequence {params.reSeqs} '
+        '--removeSelfLigation {params.removeSelfLigation} '
         '--danglingSequence {params.danglingSequences} '
-        '{params.removeSelfLigation} {params.keepSelfCircles} '
+        '{params.keepSelfCircles} '
         '{params.skipDuplicationCheck} --binSize {params.bin} '
         '--outFileName {output.hic} --outBam {output.bam} '
         '--QCfolder {output.qc} --threads {threads} '
-        '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
+        '&> {log}  || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
 rule mergeValidHiC:
