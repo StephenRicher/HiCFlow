@@ -982,6 +982,41 @@ rule detectLoops:
         '&> {log} || touch {output} && touch {output} '
 
 
+rule hicPCA:
+    input:
+        rules.IceMatrix.output.matrix
+    output:
+        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}.bedgraph'
+    params:
+        method = "dist_norm",
+        format = 'bedgraph'
+    log:
+        'logs/hicPCA/{all}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicPCA --matrix {input} --outputFileName {output} '
+        '--format {params.format} '
+        '--numberOfEigenvectors 1 --method {params.method} '
+        '--ignoreMaskedBins &> {log} || touch {output} && touch {output} '
+
+
+rule fixBedgraph:
+    input:
+        rules.hicPCA.output
+    output:
+        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}-fix.bedgraph'
+    params:
+        pos = lambda wc: REGIONS['end'][wc.region]
+    log:
+        'logs/fixBedgraph/{all}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/fixBedgraph.py {input} --pos {params.pos} '
+        '> {output} 2> {log}'
+
+
 rule reformatHomer:
     input:
         'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.h5'
@@ -1096,12 +1131,14 @@ def getTracks(wc):
         command += f'--bed {title},{track} '
     return command
 
+
 rule createConfig:
     input:
         matrix = 'dat/matrix/{region}/{bin}/ice/{group}-{region}-{bin}.h5',
         loops = 'dat/matrix/{region}/{bin}/loops/{group}-{region}-{bin}.bedgraph',
         insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
         tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-ontad.links',
+        pca = 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix.bedgraph'
     output:
         'plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{bin}.ini'
     params:
@@ -1116,6 +1153,7 @@ rule createConfig:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
         '--insulations {input.insulations} --log '
         '--loops {input.loops} --colourmap {params.colourmap} '
+        '--bigWig PCA1,{input.pca} '
         '--tads {input.tads} {params.tracks} '
         '--depth {params.depth} > {output} 2> {log}'
 
