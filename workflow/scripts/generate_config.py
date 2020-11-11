@@ -140,7 +140,11 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
     print('# End Sample Specific')
     for title, file in bigWig:
         if not_empty(file):
-            write_bigwig(file=file, title=title)
+            if file.endswith('.bedgraph'):
+                type='bedgraph'
+            else:
+                type='bigwig'
+            write_bigwig(file=file, title=title, type=type)
         print('[spacer]')
 
     for title, file in bed:
@@ -252,18 +256,17 @@ def get_links_groups(path):
     return base[0], base[2]
 
 
-def write_bigwig(file, title):
+def write_bigwig(file, title, type='bigwig'):
 
-    print(f'[BigWig - {title}]',
+    print(f'[{type} - {title}]',
           f'file = {file}',
           f'title = {title}',
-          f'min_value = 0',
           f'height = 3',
           f'number_of_bins = 500',
           f'nans_to_zeros = True',
           f'summary_method = mean',
           f'show_data_range = true',
-          f'file_type = bigwig',
+          f'file_type = {type}',
           f'overlay_previous = no', sep = '\n')
 
 
