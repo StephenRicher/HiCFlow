@@ -22,6 +22,7 @@ if not config:
 default_config = {
     'workdir':           workflow.basedir,
     'tmpdir':            tempfile.gettempdir(),
+    'threads':           workflow.cores,
     'data':              ''          ,
     'phased_vcf':        None        ,
     'genome':            ''          ,
@@ -72,7 +73,7 @@ default_config = {
 config = set_config(config, default_config)
 
 workdir: config['workdir']
-THREADS = workflow.cores
+THREADS = config['threads']
 READS = ['R1', 'R2']
 BINS = config['binsize']
 BASE_BIN = BINS[0]
