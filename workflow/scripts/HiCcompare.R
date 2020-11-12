@@ -58,6 +58,19 @@ numBins <- function(start, end, binsize) {
 
 args = commandArgs(trailingOnly=TRUE)
 
+setwd('/media/stephen/Data/HiC-subsample/example/analysis/')
+
+#outdir = 'dat/HiCcompare/chr3L/3000' 
+#qcdir = 'qc/HiCcompare' 
+#chr = '3L' 
+#start = 5500001 
+#end = 6000000
+#binsize = 3000
+#fdr = 0.1 
+#matrix1 = 'dat/matrix/chr3L/3000/G1S-chr3L-3000-sutm.txt' 
+#matrix2 = 'dat/matrix/chr3L/3000/AS-chr3L-3000-sutm.txt'
+
+
 outdir = args[1]
 qcdir = args[2]
 chr = args[3]
@@ -77,6 +90,10 @@ loess_plot = paste(qcdir, '/', group1, '-vs-', group2, '-loess.png', sep = '')
 filter_plot = paste(qcdir, '/', group1, '-vs-', group2, '-filter_params.png', sep = '')
 compare_plot = paste(qcdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep = '')
 out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
+out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
+out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
+out_fdr = paste(outdir, '/', group1, '-vs-', group2, '-fdr.homer', sep = '')
+out_medianAdjM = paste(outdir, '/', group1, '-vs-', group2, '-absZ.bedgraph', sep = '')
 
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
 
@@ -98,18 +115,26 @@ dev.off()
 
 hic.table = as.data.frame(hic.table)
 
+# Write mean adjM per interval as bedgraph
+require(data.table)
+medianAdjM = data.table(hic.table)
+medianAdjM = medianAdjM[,list(abs.Z = mean(abs(Z), na.rm = TRUE), adjM.count=length(adj.M)), 
+                        by=c("chr1","start1", "end1")]
+# Set all median values computed by less than 'n' values to 0
+medianAdjM[medianAdjM$adjM.count < 10, 'abs.Z'] = 0
+
+write.table(medianAdjM, out_medianAdjM, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
+
 # Write matrix of logFC values
-out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
 writeMatrix(hic.table, out_matrix, chr, start, end, binsize, 'adj.M')
 
 # Write matrix of of significant FDR values
-out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
 writeMatrix(hic.table[hic.table$p.adj <= fdr,], out_sig, chr, start, end, binsize, 'adj.M')
 
 # Write matrix of signed inverted adjusted P values
 hic.table$scale.p.adj = 1 - as.double(hic.table$p.adj)
 hic.table$sign.p.adj = ifelse(hic.table$adj.M > 0, hic.table$scale.p.adj, -hic.table$scale.p.adj)
-out_fdr = paste(outdir, '/', group1, '-vs-', group2, '-fdr.homer', sep = '')
+
 writeMatrix(hic.table, out_fdr, chr, start, end, binsize, "sign.p.adj")
 
 
