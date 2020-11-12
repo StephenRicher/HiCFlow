@@ -1291,6 +1291,8 @@ rule HiCcompare:
         all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
         sig = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
         fdr = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer',
+        links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links',
+        absZ = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-absZ.bedgraph'
     group:
         'HiCcompare'
     log:
@@ -1323,7 +1325,8 @@ rule multiHiCcompare:
     output:
         all = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
         sig = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
-        fdr = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer'
+        fdr = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer',
+        links = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
     params:
         dir = lambda wc: f'dat/multiHiCcompare/{wc.region}/{wc.bin}',
         qcdir = directory('qc/multiHiCcompare'),
@@ -1403,7 +1406,8 @@ rule filterHiCcompare:
 
 rule createCompareConfig:
     input:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5',
+        mat = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5',
+        absZ = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-absZ.bedgraph'
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}.ini',
     params:
@@ -1419,8 +1423,8 @@ rule createCompareConfig:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_config.py --matrix {input} --compare '
-        '{params.tracks} '
+        '{SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
+        '--bigWig absZ,{input.absZ} {params.tracks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
