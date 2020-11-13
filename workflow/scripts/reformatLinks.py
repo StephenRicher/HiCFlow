@@ -16,7 +16,8 @@ def main(start, bin, file, **kwargs):
     with fileinput.input(file) as fh:
         for i, line in enumerate(fh):
             # Skip header line
-            if i == 0: continue
+            if i == 0:
+                continue
             columns = line.split()
             chr = columns[0]
             # Lower bound of interaction
@@ -24,7 +25,7 @@ def main(start, bin, file, **kwargs):
             # Upper bound of interaction
             upper = int(columns[2]) + start
 
-            print(chr, lower-bin, lower, chr, upper-bin, upper, 0, sep='\t')
+            print(chr, lower, lower+bin, chr, upper-bin, upper, 0, sep='\t')
 
 
 def parse_arguments():
