@@ -130,28 +130,14 @@ COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords([config['plot_coordinates'], config['regions']])
 
-preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png']
-HiC_mode = [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
-                region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
-            expand('dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
-                region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS),
-                method=['norm', 'ice'], ext=['h5', 'gz']),
-            expand('dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.{ext}',
-                region=REGIONS.index, bin=BINS,
-                sample=SAMPLES, ext=['h5', 'gz']),
-            expand('dat/matrix/{region}/{bin}/{all}-{region}-{bin}-sutm.txt',
-                region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
-            expand('qc/hicrep/{region}-{bin}-hicrep.png',
-                region=REGIONS.index, bin=BINS),
-            [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
-                coords=COORDS[region], bin=BINS, compare=COMPARES, region=region,
-                tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare'],
-                set=['logFC', 'sig', 'fdr']) for region in COORDS.keys()],
-            [expand('plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coords}-{bin}.png',
-                coords=COORDS[region], bin=BINS, region=region,
-                group=list(GROUPS)) for region in COORDS.keys()],
-            expand('UCSCcompatible/{region}/{all}-{region}.hic',
-                region=REGIONS.index, all=SAMPLES+list(GROUPS))]
+preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
+              'qc/fastqc/.tmp.aggregateFastqc',
+              'qc/samtools/.tmp.aggregateSamtoolsQC']
+HiC_mode = [expand('qc/hicrep/.tmp.{region}-{bin}-hicrep',
+                region=REGIONS.index, bin=BINS)
+            'qc/hicup/.tmp.aggregatehicupTruncate',
+            expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
+                region=REGIONS.index, bin=BINS)]
 
 # Create a per-sample BAM, for each sample, of only valid HiC reads
 if config['createValidBam']:
@@ -1362,7 +1348,6 @@ rule juicerPre:
         'bam2hic'
     log:
         'logs/juicerPre/{region}/{all}.log'
-
     conda:
         f'{ENVS}/openjdk.yaml'
     shell:
