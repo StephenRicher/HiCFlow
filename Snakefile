@@ -631,6 +631,8 @@ rule sortBam:
         'dat/mapped/{pre_sample}.sort.bam'
     params:
         mem = '1G'
+    group:
+        'prepareBAM'
     threads:
         THREADS
     log:
@@ -647,6 +649,8 @@ rule indexBam:
         rules.sortBam.output
     output:
         f'{rules.sortBam.output}.bai'
+    group:
+        'prepareBAM'
     threads:
         THREADS
     log:
@@ -729,7 +733,7 @@ rule splitPairedReads:
         read = READS,
         flag = lambda wc: '0x40' if wc.read == READS[0] else '0x80'
     group:
-        'buildBaseMatrix'
+        'prepareBAM'
     log:
         'logs/splitPairedReads/{sample}-{read}.log'
     conda:
@@ -749,7 +753,7 @@ rule findRestSites:
     params:
         reSeq = lambda wc: config['restrictionSeqs'][wc.re].replace('^', '')
     group:
-        'buildBaseMatrix'
+        'prepareBAM'
     log:
         'logs/findRestSites/{cell_type}-{re}.log'
     conda:
@@ -815,8 +819,6 @@ rule buildBaseMatrix:
             '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
-    group:
-        'buildBaseMatrix'
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
