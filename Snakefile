@@ -450,7 +450,7 @@ def hicupMapBasename(wildcards):
 
 rule hicupMap:
     input:
-        reads = rules.cutadapt.output.trimmed,
+        reads = rules.hicupTruncate.output.truncated,
         bt2_index = hicupMapIndex
     output:
         mapped = 'dat/mapped/{pre_sample}.pair.bam',
