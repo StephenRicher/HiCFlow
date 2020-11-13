@@ -342,9 +342,58 @@ if config['fastq_screen'] is not None:
             "0.60.0/bio/fastq_screen"
 
 
-rule hicupTruncate:
+rule cutadapt:
     input:
         lambda wc: samples.xs(wc.pre_sample, level=2)['path']
+    output:
+        trimmed = ['dat/fastq/trimmed/{pre_sample}-R1.trim.fastq.gz',
+                   'dat/fastq/trimmed/{pre_sample}-R2.trim.fastq.gz'],
+        qc = 'qc/cutadapt/unmod/{pre_sample}.cutadapt.txt'
+    group:
+        'cutadapt'
+    params:
+        forwardAdapter = config['cutadapt']['forwardAdapter'],
+        reverseAdapter = config['cutadapt']['reverseAdapter'],
+        overlap = config['cutadapt']['overlap'],
+        errorRate = config['cutadapt']['errorRate'],
+        minimumLength = config['cutadapt']['minimumLength'],
+        qualityCutoff = config['cutadapt']['qualityCutoff'],
+        GCcontent = config['cutadapt']['GCcontent']
+    log:
+        'logs/cutadapt/{pre_sample}.log'
+    conda:
+        f'{ENVS}/cutadapt.yaml'
+    threads:
+        THREADS
+    shell:
+        'cutadapt -a {params.forwardAdapter} -A {params.reverseAdapter} '
+        '--overlap {params.overlap} --error-rate {params.errorRate} '
+        '--minimum-length {params.minimumLength} '
+        '--quality-cutoff {params.qualityCutoff} '
+        '--gc-content {params.GCcontent} --cores {threads} '
+        '-o {output.trimmed[0]} -p {output.trimmed[1]} {input} '
+        '> {output.qc} 2> {log}'
+
+
+rule reformatCutadapt:
+    input:
+        rules.cutadapt.output.qc
+    output:
+        'qc/cutadapt/{pre_sample}.cutadapt.txt'
+    group:
+        'cutadapt'
+    log:
+        'logs/reformatCutadapt/{pre_sample}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/modifyCutadapt.py {wildcards.pre_sample} {input} '
+        '> {output} 2> {log}'
+
+
+rule hicupTruncate:
+    input:
+        rules.cutadapt.output.trimmed
     output:
         truncated = ['dat/fastq/truncated/{pre_sample}-R1.trunc.fastq.gz',
                      'dat/fastq/truncated/{pre_sample}-R2.trunc.fastq.gz'],
@@ -376,56 +425,6 @@ rule aggregatehicupTruncate:
         touch(temp('qc/hicup/.tmp.aggregatehicupTruncate'))
     group:
         'hicupTruncate' if config['groupJobs'] else 'aggregateTarget'
-
-
-rule cutadapt:
-    input:
-        rules.hicupTruncate.output.truncated
-    output:
-        trimmed = ['dat/fastq/trimmed/{pre_sample}-R1.trim.fastq.gz',
-                   'dat/fastq/trimmed/{pre_sample}-R2.trim.fastq.gz'],
-        qc = 'qc/cutadapt/unmod/{pre_sample}.cutadapt.txt'
-    group:
-        'cutadapt'
-    params:
-        forwardAdapter = config['cutadapt']['forwardAdapter'],
-        reverseAdapter = config['cutadapt']['reverseAdapter'],
-        overlap = config['cutadapt']['overlap'],
-        errorRate = config['cutadapt']['errorRate'],
-        minimumLength = config['cutadapt']['minimumLength'],
-        qualityCutoff = config['cutadapt']['qualityCutoff'],
-        GCcontent = config['cutadapt']['GCcontent']
-    log:
-        'logs/cutadapt/{pre_sample}.log'
-    conda:
-        f'{ENVS}/cutadapt.yaml'
-    threads:
-        THREADS
-    shell:
-        'cutadapt -a {params.forwardAdapter} -A {params.reverseAdapter} '
-        '--overlap {params.overlap} --error-rate {params.errorRate} '
-        '--minimum-length {params.minimumLength} '
-        '--quality-cutoff {params.qualityCutoff} '
-        '--gc-content {params.GCcontent} '
-        '--discard-trimmed --cores {threads} '
-        '-o {output.trimmed[0]} -p {output.trimmed[1]} {input} '
-        '> {output.qc} 2> {log}'
-
-
-rule reformatCutadapt:
-    input:
-        rules.cutadapt.output.qc
-    output:
-        'qc/cutadapt/{pre_sample}.cutadapt.txt'
-    group:
-        'cutadapt'
-    log:
-        'logs/reformatCutadapt/{pre_sample}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/modifyCutadapt.py {wildcards.pre_sample} {input} '
-        '> {output} 2> {log}'
 
 
 def hicupMapIndex(wildcards):
