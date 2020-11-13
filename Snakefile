@@ -613,7 +613,7 @@ rule SNPsplit:
     params:
         outdir = 'snpsplit/'
     group:
-        'snpsplit'
+        'SNPsplit'
     log:
         'logs/SNPsplit/SNPsplit-{pre_sample}.log'
     conda:
@@ -630,7 +630,7 @@ rule mergeSNPsplit:
     output:
         'snpsplit/merged/{pre_group}_a{allele}-{rep}.pair.bam'
     group:
-        'snpsplit'
+        'SNPsplit'
     log:
         'logs/mergeSNPsplit/{pre_group}_a{allele}-{rep}.log'
     conda:
@@ -1144,7 +1144,7 @@ rule HiCRep:
         start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
         end = lambda wildcards: REGIONS['end'][wildcards.region]
     group:
-        'processHiC' if config['groupJobs'] else 'HiCRep'
+        'HiCRep'
     log:
         'logs/HiCRep/{region}-{bin}.log'
     conda:
@@ -1152,6 +1152,16 @@ rule HiCRep:
     shell:
         '{SCRIPTS}/runHiCRep.R {output} {wildcards.bin} '
         '{params.start} {params.end} {input} &> {log}'
+
+
+rule aggregateHiCRep:
+    input:
+        expand('qc/hicrep/{region}-{bin}-hicrep.png',
+            region=REGIONS, bin=BINS)
+    output:
+        touch(temp('qc/hicrep/.tmp.{region}-{bin}-hicrep'))
+    group:
+        'HiCRep' if config['groupJobs'] else 'aggregateTarget'
 
 
 rule reformatNxN:
