@@ -821,6 +821,8 @@ rule buildBaseMatrix:
         end = lambda wc: REGIONS['end'][wc.region],
         reSeqs = getRestrictionSeqs,
         danglingSequences = getDanglingSequences,
+        maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
+        minDistance = config['HiCParams']['minDistance'],
         removeSelfLigation = (
             'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
         keepSelfCircles = (
@@ -840,6 +842,8 @@ rule buildBaseMatrix:
         '--region {params.chr}:{params.start}-{params.end} '
         '--restrictionCutFile {input.restSites} '
         '--restrictionSequence {params.reSeqs} '
+        '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
+        '--minDistance {params.minDistance} '
         '--removeSelfLigation {params.removeSelfLigation} '
         '--danglingSequence {params.danglingSequences} '
         '{params.keepSelfCircles} '
