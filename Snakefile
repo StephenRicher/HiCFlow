@@ -658,7 +658,7 @@ rule indexBam:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools index -@ 6 {input} &> {log}'
+        'samtools index -@ {threads} {input} &> {log}'
 
 
 rule samtoolsStats:
@@ -745,6 +745,23 @@ rule splitPairedReads:
         '> {output} 2> {log}'
 
 
+rule indexSplitBam:
+    input:
+        rules.splitPairedReads.output
+    output:
+        f'{rules.splitPairedReads.output}.bai'
+    group:
+        'prepareBAM'
+    threads:
+        THREADS
+    log:
+        'logs/indexSplitBam/{sample}-{read}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools index -@ {threads} {input} &> {log}'
+
+
 rule findRestSites:
     input:
         rules.bgzipGenome.output
@@ -798,6 +815,7 @@ def getDanglingSequences(wc):
 rule buildBaseMatrix:
     input:
         bams = expand('dat/mapped/split/{{sample}}-{read}.hic.bam', read=READS),
+        indexes =  expand('dat/mapped/split/{{sample}}-{read}.hic.bam.bai', read=READS),
         restSites = getRestSites
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
