@@ -133,25 +133,8 @@ COORDS = load_coords([config['plot_coordinates'], config['regions']])
 preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc',
               'qc/samtools/.tmp.aggregateSamtoolsQC']
-HiC_mode = [expand('dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext}',
-                region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS),
-                method=['norm', 'ice'], ext=['h5', 'gz']),
-            expand('dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.{ext}',
-                region=REGIONS.index, bin=BINS,
-                sample=SAMPLES, ext=['h5', 'gz']),
-            expand('dat/matrix/{region}/{bin}/{all}-{region}-{bin}-sutm.txt',
-                region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
-            expand('qc/hicrep/.tmp.{region}-{bin}-hicrep',
+HiC_mode = [expand('qc/hicrep/.tmp.{region}-{bin}-hicrep',
                 region=REGIONS.index, bin=BINS),
-            [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
-                coords=COORDS[region], bin=BINS, compare=COMPARES, region=region,
-                tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare'],
-                set=['logFC', 'sig', 'fdr']) for region in COORDS.keys()],
-            [expand('plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coords}-{bin}.png',
-                coords=COORDS[region], bin=BINS, region=region,
-                group=list(GROUPS)) for region in COORDS.keys()],
-            expand('UCSCcompatible/{region}/{all}-{region}.hic',
-                region=REGIONS.index, all=SAMPLES+list(GROUPS)),
             'qc/hicup/.tmp.aggregatehicupTruncate',
             expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
                 region=REGIONS.index, bin=BINS)]
@@ -1163,7 +1146,7 @@ rule HiCRep:
 rule aggregateHiCRep:
     input:
         expand('qc/hicrep/{region}-{bin}-hicrep.png',
-            region=REGIONS, bin=BINS)
+            region=REGIONS.index, bin=BINS)
     output:
         touch(temp('qc/hicrep/.tmp.{region}-{bin}-hicrep'))
     group:
@@ -1590,7 +1573,7 @@ rule plotCompare:
 rule aggregateProcessHiC:
     input:
         lambda wc: expand('plots/{{region}}/{{bin}}/{tool}/{set}/{compare}-{{region}}-{coords}-{{bin}}-{set}.png',
-            coords=COORDS[wc.region], compare=COMPARES,
+            coords=COORDS[wc.region], compare=COMPARES, set=['logFC', 'sig', 'fdr'],
             tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare']),
         lambda wc: expand('plots/{{region}}/{{bin}}/pyGenomeTracks/{group}-{{region}}-{coords}-{{bin}}.png',
             coords=COORDS[wc.region], group=list(GROUPS)),
