@@ -134,7 +134,7 @@ preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc',
               'qc/samtools/.tmp.aggregateSamtoolsQC']
 HiC_mode = [expand('qc/hicrep/.tmp.{region}-{bin}-hicrep',
-                region=REGIONS.index, bin=BINS)
+                region=REGIONS.index, bin=BINS),
             'qc/hicup/.tmp.aggregatehicupTruncate',
             expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
                 region=REGIONS.index, bin=BINS)]
