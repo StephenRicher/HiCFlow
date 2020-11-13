@@ -300,8 +300,8 @@ rule fastQCTrimmed:
 
 rule aggregateFastqc:
     input:
-        expand('qc/fastqc/{sample}-{read}.raw_fastqc.zip',
-            sample=ORIGINAL_SAMPLES, read=READS)
+        expand('qc/fastqc/{sample}-{read}.{type}_fastqc.zip',
+            sample=ORIGINAL_SAMPLES, read=READS, type=['trim', 'raw'])
     output:
         touch(temp('qc/fastqc/.tmp.aggregateFastqc'))
     group:
