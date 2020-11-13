@@ -68,6 +68,7 @@ default_config = {
     'createValidBam':    False,
     'colourmap':         'Purples',
     'multiQCconfig':     None,
+    'groupJobs':         False,
 }
 
 config = set_config(config, default_config)
@@ -172,6 +173,8 @@ if ALLELE_SPECIFIC:
             vcf = lambda wc: config['phased_vcf'][wc.cell_type]
         output:
             'dat/genome/masked/{cell_type}.fa'
+        group:
+            'prepareGenome'
         log:
             'logs/maskPhased/{cell_type}.log'
         conda:
@@ -200,6 +203,8 @@ rule bgzipGenome:
         lambda wc: config['genome'][wc.cell_type]
     output:
         'dat/genome/{cell_type}.fa.gz'
+    group:
+        'prepareGenome'
     log:
         'logs/bgzipGenome/{cell_type}.log'
     conda:
@@ -213,6 +218,8 @@ rule indexGenome:
         rules.bgzipGenome.output
     output:
         f'{rules.bgzipGenome.output}.fai'
+    group:
+        'prepareGenome'
     log:
         'logs/indexGenome/{cell_type}-indexGenome.log'
     conda:
@@ -226,6 +233,8 @@ rule getChromSizes:
         rules.indexGenome.output
     output:
         'dat/genome/chrom_sizes/{cell_type}.chrom.sizes'
+    group:
+        'prepareGenome'
     log:
         'logs/getChromSizes/{cell_type}.log'
     shell:
@@ -247,6 +256,8 @@ rule bowtie2Build:
                n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
     params:
         basename = lambda wc: f'dat/genome/index/{wc.cell_type}'
+    group:
+        'prepareGenome'
     log:
         'logs/bowtie2Build/{cell_type}.log'
     conda:
@@ -287,6 +298,50 @@ rule reformatFastQC:
         '{wildcards.single} &> {log}'
 
 
+rule fastQCTrimmed:
+    input:
+        'dat/fastq/trimmed/{single}.trim.fastq.gz'
+    output:
+        html = 'qc/fastqc/{single}.trim_fastqc.html',
+        zip = 'qc/fastqc/{single}.trim_fastqc.zip'
+    group:
+        'fastqc'
+    log:
+        'logs/fastqc_trimmed/{single}.log'
+    wrapper:
+        '0.49.0/bio/fastqc'
+
+
+rule aggregateFastqc:
+    input:
+        expand('qc/fastqc/{sample}-{read}.raw_fastqc.zip',
+            sample=ORIGINAL_SAMPLES, read=READS)
+    output:
+        touch(temp('qc/fastqc/.tmp.aggregateFastqc'))
+    group:
+        'fastqc' if config['groupJobs'] else 'aggregateTarget'
+
+
+if config['fastq_screen'] is not None:
+
+    rule fastQScreen:
+        input:
+            'dat/fastq/trimmed/{single}.trim.fastq.gz'
+        output:
+            txt = 'qc/fastq_screen/{single}.fastq_screen.txt',
+            png = 'qc/fastq_screen/{single}.fastq_screen.png'
+        params:
+            fastq_screen_config = config['fastq_screen'],
+            subset = 100000,
+            aligner = 'bowtie2'
+        log:
+            'logs/fastq_screen/{single}.log'
+        threads:
+            THREADS
+        wrapper:
+            "0.60.0/bio/fastq_screen"
+
+
 rule hicupTruncate:
     input:
         lambda wc: samples.xs(wc.pre_sample, level=2)['path']
@@ -297,6 +352,8 @@ rule hicupTruncate:
     params:
         re1 = list(config['restrictionSeqs'].values())[0],
         fill = '--nofill' if config['HiCParams']['nofill'] else ''
+    group:
+        'hicupTruncate'
     threads:
         2 if THREADS > 2 else THREADS
     log:
@@ -309,6 +366,16 @@ rule hicupTruncate:
         '--summary {output.summary} '
         '--re1 {params.re1} '
         '--threads {threads} {input} &> {log}'
+
+
+rule aggregatehicupTruncate:
+    input:
+        expand('qc/hicup/{sample}-truncate-summary.txt',
+            sample=ORIGINAL_SAMPLES)
+    output:
+        touch(temp('qc/hicup/.tmp.aggregatehicupTruncate'))
+    group:
+        'hicupTruncate' if config['groupJobs'] else 'aggregateTarget'
 
 
 rule cutadapt:
@@ -359,38 +426,6 @@ rule reformatCutadapt:
     shell:
         '{SCRIPTS}/modifyCutadapt.py {wildcards.pre_sample} {input} '
         '> {output} 2> {log}'
-
-
-if config['fastq_screen'] is not None:
-
-    rule fastQScreen:
-        input:
-            'dat/fastq/trimmed/{single}.trim.fastq.gz'
-        output:
-            txt = 'qc/fastq_screen/{single}.fastq_screen.txt',
-            png = 'qc/fastq_screen/{single}.fastq_screen.png'
-        params:
-            fastq_screen_config = config['fastq_screen'],
-            subset = 100000,
-            aligner = 'bowtie2'
-        log:
-            'logs/fastq_screen/{single}.log'
-        threads:
-            THREADS
-        wrapper:
-            "0.60.0/bio/fastq_screen"
-
-
-rule fastQCTrimmed:
-    input:
-        'dat/fastq/trimmed/{single}.trim.fastq.gz'
-    output:
-        html = 'qc/fastqc/{single}.trim_fastqc.html',
-        zip = 'qc/fastqc/{single}.trim_fastqc.zip'
-    log:
-        'logs/fastqc_trimmed/{single}.log'
-    wrapper:
-        '0.49.0/bio/fastqc'
 
 
 def hicupMapIndex(wildcards):
@@ -444,6 +479,8 @@ rule digest:
         f'dat/genome/digest/{{cell_type}}-pyHiCtools-digest.txt'
     params:
         reSeq = list(config['restrictionSeqs'].values())[0]
+    group:
+        'filterQC'
     log:
         f'logs/digest/{{cell_type}}.log'
     conda:
@@ -463,6 +500,8 @@ rule sampleReads:
     params:
         seed = '42',
         frac = '20'
+    threads:
+        2 if THREADS > 2 else THREADS
     log:
         'logs/sampleReads/{pre_sample}.log'
     conda:
@@ -527,6 +566,8 @@ rule plotQC:
                     'ditag_length.png'])
     params:
         outdir = 'qc/filterQC'
+    group:
+        'filterQC' if config['groupJobs'] else 'plotQC'
     log:
         'logs/plotQC/plot_subsample.log'
     conda:
@@ -571,6 +612,8 @@ rule SNPsplit:
                    'UA_UA.bam', 'allele_flagged.bam'])
     params:
         outdir = 'snpsplit/'
+    group:
+        'snpsplit'
     log:
         'logs/SNPsplit/SNPsplit-{pre_sample}.log'
     conda:
@@ -586,6 +629,8 @@ rule mergeSNPsplit:
         'snpsplit/{pre_group}-{rep}.dedup.G{allele}_UA.bam'
     output:
         'snpsplit/merged/{pre_group}_a{allele}-{rep}.pair.bam'
+    group:
+        'snpsplit'
     log:
         'logs/mergeSNPsplit/{pre_group}_a{allele}-{rep}.log'
     conda:
@@ -633,7 +678,7 @@ rule samtoolsStats:
     output:
         'qc/samtools/stats/{pre_sample}.stats.txt'
     group:
-        'samtools_qc'
+        'samtoolsQC'
     log:
         'logs/samtoolsStats/{pre_sample}.log'
     conda:
@@ -649,7 +694,7 @@ rule samtoolsIdxstats:
     output:
         'qc/samtools/idxstats/{pre_sample}.idxstats.txt'
     group:
-        'samtools_qc'
+        'samtoolsQC'
     log:
         'logs/samtoolsIdxstats/{pre_sample}.log'
     conda:
@@ -664,13 +709,23 @@ rule samtoolsFlagstat:
     output:
         'qc/samtools/flagstat/{pre_sample}.flagstat.txt'
     group:
-        'samtools_qc'
+        'samtoolsQC'
     log:
         'logs/samtoolsFlagstat/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools flagstat {input} > {output} 2> {log}'
+
+
+rule aggregateSamtoolsQC:
+    input:
+        expand('qc/samtools/{test}/{sample}.{test}.txt',
+            sample=ORIGINAL_SAMPLES, test=['flagstat', 'idxstats', 'stats'])
+    output:
+        touch(temp('qc/samtools/.tmp.aggregateSamtoolsQC'))
+    group:
+        'samtoolsQC' if config['groupJobs'] else 'aggregateTarget'
 
 
 def split_input(wildcards):
@@ -688,6 +743,8 @@ rule splitPairedReads:
     params:
         read = READS,
         flag = lambda wc: '0x40' if wc.read == READS[0] else '0x80'
+    group:
+        'buildBaseMatrix'
     log:
         'logs/splitPairedReads/{sample}-{read}.log'
     conda:
@@ -706,6 +763,8 @@ rule findRestSites:
         'dat/genome/{cell_type}-{re}-restSites.bed'
     params:
         reSeq = lambda wc: config['restrictionSeqs'][wc.re].replace('^', '')
+    group:
+        'buildBaseMatrix'
     log:
         'logs/findRestSites/{cell_type}-{re}.log'
     conda:
@@ -763,14 +822,14 @@ rule buildBaseMatrix:
         end = lambda wc: REGIONS['end'][wc.region],
         reSeqs = getRestrictionSeqs,
         danglingSequences = getDanglingSequences,
-        #removeSelfLigation = (
-        #    '--removeSelfLigation' if config['HiCParams']['removeSelfLigation'] else ''),
         removeSelfLigation = (
             'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
         keepSelfCircles = (
             '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
+    group:
+        'buildBaseMatrix'
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
@@ -815,6 +874,8 @@ rule mergeBins:
     params:
         bin = config['binsize'],
         nbins = lambda wildcards: int(int(wildcards.bin) / BASE_BIN)
+    group:
+        'processHiC' if config['groupJobs'] else 'mergeBins'
     log:
         'logs/mergeBins/{sample}-{region}-{bin}.log'
     conda:
@@ -833,6 +894,8 @@ rule readCountNormalise:
                sample=SAMPLES)
     params:
         method = 'smallest'
+    group:
+        'processHiC' if config['groupJobs'] else 'readCountNormalise'
     log:
         'logs/readCountNormalise/{region}-{bin}.log'
     conda:
@@ -850,6 +913,8 @@ rule sumReplicates:
             group=wildcards.group, rep=GROUPS[wildcards.group])
     output:
         'dat/matrix/{region}/{bin}/norm/{group}-{region}-{bin}.h5'
+    group:
+        'processHiC' if config['groupJobs'] else 'sumReplicates'
     log:
         'logs/sumReplicates/{group}-{bin}-{region}.log'
     conda:
@@ -868,6 +933,8 @@ rule IceMatrix:
     params:
         iternum = 1000,
         upper_threshold = 5
+    group:
+        'processHiC' if config['groupJobs'] else 'IceMatrix'
     log:
         'logs/IceMatrix/{all}-{region}-{bin}.log'
     conda:
@@ -885,6 +952,8 @@ rule distanceNormalise:
         'dat/matrix/{region}/{bin}/ice/obs_exp/{all}-{region}-{bin}.h5'
     params:
         method = 'obs_exp'
+    group:
+        'processHiC' if config['groupJobs'] else 'distanceNormalise'
     log:
         'logs/distanceNormalise/{all}-{region}-{bin}.log'
     conda:
@@ -906,6 +975,8 @@ rule plotMatrix:
         title = '"{all} : {region} at {bin} bin size"',
         dpi = 600,
         colour = 'YlGn'
+    group:
+        'processHiC' if config['groupJobs'] else 'plotMatrix'
     log:
         'logs/plotMatrix/{all}-{region}-{bin}.log'
     conda:
@@ -937,6 +1008,8 @@ rule TadInsulation:
         min_depth = lambda wc: int(wc.bin) * 3,
         max_depth = lambda wc: int(wc.bin) * 10,
         prefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}'
+    group:
+        'processHiC' if config['groupJobs'] else 'TadInsulation'
     threads:
         THREADS
     log:
@@ -964,6 +1037,8 @@ rule detectLoops:
         pValuePre = 0.05,
         pValue = 0.05,
         peakInter = 5
+    group:
+        'processHiC' if config['groupJobs'] else 'detectLoops'
     log:
         'logs/detectLoops/{all}-{region}-{bin}.log'
     conda:
@@ -991,6 +1066,8 @@ rule hicPCA:
     params:
         method = "dist_norm",
         format = 'bedgraph'
+    group:
+        'processHiC' if config['groupJobs'] else 'hicPCA'
     log:
         'logs/hicPCA/{all}-{region}-{bin}.log'
     conda:
@@ -1009,6 +1086,8 @@ rule fixBedgraph:
         'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}-fix.bedgraph'
     params:
         pos = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'processHiC' if config['groupJobs'] else 'hicPCA'
     log:
         'logs/fixBedgraph/{all}-{region}-{bin}.log'
     conda:
@@ -1023,6 +1102,8 @@ rule reformatHomer:
         'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.h5'
     output:
         'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.gz'
+    group:
+        'processHiC' if config['groupJobs'] else 'reformatMatrices'
     log:
         'logs/reformatHomer/{all}-{region}-{bin}-{method}.log'
     conda:
@@ -1039,6 +1120,8 @@ rule reformatNxN3p:
         'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.nxnp3.tsv'
     params:
         region = REGIONS.index,
+    group:
+        'processHiC' if config['groupJobs'] else 'reformatMatrices'
     log:
         'logs/reformatNxN3p/{sample}-{region}-{bin}.log'
     conda:
@@ -1060,6 +1143,8 @@ rule HiCRep:
         region = REGIONS.index,
         start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
         end = lambda wildcards: REGIONS['end'][wildcards.region]
+    group:
+        'processHiC' if config['groupJobs'] else 'HiCRep'
     log:
         'logs/HiCRep/{region}-{bin}.log'
     conda:
@@ -1074,6 +1159,8 @@ rule reformatNxN:
         'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.gz'
     output:
         'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.nxn.tsv'
+    group:
+        'processHiC' if config['groupJobs'] else 'OnTAD'
     log:
         'logs/reformatNxN/{region}/{bin}/{all}.log'
     conda:
@@ -1096,7 +1183,7 @@ rule OnTAD:
         length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
     group:
-        'OnTAD'
+        'processHiC' if config['groupJobs'] else 'OnTAD'
     log:
         'logs/OnTAD/{region}/{bin}/{all}.log'
     shell:
@@ -1113,7 +1200,7 @@ rule reformatLinks:
         region = REGIONS.index,
         start = lambda wildcards: REGIONS['start'][wildcards.region]
     group:
-        'OnTAD'
+        'processHiC' if config['groupJobs'] else 'OnTAD'
     log:
         'logs/reformatLinks/{region}/{bin}/{all}.log'
     conda:
@@ -1146,6 +1233,8 @@ rule createConfig:
         tracks = getTracks,
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = config['colourmap']
+    group:
+        'processHiC' if config['groupJobs'] else 'plotHiC'
     conda:
         f'{ENVS}/python3.yaml'
     log:
@@ -1179,6 +1268,8 @@ rule plotHiC:
         region = setRegion,
         title = '"{group} : {region} at {bin} bin size"',
         dpi = 600
+    group:
+        'processHiC' if config['groupJobs'] else 'plotHiC'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
@@ -1215,6 +1306,8 @@ rule reformatPre:
         'dat/matrix/{region}/{all}-{region}.bam'
     output:
         'dat/matrix/{region}/base/raw/{all}-{region}.pre.tsv'
+    group:
+        'bam2hic'
     log:
         'logs/reformatPre/{region}/{all}.log'
     conda:
@@ -1249,11 +1342,14 @@ rule juicerPre:
         chrom_sizes = getChromSizes
     output:
         'UCSCcompatible/{region}/{all}-{region}.hic'
-    log:
-        'logs/juicerPre/{region}/{all}.log'
     params:
         chr = lambda wildcards: REGIONS['chr'][wildcards.region],
         resolutions = ','.join([str(bin) for bin in BINS])
+    group:
+        'bam2hic'
+    log:
+        'logs/juicerPre/{region}/{all}.log'
+
     conda:
         f'{ENVS}/openjdk.yaml'
     shell:
@@ -1268,13 +1364,15 @@ rule straw:
         rules.juicerPre.output
     output:
         'dat/matrix/{region}/{bin}/{all}-{region}-{bin}-sutm.txt'
-    log:
-        'logs/straw/{region}/{bin}/{all}.log'
     params:
         # Strip 'chr' as juicer removes by default
         chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
-        start = lambda wildcards: REGIONS['start'][wildcards.region],
-        end = lambda wildcards: REGIONS['end'][wildcards.region],
+        start = lambda wc: REGIONS['start'][wc.region],
+        end = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'processHiC' if config['groupJobs'] else 'straw'
+    log:
+        'logs/straw/{region}/{bin}/{all}.log'
     conda:
         f'{ENVS}/hic-straw.yaml'
     shell:
@@ -1294,12 +1392,6 @@ rule HiCcompare:
         fdr = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer',
         links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links',
         absZ = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-absZ.bedgraph'
-    group:
-        'HiCcompare'
-    log:
-        'logs/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
-    threads:
-        12 # Need to ensure it is run 1 at a time!
     params:
         dir = lambda wc: f'dat/HiCcompare/{wc.region}/{wc.bin}',
         qcdir = directory('qc/HiCcompare'),
@@ -1307,6 +1399,10 @@ rule HiCcompare:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
         fdr = config['HiCcompare']['fdr']
+    group:
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
+    log:
+        'logs/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
@@ -1336,11 +1432,9 @@ rule multiHiCcompare:
         end = lambda wc: REGIONS['end'][wc.region],
         fdr = config['HiCcompare']['fdr']
     group:
-        'HiCcompare'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
-    threads:
-        12 # Need to ensure it is run 1 at a time!
     conda:
         f'{ENVS}/multiHiCcompare.yaml'
     shell:
@@ -1358,7 +1452,7 @@ rule applyMedianFilter:
     params:
         size = config['compareMatrices']['size']
     group:
-        'HiCcompare'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/applyMedianFilter/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1374,7 +1468,7 @@ rule homerToH5:
     output:
         'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5'
     group:
-        'HiCcompare'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.log'
     conda:
@@ -1394,7 +1488,7 @@ rule filterHiCcompare:
         p_value = config['HiCcompare']['fdr'],
         log_fc = config['HiCcompare']['logFC'],
     group:
-        'HiCcompare'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/filterHiCcompare/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1418,7 +1512,7 @@ rule createCompareConfig:
         vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
         vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
     group:
-        'HiCcompare'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}-{set}.log'
     conda:
@@ -1462,6 +1556,8 @@ rule plotCompare:
         title = title,
         region = setRegion,
         dpi = 600
+    group:
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
@@ -1474,6 +1570,21 @@ rule plotCompare:
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
+
+
+rule aggregateProcessHiC:
+    input:
+        lambda wc: expand('plots/{{region}}/{{bin}}/{tool}/{set}/{compare}-{{region}}-{coords}-{{bin}}-{set}.png',
+            coords=COORDS[wc.region], compare=COMPARES,
+            tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare']),
+        lambda wc: expand('plots/{{region}}/{{bin}}/pyGenomeTracks/{group}-{{region}}-{coords}-{{bin}}.png',
+            coords=COORDS[wc.region], group=list(GROUPS)),
+        expand('plots/{{region}}/{{bin}}/obs_exp/{all}-{{region}}-{{bin}}.png',
+            all=SAMPLES+list(GROUPS))
+    output:
+        touch(temp('plots/{region}/{bin}/.tmp.aggregateProcessHiC'))
+    group:
+        'processHiC' if config['groupJobs'] else 'aggregateTarget'
 
 
 if not ALLELE_SPECIFIC:

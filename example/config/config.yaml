@@ -41,7 +41,7 @@ cutadapt:
     minimumLength: 20
     qualityCutoff: 20
     GCcontent: 43
-    
+
 
 # List of restriction sequence in order of protocol usage. Cut site is denoted
 # using the '^' symbol. Ensure restriction enzyme names are given as strings.
@@ -91,3 +91,9 @@ multiQCconfig : ../config/multiqc_config.yaml
 # Configuration file of paths to genome indexes for FastQ Screen.
 # See template in example/config/fastq_screen.config
 fastq_screen :
+
+# Cluster only - group certain jobs (e.g. lammps simulations / post-processing)
+# into a single job submission. Some clusters be default assign a job all
+# threads even for single-thread operation. Therefore it may by quicker to
+# run all replicates in parallel in one job rather than have wasted threads.
+groupJobs: True
