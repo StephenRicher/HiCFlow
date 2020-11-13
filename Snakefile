@@ -142,7 +142,7 @@ HiC_mode = [expand('dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.{ext
             expand('dat/matrix/{region}/{bin}/{all}-{region}-{bin}-sutm.txt',
                 region=REGIONS.index, bin=BINS, all=SAMPLES+list(GROUPS)),
             expand('qc/hicrep/.tmp.{region}-{bin}-hicrep',
-                region=REGIONS.index, bin=BINS)
+                region=REGIONS.index, bin=BINS),
             [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
                 coords=COORDS[region], bin=BINS, compare=COMPARES, region=region,
                 tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare'],
