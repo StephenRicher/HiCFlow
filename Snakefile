@@ -442,13 +442,12 @@ def getCellType(wc):
         if wc.pre_sample in samples:
             return cellType
 
-
 rule bowtie2:
     input:
         fastq = 'dat/fastq/truncated/{pre_sample}-{read}.trunc.fastq.gz',
         bt2_index = bowtie2Index
     output:
-        sam = pipe('mapped/{pre_sample}-{read}.sam'),
+        sam = pipe('dat/mapped/{pre_sample}-{read}.sam'),
         qc = 'qc/bowtie2/{pre_sample}-{read}.bowtie2.txt'
     params:
         index = bowtie2Basename,
@@ -471,7 +470,7 @@ rule addReadFlag:
     input:
         rules.bowtie2.output.sam
     output:
-        'mapped/{pre_sample}-{read}-addFlag.sam'
+        'dat/mapped/{pre_sample}-{read}-addFlag.sam'
     params:
         flag = lambda wc: '0x41' if wc.read == 'R1' else '0x81'
     group:
@@ -487,10 +486,10 @@ rule addReadFlag:
 
 rule mergeBam:
     input:
-        'mapped/{pre_sample}-R1-addFlag.sam',
-        'mapped/{pre_sample}-R2-addFlag.sam'
+        'dat/mapped/{pre_sample}-R1-addFlag.sam',
+        'dat/mapped/{pre_sample}-R2-addFlag.sam'
     output:
-        pipe('mapped/{pre_sample}-merged.bam')
+        pipe('dat/mapped/{pre_sample}-merged.bam')
     group:
         'prepareBAM'
     log:
