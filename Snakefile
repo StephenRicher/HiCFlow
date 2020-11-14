@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import math
 import tempfile
 import itertools
 import pandas as pd
@@ -413,7 +414,7 @@ rule aggregatehicupTruncate:
         'hicupTruncate' if config['groupJobs'] else 'aggregateTarget'
 
 
-def hicupMapIndex(wildcards):
+def bowtie2Index(wildcards):
     """ Retrieve bowtie2 index associated with sample. """
 
     for cell_type, samples in CELL_TYPES.items():
@@ -424,7 +425,7 @@ def hicupMapIndex(wildcards):
         cell_type=type, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
 
 
-def hicupMapBasename(wildcards):
+def bowtie2Basename(wildcards):
     """ Retrieve bowtie2 index basename associated with sample. """
 
     for cell_type, samples in CELL_TYPES.items():
@@ -434,146 +435,87 @@ def hicupMapBasename(wildcards):
     return expand('dat/genome/index/{cell_type}', cell_type=type)
 
 
-rule hicupMap:
-    input:
-        reads = rules.hicupTruncate.output.truncated,
-        bt2_index = hicupMapIndex
-    output:
-        mapped = 'dat/mapped/{pre_sample}.pair.bam',
-        summary = 'qc/hicup/{pre_sample}-map-summary.txt'
-    params:
-        basename = hicupMapBasename
-    threads:
-        THREADS
-    log:
-        'logs/hicupMap/{pre_sample}.log'
-    conda:
-        f'{ENVS}/hicup.yaml'
-    shell:
-        '{SCRIPTS}/hicup/hicupMap.py '
-        '--output {output.mapped} '
-        '--summary {output.summary} '
-        '--index {params.basename} '
-        '--threads {threads} {input.reads} &> {log}'
+def getCellType(wc):
+    """ Retrieve cell type associated with sample. """
+
+    for cellType, samples in CELL_TYPES.items():
+        if wc.pre_sample in samples:
+            return cellType
 
 
-rule digest:
+rule bowtie2:
     input:
-        rules.bgzipGenome.output
+        fastq = 'dat/fastq/truncated/{pre_sample}-{read}.trunc.fastq.gz',
+        bt2_index = bowtie2Index
     output:
-        f'dat/genome/digest/{{cell_type}}-pyHiCtools-digest.txt'
+        sam = pipe('mapped/{pre_sample}-{read}.sam'),
+        qc = 'qc/bowtie2/{pre_sample}-{read}.bowtie2.txt'
     params:
-        reSeq = list(config['restrictionSeqs'].values())[0]
+        index = bowtie2Basename,
+        cellType = getCellType
     group:
-        'filterQC'
+        'bowtie2'
     log:
-        f'logs/digest/{{cell_type}}.log'
+        'logs/bowtie2/{pre_sample}-{read}.log'
     conda:
-        f'{ENVS}/pyHiCTools.yaml'
-    shell:
-        'pyHiCTools digest --restriction {params.reSeq} <(zcat -f {input}) '
-        '> {output} 2> {log}'
-
-
-rule sampleReads:
-    input:
-        rules.hicupMap.output.mapped
-    output:
-        pipe('dat/mapped/subsampled/{pre_sample}-subsample.bam')
-    group:
-        'filterQC'
-    params:
-        seed = '42',
-        frac = '20'
+        f'{ENVS}/bowtie2.yaml'
     threads:
-        2 if THREADS > 2 else THREADS
+        THREADS - 1 if THREADS > 1 else 1
+    shell:
+        'bowtie2 -x {params.index} -U {input.fastq} '
+        '--reorder --rg-id {params.cellType} --threads {threads} '
+        '--very-fast > {output.sam} 2> {log} && cp {log} {output.qc}'
+
+
+rule addReadFlag:
+    input:
+        rules.bowtie2.output.sam
+    output:
+        'mapped/{pre_sample}-{read}-addFlag.sam'
+    params:
+        flag = lambda wc: '0x41' if wc.read == 'R1' else '0x81'
+    group:
+        'bowtie2'
     log:
-        'logs/sampleReads/{pre_sample}.log'
+        'logs/addReadFlag/{pre_sample}-{read}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools view -@ {threads} -s {params.seed}.{params.frac} {input} '
+        '{SCRIPTS}/addReadFlag.awk -v flag={params.flag} {input} '
         '> {output} 2> {log}'
 
 
-def processHiC_digest(wildcards):
-    """ Retrieve pyHiCTools digest file associated with sample. """
-
-    for cell_type, samples in CELL_TYPES.items():
-        if wildcards.pre_sample in samples:
-            type = cell_type
-
-    return expand('dat/genome/digest/{cell_type}-pyHiCtools-digest.txt',
-        cell_type=type)
-
-
-rule processHiC:
+rule mergeBam:
     input:
-        dedup_nmsort = rules.sampleReads.output,
-        digest = processHiC_digest
+        'mapped/{pre_sample}-R1-addFlag.sam',
+        'mapped/{pre_sample}-R2-addFlag.sam'
     output:
-        pipe('dat/mapped/subsampled/{pre_sample}.processed.sam')
+        pipe('mapped/{pre_sample}-merged.bam')
     group:
-        'filterQC'
+        'prepareBAM'
     log:
-        'logs/process/{pre_sample}.log'
+        'logs/collateBam/{pre_sample}.log'
     conda:
-        f'{ENVS}/pyHiCTools.yaml'
+        f'{ENVS}/samtools.yaml'
     shell:
-        'pyHiCTools process --digest {input.digest} {input.dedup_nmsort} '
-        '> {output} 2> {log}'
+        'samtools merge -nu {output} {input} &> {log}'
 
-
-rule extractHiC:
+# Input to SNPsplit
+rule fixmateBam:
     input:
-        rules.processHiC.output
+        rules.mergeBam.output
     output:
-        'dat/mapped/subsampled/{pre_sample}-processed.txt'
+        'dat/mapped/{pre_sample}.fixed.bam'
     group:
-        'filterQC'
+        'prepareBAM'
     log:
-        'logs/extractHiC/{pre_sample}.log'
+        'logs/fixmateBam/{pre_sample}.log'
     conda:
-        f'{ENVS}/pyHiCTools.yaml'
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS - 1 if THREADS > 1 else 1
     shell:
-        'pyHiCTools extract '
-        '--sample {wildcards.pre_sample} {input} '
-        '> {output} 2> {log}'
-
-
-rule plotQC:
-    input:
-        expand('dat/mapped/subsampled/{pre_sample}-processed.txt',
-            pre_sample=ORIGINAL_SAMPLES)
-    output:
-        expand('qc/filterQC/{fig}',
-               fig=['trans_stats.csv', 'insert_size_frequency.png',
-                    'ditag_length.png'])
-    params:
-        outdir = 'qc/filterQC'
-    group:
-        'filterQC' if config['groupJobs'] else 'plotQC'
-    log:
-        'logs/plotQC/plot_subsample.log'
-    conda:
-        f'{ENVS}/ggplot2.yaml'
-    shell:
-        '{SCRIPTS}/plotQC.R {params.outdir} {input} 2> {log}'
-
-
-rule mergeHicupQC:
-    input:
-        truncater = rules.hicupTruncate.output.summary,
-        mapper = rules.hicupMap.output.summary
-    output:
-        'qc/hicup/HiCUP_summary_report-{pre_sample}.txt'
-    log:
-        'logs/mergeHicupQC/{pre_sample}.log'
-    conda:
-        f'{ENVS}/hicup.yaml'
-    shell:
-        '{SCRIPTS}/hicup/mergeHicupSummary.py --truncater {input.truncater} '
-        '--mapper {input.mapper} > {output} 2> {log}'
+        'samtools fixmate -@ {threads} -mp {input} {output} 2> {log}'
 
 
 def SNPsplit_input(wildcards):
@@ -588,7 +530,7 @@ def SNPsplit_input(wildcards):
 
 rule SNPsplit:
     input:
-        bam = rules.hicupMap.output.mapped,
+        bam = rules.fixmateBam.output,
         snps = SNPsplit_input
     output:
         expand('snpsplit/{{pre_sample}}.pair.{ext}',
@@ -624,114 +566,20 @@ rule mergeSNPsplit:
         'samtools merge -n {output} {input} &> {log}'
 
 
-rule sortBam:
-    input:
-        rules.hicupMap.output.mapped
-    output:
-        'dat/mapped/{pre_sample}.sort.bam'
-    params:
-        mem = '1G'
-    group:
-        'prepareBAM'
-    threads:
-        THREADS
-    log:
-        'logs/sortBam/{pre_sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools sort -@ {threads} -m {params.mem} {input} '
-        '> {output} 2> {log}'
-
-
-rule indexBam:
-    input:
-        rules.sortBam.output
-    output:
-        f'{rules.sortBam.output}.bai'
-    group:
-        'prepareBAM'
-    threads:
-        THREADS
-    log:
-        'logs/indexBam/{pre_sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools index -@ {threads} {input} &> {log}'
-
-
-rule samtoolsStats:
-    input:
-        rules.sortBam.output
-    output:
-        'qc/samtools/stats/{pre_sample}.stats.txt'
-    group:
-        'samtoolsQC'
-    log:
-        'logs/samtoolsStats/{pre_sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools stats {input} > {output} 2> {log}'
-
-
-rule samtoolsIdxstats:
-    input:
-        bam = rules.sortBam.output,
-        index = rules.indexBam.output
-    output:
-        'qc/samtools/idxstats/{pre_sample}.idxstats.txt'
-    group:
-        'samtoolsQC'
-    log:
-        'logs/samtoolsIdxstats/{pre_sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools idxstats {input.bam} > {output} 2> {log}'
-
-
-rule samtoolsFlagstat:
-    input:
-        rules.sortBam.output
-    output:
-        'qc/samtools/flagstat/{pre_sample}.flagstat.txt'
-    group:
-        'samtoolsQC'
-    log:
-        'logs/samtoolsFlagstat/{pre_sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools flagstat {input} > {output} 2> {log}'
-
-
-rule aggregateSamtoolsQC:
-    input:
-        expand('qc/samtools/{test}/{sample}.{test}.txt',
-            sample=ORIGINAL_SAMPLES, test=['flagstat', 'idxstats', 'stats'])
-    output:
-        touch(temp('qc/samtools/.tmp.aggregateSamtoolsQC'))
-    group:
-        'samtoolsQC' if config['groupJobs'] else 'aggregateTarget'
-
-
-def split_input(wildcards):
+def splitInput(wc):
     if ALLELE_SPECIFIC:
         return 'snpsplit/merged/{sample}.pair.bam'
     else:
-        return f'dat/mapped/{wildcards.sample}.pair.bam'
+        return 'dat/mapped/{sample}.fixed.bam'
 
 
 rule splitPairedReads:
     input:
-        split_input
+        splitInput
     output:
-        'dat/mapped/split/{sample}-{read}.hic.bam'
+        'dat/mapped/split/{sample}-{read}.bam'
     params:
-        read = READS,
-        flag = lambda wc: '0x40' if wc.read == READS[0] else '0x80'
+        flag = lambda wc: '0x40' if wc.read == 'R1' else '0x80'
     group:
         'prepareBAM'
     log:
@@ -743,23 +591,6 @@ rule splitPairedReads:
     shell:
         'samtools view -@ {threads} -f {params.flag} -b {input} '
         '> {output} 2> {log}'
-
-
-rule indexSplitBam:
-    input:
-        rules.splitPairedReads.output
-    output:
-        f'{rules.splitPairedReads.output}.bai'
-    group:
-        'prepareBAM'
-    threads:
-        THREADS
-    log:
-        'logs/indexSplitBam/{sample}-{read}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools index -@ {threads} {input} &> {log}'
 
 
 rule findRestSites:
@@ -814,8 +645,7 @@ def getDanglingSequences(wc):
 
 rule buildBaseMatrix:
     input:
-        bams = expand('dat/mapped/split/{{sample}}-{read}.hic.bam', read=READS),
-        indexes =  expand('dat/mapped/split/{{sample}}-{read}.hic.bam.bai', read=READS),
+        bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=READS),
         restSites = getRestSites
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
@@ -840,7 +670,7 @@ rule buildBaseMatrix:
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
-        THREADS
+        4 if THREADS > 4 else THREADS
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1607,73 +1437,17 @@ rule aggregateProcessHiC:
 
 if not ALLELE_SPECIFIC:
 
-    rule mergeBamByCellType:
+    rule sortBam:
         input:
-            lambda wildcards: expand('dat/mapped/{pre_sample}.pair.bam',
-                pre_sample = CELL_TYPES[wildcards.cell_type])
+            rules.fixmateBam.output
         output:
-            pipe('dat/mapped/mergeByCell/{cell_type}.merged.bam')
-        group:
-            'mergeCellType'
-        log:
-            'logs/mergeBamByCellType/{cell_type}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        threads:
-            max(1, (THREADS - 1) / 2)
-        shell:
-            'samtools merge -@ {threads} -O bam,level=0 '
-            '-n - {input} > {output} 2> {log}'
-
-
-    rule fixmate:
-        input:
-            rules.mergeBamByCellType.output
-        output:
-            pipe('dat/mapped/mergeByCell/{cell_type}.fixed.bam')
-        group:
-            'mergeCellType'
-        log:
-            'logs/fixmate/{cell_type}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        shell:
-            'samtools fixmate -O bam,level=0 '
-            '-pmr {input} - > {output} 2> {log}'
-
-
-    rule addReadGroup:
-        input:
-            rules.fixmate.output
-        output:
-            temp('dat/mapped/mergeByCell/{cell_type}.fixed-RG.bam')
-        group:
-            'mergeCellType'
-        log:
-            'logs/addReadGroup/{cell_type}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        threads:
-            max(1, (THREADS - 1) / 2)
-        shell:
-            'samtools addreplacerg -@ {threads} -O bam,level=-1 '
-            '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cell_type}" '
-            '{input} > {output} 2> {log}'
-
-
-    rule sortMergedBam:
-        input:
-            rules.addReadGroup.output
-        output:
-            pipe('dat/mapped/mergeByCell/{cell_type}.sort.bam')
-        group:
-            'dedup'
+            pipe('dat/mapped/{pre_sample}.sorted.bam')
         params:
             mem = '1G'
         threads:
-            THREADS - 2 if THREADS > 2 else 1
+            max(math.ceil(THREADS * 0.5), 1)
         log:
-            'logs/sortMergedBam/{cell_type}.log'
+            'logs/sortBam/{pre_sample}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
@@ -1683,16 +1457,14 @@ if not ALLELE_SPECIFIC:
 
     rule deduplicate:
         input:
-            rules.sortMergedBam.output
+            rules.sortBam.output
         output:
-            bam = 'dat/mapped/mergeByCell/{cell_type}.dedup.bam',
-            qc = 'qc/deduplicate/{cell_type}.txt'
-        group:
-            'dedup'
+            bam = 'dat/mapped/{pre_sample}.dedup.bam',
+            qc = 'qc/deduplicate/{pre_sample}.txt'
         threads:
-            2 if THREADS - 2 > 1 else 1
+            max(math.floor(THREADS * 0.5), 1)
         log:
-            'logs/deduplicate/{cell_type}.log'
+            'logs/deduplicate/{pre_sample}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
@@ -1700,15 +1472,33 @@ if not ALLELE_SPECIFIC:
             '-rsf {output.qc} {input} {output.bam} &> {log}'
 
 
+    rule mergeBamByCellType:
+        input:
+            lambda wc: expand('dat/mapped/{pre_sample}.dedup.bam',
+                pre_sample = CELL_TYPES[wc.cell_type])
+        output:
+            'dat/mapped/mergeByCell/{cell_type}.merged.bam'
+        group:
+            'mergeCellType'
+        log:
+            'logs/mergeBamByCellType/{cell_type}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        threads:
+            THREADS
+        shell:
+            'samtools merge -@ {threads} {output} {input} &> {log}'
+
+
     rule indexMergedBam:
         input:
-            rules.deduplicate.output.bam
+            rules.mergeBamByCellType.output
         output:
-            f'{rules.deduplicate.output.bam}.bai'
+            f'{rules.mergeBamByCellType.output}.bai'
         threads:
             THREADS
         log:
-            'logs/samtools/index/{cell_type}.log'
+            'logs/indexMergedBam/{cell_type}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
@@ -1742,7 +1532,7 @@ if not ALLELE_SPECIFIC:
 
     rule baseRecalibrator:
         input:
-            bam = rules.deduplicate.output.bam,
+            bam = rules.mergeBamByCellType.output,
             bam_index = rules.indexMergedBam.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
@@ -1767,7 +1557,7 @@ if not ALLELE_SPECIFIC:
 
     rule applyBQSR:
         input:
-            bam = rules.deduplicate.output.bam,
+            bam = rules.mergeBamByCellType.output,
             bam_index = rules.indexMergedBam.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
@@ -2044,7 +1834,7 @@ if not ALLELE_SPECIFIC:
 
     rule mpileup:
         input:
-            bam = rules.deduplicate.output.bam,
+            bam = rules.mergeBamByCellType.output,
             bam_index = rules.indexMergedBam.output,
             genome = rules.bgzipGenome.output,
         output:
@@ -2294,23 +2084,95 @@ def multiQCconfig():
         return ''
 
 
+
+rule sampleReads:
+    input:
+        'dat/mapped/{sample}.fixed.bam'
+    output:
+        'dat/mapped/subsampled/{sample}-subsample.sam'
+    group:
+        'filterQC'
+    params:
+        seed = '42',
+        frac = '20'
+    threads:
+        2 if THREADS > 2 else THREADS
+    log:
+        'logs/sampleReads/{sample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools view -@ {threads} -s {params.seed}.{params.frac} {input} '
+        '> {output} 2> {log}'
+
+
+rule processHiC:
+    input:
+        reads = rules.sampleReads.output,
+        digest = getRestSites
+    output:
+        'dat/mapped/subsampled/{sample}-processed.txt'
+    group:
+        'filterQC'
+    log:
+        'logs/process/{sample}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/processHiC.py {input.digest} {input.reads} '
+        '> {output} 2> {log}'
+
+
+rule plotQC:
+    input:
+        expand('dat/mapped/subsampled/{sample}-processed.txt',
+            sample=ORIGINAL_SAMPLES)
+    output:
+        expand('qc/filterQC/{fig}',
+               fig=['trans_stats.csv', 'insert_size_frequency.png',
+                    'ditag_length.png'])
+    params:
+        outdir = 'qc/filterQC'
+    group:
+        'filterQC' if config['groupJobs'] else 'plotQC'
+    log:
+        'logs/plotQC/plot_subsample.log'
+    conda:
+        f'{ENVS}/ggplot2.yaml'
+    shell:
+        '{SCRIPTS}/plotQC.R {params.outdir} {input} 2> {log}'
+
+
+rule mergeHicupQC:
+    input:
+        rules.hicupTruncate.output.summary,
+    output:
+        'qc/hicup/HiCUP_summary_report-{pre_sample}.txt'
+    log:
+        'logs/mergeHicupQC/{pre_sample}.log'
+    conda:
+        f'{ENVS}/hicup.yaml'
+    shell:
+        '{SCRIPTS}/hicup/mergeHicupSummary.py --truncater {input.truncater} '
+        '> {output} 2> {log}'
+
+
 rule multiqc:
     input:
         [expand('qc/fastqc/{sample}-{read}.raw_fastqc.zip',
-                sample=ORIGINAL_SAMPLES, read=READS),
+            sample=ORIGINAL_SAMPLES, read=READS),
          expand('qc/cutadapt/{sample}.cutadapt.txt', sample=ORIGINAL_SAMPLES),
          expand('qc/fastqc/{sample}-{read}.trim_fastqc.zip',
-                sample=ORIGINAL_SAMPLES, read=READS),
+            sample=ORIGINAL_SAMPLES, read=READS),
          expand('qc/hicup/HiCUP_summary_report-{sample}.txt', sample=ORIGINAL_SAMPLES),
-         expand('qc/samtools/stats/{sample}.stats.txt', sample=ORIGINAL_SAMPLES),
-         expand('qc/samtools/idxstats/{sample}.idxstats.txt', sample=ORIGINAL_SAMPLES),
-         expand('qc/samtools/flagstat/{sample}.flagstat.txt', sample=ORIGINAL_SAMPLES),
+         expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
+            sample=ORIGINAL_SAMPLES, read=READS),
          expand('qc/hicexplorer/{sample}-{region}.{bin}_QC',
-                sample=SAMPLES, region=REGIONS.index, bin=BASE_BIN),
+            sample=SAMPLES, region=REGIONS.index, bin=BASE_BIN),
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
-                sample=ORIGINAL_SAMPLES, read=READS) if config['fastq_screen'] else [],
+            sample=ORIGINAL_SAMPLES, read=READS) if config['fastq_screen'] else [],
          expand('qc/bcftools/{region}/{cell_type}-{region}-bcftoolsStats.txt',
-                region=REGIONS.index, cell_type=CELL_TYPES) if PHASE_MODE=='BCFTOOLS' else []]
+            region=REGIONS.index, cell_type=CELL_TYPES) if PHASE_MODE=='BCFTOOLS' else []]
     output:
         directory('qc/multiqc')
     params:
