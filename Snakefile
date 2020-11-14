@@ -462,7 +462,7 @@ rule bowtie2:
     shell:
         'bowtie2 -x {params.index} -U {input.fastq} '
         '--reorder --rg-id {params.cellType} --threads {threads} '
-        '--very-fast > {output.sam} 2> {log} && cp {log} {output.qc}'
+        '--very-sensitive > {output.sam} 2> {log} && cp {log} {output.qc}'
 
 
 rule addReadFlag:
