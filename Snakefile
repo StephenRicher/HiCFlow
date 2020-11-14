@@ -1903,7 +1903,7 @@ if not ALLELE_SPECIFIC:
     rule extractHAIRS:
         input:
             vcf = hapCut2Input,
-            bam = rules.deduplicate.output.bam
+            bam = rules.mergeBamByCellType.output
         output:
             'dat/phasing/{region}/{cell_type}-{region}.fragments'
         params:
