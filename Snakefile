@@ -132,8 +132,7 @@ COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)
 COORDS = load_coords([config['plot_coordinates'], config['regions']])
 
 preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
-              'qc/fastqc/.tmp.aggregateFastqc',
-              'qc/samtools/.tmp.aggregateSamtoolsQC']
+              'qc/fastqc/.tmp.aggregateFastqc']
 HiC_mode = [expand('qc/hicrep/.tmp.{region}-{bin}-hicrep',
                 region=REGIONS.index, bin=BINS),
             'qc/hicup/.tmp.aggregatehicupTruncate',
