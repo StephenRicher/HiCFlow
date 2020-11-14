@@ -496,7 +496,7 @@ rule mergeBam:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools merge -nu {output} {input} &> {log}'
+        'samtools merge -nu - {input} > {output} 2> {log}'
 
 # Input to SNPsplit
 rule fixmateBam:
