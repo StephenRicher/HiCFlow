@@ -19,7 +19,12 @@ def main(truncater, mapper, filter, deduplicator, **kwargs):
 
     write_header()
     trunc = process_summary(truncater)
-    map = process_summary(mapper)
+    if mapper:
+        map = process_summary(mapper)
+        percent_mapped = (float(map[0][10])/float(map[0][1])) * 100
+    else:
+        percent_mapped = 0
+        map = [[0] * 11] * 2
 
     filename = os.path.basename('-'.join(trunc[0][0].split('-')[:2]))
 
@@ -41,7 +46,7 @@ def main(truncater, mapper, filter, deduplicator, **kwargs):
         percent_unique_trans = 0
         percent_passed = 0
 
-    percent_mapped = (float(map[0][10])/float(map[0][1])) * 100
+
 
     print(filename, trunc[0][1], trunc[1][1],
           trunc[0][4], trunc[1][4], trunc[0][2], trunc[1][2],
@@ -95,7 +100,7 @@ def parse_arguments():
     requiredNamed.add_argument(
         '--truncater', required=True, help='Truncater summary file.')
     requiredNamed.add_argument(
-        '--mapper', required=True, help='Mapper summary file.')
+        '--mapper', help='Mapper summary file.')
     requiredNamed.add_argument(
         '--filter', help='Filter summary file.')
     requiredNamed.add_argument(

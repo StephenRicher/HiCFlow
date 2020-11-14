@@ -2151,8 +2151,7 @@ rule mergeHicupQC:
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
-        '{SCRIPTS}/hicup/mergeHicupSummary.py --truncater {input} '
-        '> {output} 2> {log}'
+        '{SCRIPTS}/mergeHicupSummary.py --truncater {input} > {output} 2> {log}'
 
 
 rule multiqc:
