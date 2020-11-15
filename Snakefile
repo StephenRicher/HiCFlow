@@ -461,7 +461,7 @@ rule bowtie2:
         THREADS - 1 if THREADS > 1 else 1
     shell:
         'bowtie2 -x {params.index} -U {input.fastq} '
-        '--reorder --rg-id {params.cellType} --threads {threads} '
+        '--reorder --threads {threads} '
         '--very-sensitive > {output.sam} 2> {log} && cp {log} {output.qc}'
 
 
@@ -1475,7 +1475,7 @@ if not ALLELE_SPECIFIC:
             lambda wc: expand('dat/mapped/{pre_sample}.dedup.bam',
                 pre_sample = CELL_TYPES[wc.cell_type])
         output:
-            'dat/mapped/mergeByCell/{cell_type}.merged.bam'
+            pipe('dat/mapped/mergeByCell/{cell_type}.merged.bam')
         group:
             'mergeCellType'
         log:
@@ -1483,16 +1483,35 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         threads:
-            THREADS
+            max(math.ceil(THREADS * 0.5), 1)
         shell:
-            'samtools merge -@ {threads} {output} {input} &> {log}'
+            'samtools merge -u -@ {threads} - {input} > {output} &> {log}'
+
+
+    rule addReadGroup:
+        input:
+            rules.mergeBamByCellType.output
+        output:
+            'dat/mapped/mergeByCell/{cell_type}.fixed-RG.bam'
+        group:
+            'mergeCellType'
+        log:
+            'logs/addReadGroup/{cell_type}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        threads:
+            max(math.floor(THREADS * 0.5), 1)
+        shell:
+            'samtools addreplacerg -@ {threads} '
+            '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cell_type}" '
+            '{input} > {output} 2> {log}'
 
 
     rule indexMergedBam:
         input:
-            rules.mergeBamByCellType.output
+            rules.addReadGroup.output
         output:
-            f'{rules.mergeBamByCellType.output}.bai'
+            f'{rules.addReadGroup.output}.bai'
         threads:
             THREADS
         log:
@@ -1530,7 +1549,7 @@ if not ALLELE_SPECIFIC:
 
     rule baseRecalibrator:
         input:
-            bam = rules.mergeBamByCellType.output,
+            bam = rules.addReadGroup.output,
             bam_index = rules.indexMergedBam.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
@@ -1555,7 +1574,7 @@ if not ALLELE_SPECIFIC:
 
     rule applyBQSR:
         input:
-            bam = rules.mergeBamByCellType.output,
+            bam = rules.addReadGroup.output,
             bam_index = rules.indexMergedBam.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
@@ -1832,7 +1851,7 @@ if not ALLELE_SPECIFIC:
 
     rule mpileup:
         input:
-            bam = rules.mergeBamByCellType.output,
+            bam = rules.addReadGroup.output,
             bam_index = rules.indexMergedBam.output,
             genome = rules.bgzipGenome.output,
         output:
@@ -1902,7 +1921,7 @@ if not ALLELE_SPECIFIC:
     rule extractHAIRS:
         input:
             vcf = hapCut2Input,
-            bam = rules.mergeBamByCellType.output
+            bam = rules.addReadGroup.output
         output:
             'dat/phasing/{region}/{cell_type}-{region}.fragments'
         params:
