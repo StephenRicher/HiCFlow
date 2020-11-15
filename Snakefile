@@ -1489,7 +1489,7 @@ if not ALLELE_SPECIFIC:
         threads:
             max(math.ceil(THREADS * 0.5), 1)
         shell:
-            'samtools merge -u -@ {threads} - {input} > {output} &> {log}'
+            'samtools merge -u -@ {threads} - {input} > {output} 2> {log}'
 
 
     rule addReadGroup:
