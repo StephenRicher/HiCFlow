@@ -13,7 +13,12 @@ __version__ = '1.0.0'
 
 def main(file, **kwargs):
 
-    bestBlockLine = getBestBlockLine(file)
+    try:
+        bestBlockLine = getBestBlockLine(file)
+    except UnboundLocalError:
+        logging.warning(f'{file} is empty.')
+        return 0
+        
     with open(file) as fh:
         for i, line in enumerate(fh):
             if i == bestBlockLine:
