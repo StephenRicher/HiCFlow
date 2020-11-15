@@ -531,12 +531,12 @@ rule SNPsplit:
         bam = rules.fixmateBam.output,
         snps = SNPsplit_input
     output:
-        expand('snpsplit/{{pre_sample}}.{ext}',
+        expand('dat/snpsplit/{{pre_sample}}.fixed.{ext}',
             ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
                    'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
                    'UA_UA.bam', 'allele_flagged.bam'])
     params:
-        outdir = 'snpsplit/'
+        outdir = 'dat/snpsplit/'
     group:
         'SNPsplit'
     log:
@@ -550,10 +550,10 @@ rule SNPsplit:
 
 rule mergeSNPsplit:
     input:
-        'snpsplit/{pre_group}-{rep}.G{allele}_G{allele}.bam',
-        'snpsplit/{pre_group}-{rep}.G{allele}_UA.bam'
+        'dat/snpsplit/{pre_group}-{rep}.fixed.G{allele}_G{allele}.bam',
+        'dat/snpsplit/{pre_group}-{rep}.fixed.G{allele}_UA.bam'
     output:
-        'snpsplit/merged/{pre_group}_a{allele}-{rep}.pair.bam'
+        'dat/snpsplit/merged/{pre_group}_a{allele}-{rep}.fixed.bam'
     group:
         'SNPsplit'
     log:
@@ -566,7 +566,7 @@ rule mergeSNPsplit:
 
 def splitInput(wc):
     if ALLELE_SPECIFIC:
-        return 'snpsplit/merged/{sample}.pair.bam'
+        return 'dat/snpsplit/merged/{sample}.fixed.bam'
     else:
         return 'dat/mapped/{sample}.fixed.bam'
 
