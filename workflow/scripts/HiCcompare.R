@@ -55,21 +55,7 @@ numBins <- function(start, end, binsize) {
   return(unique_bins)
 }
 
-
 args = commandArgs(trailingOnly=TRUE)
-
-setwd('/media/stephen/Data/HiC-subsample/example/analysis/')
-
-#outdir = 'dat/HiCcompare/chr3L/3000' 
-#qcdir = 'qc/HiCcompare' 
-#chr = '3L' 
-#start = 5500001 
-#end = 6000000
-#binsize = 3000
-#fdr = 0.1 
-#matrix1 = 'dat/matrix/chr3L/3000/G1S-chr3L-3000-sutm.txt' 
-#matrix2 = 'dat/matrix/chr3L/3000/AS-chr3L-3000-sutm.txt'
-
 
 outdir = args[1]
 qcdir = args[2]
