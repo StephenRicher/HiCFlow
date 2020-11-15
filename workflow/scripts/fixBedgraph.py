@@ -19,9 +19,12 @@ def fixBedgraph(file: str, pos: int):
                 line = next(fh).strip()
                 print(prevLine)
             except StopIteration:
-                # Last line in file
-                ref, start, end, score = prevLine.split()
-                print(ref, start, pos, score, sep='\t')
+                try:
+                    # Last line in file
+                    ref, start, end, score = prevLine.split()
+                    print(ref, start, pos, score, sep='\t')
+                except UnboundLocalError:
+                    pass # Empty input file
                 break
             except UnboundLocalError:
                 pass
