@@ -1837,7 +1837,7 @@ if not ALLELE_SPECIFIC:
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region] + 1,
-            end = lambda wcs: REGIONS['end'][wc.region]
+            end = lambda wc: REGIONS['end'][wc.region]
         log:
             'logs/splitVCFS/{region}/{cell_type}.log'
         conda:
