@@ -104,11 +104,20 @@ hic.table = as.data.frame(hic.table)
 # Write mean adjM per interval as bedgraph
 require(data.table)
 medianAdjM = data.table(hic.table)
-medianAdjM = medianAdjM[,list(abs.Z = mean(abs(Z), na.rm = TRUE), adjM.count=length(adj.M)), 
+medianAdjM = medianAdjM[order(medianAdjM$start1), list(abs.Z = mean(abs(Z), na.rm = TRUE), adjM.count=length(adj.M)),
                         by=c("chr1","start1", "end1")]
+
+# Ensure start and end bedgraph intervals extend to to full interval
+if (min(medianAdjM$start1) > start) {
+  medianAdjM = rbindlist(list(
+    list(chr, start, min(medianAdjM$start1), 0, 0), medianAdjM))
+}
+if (max(medianAdjM$end1) < end) {
+  medianAdjM = rbindlist(list(
+    medianAdjM, list(chr, max(medianAdjM$end1), end, 0, 0)))
+}
 # Set all median values computed by less than 'n' values to 0
 medianAdjM[medianAdjM$adjM.count < 10, 'abs.Z'] = 0
-
 write.table(medianAdjM, out_medianAdjM, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
 
 # Write matrix of logFC values
