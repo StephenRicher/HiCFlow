@@ -64,6 +64,19 @@ def set_config(config, default, outer_key=''):
     return config
 
 
+def filterRegions(regions, binSizes, nbins=100):
+    """ Remove binsizes for regions  with too few bins """
+
+    regionBin = {}
+    for region, coords in regions.iterrows():
+        for bin in binSizes:
+            if (coords.length / bin) > nbins:
+                try:
+                    regionBin[region].append(bin)
+                except KeyError:
+                    regionBin[region] = [bin]
+    return regionBin
+
 
 def load_samples(samples_file):
 

@@ -7,7 +7,7 @@ import math
 import tempfile
 import itertools
 import pandas as pd
-from snake_setup import set_config, load_samples, get_grouping, load_regions, get_allele_groupings, load_coords
+from snake_setup import set_config, load_samples, get_grouping, load_regions, get_allele_groupings, load_coords, filterRegions
 
 BASE = workflow.basedir
 
@@ -40,7 +40,8 @@ default_config = {
          'GCcontent':       50                                ,},
     'restrictionSeqs':      ''      ,
     'HiCParams':
-        {'minDistance':          300  ,
+        {'minBins':              50  ,
+         'minDistance':          300  ,
          'maxLibraryInsertSize': 1000 ,
          'removeSelfLigation':   True ,
          'keepSelfCircles':      False,
@@ -87,6 +88,9 @@ samples = load_samples(config['data'])
 ORIGINAL_SAMPLES, ORIGINAL_GROUPS, CELL_TYPES = get_grouping(samples)
 
 REGIONS = load_regions(config['regions'])
+
+# Remove region-binSize combinations with too few bins
+regionBin = filterRegions(REGIONS, BINS, nbins=config['HiCParams']['minBins'])
 
 if config['phased_vcf']:
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
@@ -135,8 +139,8 @@ preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc']
 HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
             'qc/hicup/.tmp.aggregatehicupTruncate',
-            expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
-                region=REGIONS.index, bin=BINS)]
+            [expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
+                region=region, bin=regionBin[region]) for region in regionBin]]
 
 # Create a per-sample BAM, for each sample, of only valid HiC reads
 if config['createValidBam']:
@@ -655,7 +659,6 @@ rule buildBaseMatrix:
         qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}_QC')
     params:
         bin = BASE_BIN,
-        region = REGIONS.index,
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
@@ -694,7 +697,7 @@ rule buildBaseMatrix:
 rule mergeValidHiC:
     input:
         expand('dat/matrix/{region}/{{sample}}-{region}.bam',
-            region=REGIONS.index)
+            region=regionBin.keys())
     output:
         'dat/mapped/{sample}-validHiC.bam'
     log:
@@ -959,8 +962,6 @@ rule reformatNxN3p:
         'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.gz'
     output:
         'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.nxnp3.tsv'
-    params:
-        region = REGIONS.index,
     group:
         'processHiC' if config['groupJobs'] else 'reformatMatrices'
     log:
@@ -980,10 +981,8 @@ rule HiCRep:
     output:
         'qc/hicrep/{region}-{bin}-hicrep.png'
     params:
-        bin = BINS,
-        region = REGIONS.index,
-        start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
-        end = lambda wildcards: REGIONS['end'][wildcards.region]
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region]
     group:
         'HiCRep'
     log:
@@ -998,7 +997,7 @@ rule HiCRep:
 rule aggregateHiCRep:
     input:
         expand('qc/hicrep/{region}-{{bin}}-hicrep.png',
-            region=REGIONS.index)
+            region=regionBin.keys())
     output:
         touch(temp('qc/hicrep/.tmp.{bin}-hicrep'))
     group:
@@ -1029,7 +1028,6 @@ rule OnTAD:
         tad = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad.tad'
     params:
         bin = BINS,
-        region = REGIONS.index,
         chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
@@ -1048,8 +1046,7 @@ rule reformatLinks:
     output:
         'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad.links'
     params:
-        region = REGIONS.index,
-        start = lambda wildcards: REGIONS['start'][wildcards.region]
+        start = lambda wc: REGIONS['start'][wc.region]
     group:
         'processHiC' if config['groupJobs'] else 'OnTAD'
     log:
@@ -1194,7 +1191,7 @@ rule juicerPre:
     output:
         'UCSCcompatible/{region}/{all}-{region}.hic'
     params:
-        chr = lambda wildcards: REGIONS['chr'][wildcards.region],
+        chr = lambda wc: REGIONS['chr'][wc.region],
         resolutions = ','.join([str(bin) for bin in BINS])
     group:
         'bam2hic'
@@ -1612,9 +1609,9 @@ if not ALLELE_SPECIFIC:
         output:
             'dat/gatk/split/{cell_type}-{region}-g.vcf.gz'
         params:
-            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-            start = lambda wildcards: REGIONS['start'][wildcards.region],
-            end = lambda wildcards: REGIONS['end'][wildcards.region],
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
             intervals = config['regions'],
             java_opts = '-Xmx6G',
             min_prune = 2, # Increase to speed up
@@ -1838,10 +1835,9 @@ if not ALLELE_SPECIFIC:
         output:
             'dat/gatk/{cell_type}-all-{region}.filt.vcf'
         params:
-            region = REGIONS.index,
-            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-            start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
-            end = lambda wildcards: REGIONS['end'][wildcards.region]
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region] + 1,
+            end = lambda wcs: REGIONS['end'][wc.region]
         log:
             'logs/splitVCFS/{region}/{cell_type}.log'
         conda:
@@ -1861,10 +1857,9 @@ if not ALLELE_SPECIFIC:
         output:
             pipe('dat/bcftools/{region}/{cell_type}-{region}-mpileup.bcf')
         params:
-            region = REGIONS.index,
-            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-            start = lambda wildcards: REGIONS['start'][wildcards.region] + 1,
-            end = lambda wildcards: REGIONS['end'][wildcards.region]
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region] + 1,
+            end = lambda wc: REGIONS['end'][wc.region]
         group:
             'bcftoolsVariants'
         log:
@@ -1929,10 +1924,9 @@ if not ALLELE_SPECIFIC:
         output:
             'dat/phasing/{region}/{cell_type}-{region}.fragments'
         params:
-            region = REGIONS.index,
-            chr = lambda wildcards: REGIONS['chr'][wildcards.region],
-            start = lambda wildcards: REGIONS['start'][wildcards.region],
-            end = lambda wildcards: REGIONS['end'][wildcards.region]
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region]
         group:
             'hapcut2'
         log:
@@ -2186,8 +2180,8 @@ rule multiqc:
          expand('qc/hicup/HiCUP_summary_report-{sample}.txt', sample=ORIGINAL_SAMPLES),
          expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
             sample=ORIGINAL_SAMPLES, read=READS),
-         expand('qc/hicexplorer/{sample}-{region}.{bin}_QC',
-            sample=SAMPLES, region=REGIONS.index, bin=BASE_BIN),
+        [expand('qc/hicexplorer/{sample}-{region}.{bin}_QC', region=region,
+            bin=BASE_BIN, sample=SAMPLES) for region in regionBin],
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
             sample=ORIGINAL_SAMPLES, read=READS) if config['fastq_screen'] else [],
          expand('qc/bcftools/{region}/{cell_type}-{region}-bcftoolsStats.txt',
