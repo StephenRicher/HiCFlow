@@ -1241,7 +1241,7 @@ rule HiCcompare:
         absZ = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-absZ.bedgraph'
     params:
         dir = lambda wc: f'dat/HiCcompare/{wc.region}/{wc.bin}',
-        qcdir = directory('qc/HiCcompare'),
+        qcdir = lambda wc: f'qc/HiCcompare/{wc.region}/{wc.bin}',
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
