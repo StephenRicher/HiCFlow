@@ -998,10 +998,10 @@ rule HiCRep:
 
 rule aggregateHiCRep:
     input:
-        expand('qc/hicrep/{region}-{bin}-hicrep.png',
-            region=REGIONS.index, bin=BINS)
+        expand('qc/hicrep/{region}-{{bin}}-hicrep.png',
+            region=REGIONS.index)
     output:
-        touch(temp('qc/hicrep/.tmp.{region}-{bin}-hicrep'))
+        touch(temp('qc/hicrep/.tmp.{region}-{{bin}}-hicrep'))
     group:
         'HiCRep' if config['groupJobs'] else 'aggregateTarget'
 
