@@ -133,8 +133,7 @@ COORDS = load_coords([config['plot_coordinates'], config['regions']])
 
 preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc']
-HiC_mode = [expand('qc/hicrep/.tmp.{region}-{bin}-hicrep',
-                region=REGIONS.index, bin=BINS),
+HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
             'qc/hicup/.tmp.aggregatehicupTruncate',
             expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
                 region=REGIONS.index, bin=BINS)]
@@ -1001,7 +1000,7 @@ rule aggregateHiCRep:
         expand('qc/hicrep/{region}-{{bin}}-hicrep.png',
             region=REGIONS.index)
     output:
-        touch(temp('qc/hicrep/.tmp.{region}-{{bin}}-hicrep'))
+        touch(temp('qc/hicrep/.tmp.{bin}-hicrep'))
     group:
         'HiCRep' if config['groupJobs'] else 'aggregateTarget'
 
