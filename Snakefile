@@ -531,7 +531,7 @@ rule SNPsplit:
         bam = rules.fixmateBam.output,
         snps = SNPsplit_input
     output:
-        expand('snpsplit/{{pre_sample}}.pair.{ext}',
+        expand('snpsplit/{{pre_sample}}.{ext}',
             ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
                    'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
                    'UA_UA.bam', 'allele_flagged.bam'])
@@ -550,8 +550,8 @@ rule SNPsplit:
 
 rule mergeSNPsplit:
     input:
-        'snpsplit/{pre_group}-{rep}.dedup.G{allele}_G{allele}.bam',
-        'snpsplit/{pre_group}-{rep}.dedup.G{allele}_UA.bam'
+        'snpsplit/{pre_group}-{rep}.G{allele}_G{allele}.bam',
+        'snpsplit/{pre_group}-{rep}.G{allele}_UA.bam'
     output:
         'snpsplit/merged/{pre_group}_a{allele}-{rep}.pair.bam'
     group:
@@ -1466,7 +1466,7 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools markdup -@ {threads} -O bam,level=-1 '
+            'samtools markdup -@ {threads} '
             '-rsf {output.qc} {input} {output.bam} &> {log}'
 
 
@@ -1504,7 +1504,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'samtools addreplacerg -@ {threads} '
             '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cell_type}" '
-            '{input} > {output} 2> {log}'
+            '-O BAM {input} > {output} 2> {log}'
 
 
     rule indexMergedBam:
