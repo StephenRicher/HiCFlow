@@ -610,17 +610,22 @@ rule findRestSites:
 
 
 def getRestSites(wildcards):
-    """ Retrieve restSite files associated with sample. """
+    """ Retrieve restSite files associated with sample wildcard """
 
-    for cell_type, samples in CELL_TYPES.items():
+    try:
+        sample = wildcards.sample
+    except AttributeError:
+        sample = wildcards.pre_sample
+    for cellType, samples in CELL_TYPES.items():
         if ALLELE_SPECIFIC:
-            groups, samples = get_allele_groupings(samples)
-        if wildcards.sample in samples:
-            type = cell_type
+            alleleGroups, alleleSamples = get_allele_groupings(samples)
+            samples += alleleSamples
+        if sample in samples:
+            type = cellType
             break
 
-    return expand('dat/genome/{cell_type}-{re}-restSites.bed',
-        cell_type=type, re=config['restrictionSeqs'].keys())
+    return expand('dat/genome/{cellType}-{re}-restSites.bed',
+        cellType=cellType, re=config['restrictionSeqs'].keys())
 
 
 def getRestrictionSeqs(wc):
@@ -2101,12 +2106,11 @@ def multiQCconfig():
         return ''
 
 
-
 rule sampleReads:
     input:
-        'dat/mapped/{sample}.fixed.bam'
+        'dat/mapped/{pre_sample}.fixed.bam'
     output:
-        'dat/mapped/subsampled/{sample}-subsample.sam'
+        'dat/mapped/subsampled/{pre_sample}-subsample.sam'
     group:
         'filterQC'
     params:
@@ -2115,7 +2119,7 @@ rule sampleReads:
     threads:
         2 if THREADS > 2 else THREADS
     log:
-        'logs/sampleReads/{sample}.log'
+        'logs/sampleReads/{pre_sample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -2128,15 +2132,15 @@ rule processHiC:
         reads = rules.sampleReads.output,
         digest = getRestSites
     output:
-        'dat/mapped/subsampled/{sample}-processed.txt'
+        'dat/mapped/subsampled/{pre_sample}-processed.txt'
     group:
         'filterQC'
     log:
-        'logs/process/{sample}.log'
+        'logs/process/{pre_sample}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/processHiC.py {input.digest} {input.reads} '
+        '{SCRIPTS}/processHiC.py {input.digest[0]} {input.reads} '
         '> {output} 2> {log}'
 
 
