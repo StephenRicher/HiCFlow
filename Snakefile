@@ -461,7 +461,7 @@ rule bowtie2:
     conda:
         f'{ENVS}/bowtie2.yaml'
     threads:
-        THREADS - 1 if THREADS > 1 else 1
+        THREADS - 2 if THREADS > 1 else 1
     shell:
         'bowtie2 -x {params.index} -U {input.fastq} '
         '--reorder --threads {threads} '
@@ -472,7 +472,7 @@ rule addReadFlag:
     input:
         rules.bowtie2.output.sam
     output:
-        'dat/mapped/{pre_sample}-{read}-addFlag.sam'
+        pipe('dat/mapped/{pre_sample}-{read}-addFlag.sam')
     params:
         flag = lambda wc: '0x41' if wc.read == 'R1' else '0x81'
     group:
@@ -486,10 +486,40 @@ rule addReadFlag:
         '> {output} 2> {log}'
 
 
-rule mergeBam:
+rule sam2bam:
     input:
-        'dat/mapped/{pre_sample}-R1-addFlag.sam',
-        'dat/mapped/{pre_sample}-R2-addFlag.sam'
+        rules.addReadFlag.output
+    output:
+        'dat/mapped/{pre_sample}-{read}-addFlag.bam'
+    group:
+        'bowtie2'
+    log:
+        'logs/sam2bam/{pre_sample}-{read}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools view -u {input} > {output} 2> {log}'
+
+
+rule catBam:
+    input:
+        'dat/mapped/{pre_sample}-R1-addFlag.bam',
+        'dat/mapped/{pre_sample}-R2-addFlag.bam'
+    output:
+        pipe('dat/mapped/{pre_sample}-merged.bam')
+    group:
+        'prepareBAM'
+    log:
+        'logs/catBam/{pre_sample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools cat {input} > {output} 2> {log}'
+
+
+rule collateBam:
+    input:
+        rules.catBam.output
     output:
         pipe('dat/mapped/{pre_sample}-merged.bam')
     group:
@@ -499,12 +529,13 @@ rule mergeBam:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools merge -nu - {input} > {output} 2> {log}'
+        'samtools collate -Ou {input} > {output} 2> {log}'
+
 
 # Input to SNPsplit
 rule fixmateBam:
     input:
-        rules.mergeBam.output
+        rules.collateBam.output
     output:
         'dat/mapped/{pre_sample}.fixed.bam'
     group:
@@ -514,7 +545,7 @@ rule fixmateBam:
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
-        THREADS - 1 if THREADS > 1 else 1
+        THREADS - 2 if THREADS > 3 else 1
     shell:
         'samtools fixmate -@ {threads} -mp {input} {output} 2> {log}'
 
