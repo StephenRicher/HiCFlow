@@ -521,7 +521,7 @@ rule collateBam:
     input:
         rules.catBam.output
     output:
-        pipe('dat/mapped/{pre_sample}-merged.bam')
+        pipe('dat/mapped/{pre_sample}-collate.bam')
     group:
         'prepareBAM'
     log:
