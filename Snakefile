@@ -523,7 +523,8 @@ rule collateBam:
     output:
         pipe('dat/mapped/{pre_sample}-collate.bam')
     params:
-        tmpdir = directory(config['tmpdir'])
+        # Add '/' to path if not present
+        tmpPrefix = os.path.join(config['tmpdir'], '')
     group:
         'prepareBAM'
     log:
@@ -531,7 +532,7 @@ rule collateBam:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools collate -Ou {input} {params.tmpdir} > {output} 2> {log}'
+        'samtools collate -Ou {input} {params.tmpPrefix} > {output} 2> {log}'
 
 
 # Input to SNPsplit
