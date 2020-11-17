@@ -67,7 +67,7 @@ fdr = as.double(args[7])
 matrix1 = args[8]
 matrix2 = args[9]
 
-dir.create(qcdir)
+dir.create(qcdir, recursive = TRUE)
 
 group1 = get_group(matrix1)
 group2 = get_group(matrix2)
