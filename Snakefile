@@ -131,6 +131,7 @@ wildcard_constraints:
 
 # Generate list of group comparisons - this avoids self comparison
 COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)]
+SAMPLE_COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(SAMPLES), 2)]
 
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords([config['plot_coordinates'], config['regions']])
@@ -1009,18 +1010,17 @@ rule reformatNxN3p:
 
 rule HiCRep:
     input:
-        expand(
-            'dat/matrix/{{region}}/{{bin}}/raw/{sample}-{{region}}-{{bin}}.nxnp3.tsv',
-            sample = SAMPLES)
+        'dat/matrix/{region}/{bin}/raw/{sample1}-{region}-{bin}.nxnp3.tsv',
+        'dat/matrix/{region}/{bin}/raw/{sample2}-{region}-{bin}.nxnp3.tsv',
     output:
-        'qc/hicrep/{region}-{bin}-hicrep.png'
+        'qc/hicrep/data/{sample1}-vs-{sample2}-{region}-{bin}-hicrep.csv'
     params:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region]
     group:
         'HiCRep'
     log:
-        'logs/HiCRep/{region}-{bin}.log'
+        'logs/HiCRep/{sample1}-vs-{sample2}-{region}-{bin}.log'
     conda:
         f'{ENVS}/hicrep.yaml'
     shell:
@@ -1028,10 +1028,28 @@ rule HiCRep:
         '{params.start} {params.end} {input} &> {log}'
 
 
+rule plotHiCRep:
+    input:
+        expand('qc/hicrep/data/{compare}-{{region}}-{{bin}}-hicrep.csv',
+            compare=SAMPLE_COMPARES)
+    output:
+        'qc/hicrep/{region}-{bin}-hicrep.png'
+    params:
+        dpi = 600,
+    group:
+        'HiCRep'
+    log:
+        'logs/plotHiCRep/{region}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotHiCRep.py --out {output} --dpi {params.dpi} '
+        '{input} &> {log}'
+
+
 rule aggregateHiCRep:
     input:
-        expand('qc/hicrep/{region}-{{bin}}-hicrep.png',
-            region=regionBin.keys())
+        expand('qc/hicrep/{region}-{{bin}}-hicrep.png', region=regionBin.keys())
     output:
         touch(temp('qc/hicrep/.tmp.{bin}-hicrep'))
     group:
