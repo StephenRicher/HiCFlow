@@ -79,6 +79,7 @@ out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
 out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
 out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
 out_fdr = paste(outdir, '/', group1, '-vs-', group2, '-fdr.homer', sep = '')
+out_Z = paste(outdir, '/', group1, '-vs-', group2, '-Z.homer', sep = '')
 out_medianAdjM = paste(outdir, '/', group1, '-vs-', group2, '-absZ.bedgraph', sep = '')
 
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
@@ -122,6 +123,9 @@ write.table(medianAdjM, out_medianAdjM, quote=FALSE, row.names=FALSE, col.names=
 
 # Write matrix of logFC values
 writeMatrix(hic.table, out_matrix, chr, start, end, binsize, 'adj.M')
+
+# Write matrix of Z scores
+writeMatrix(hic.table, out_Z, chr, start, end, binsize, 'Z')
 
 # Write matrix of of significant FDR values
 writeMatrix(hic.table[hic.table$p.adj <= fdr,], out_sig, chr, start, end, binsize, 'adj.M')
