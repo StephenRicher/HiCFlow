@@ -18,9 +18,6 @@ end = as.integer(args[4])
 matrix1 = args[5]
 matrix2 = args[6]
 
-h_hat = NA
-scc = NA
-
 if (file.info(matrix1)$size == 0) {
   print(matrix1 ,"is empty - SCC not computed.")
 } else if (file.info(matrix2)$size == 0) {
@@ -39,6 +36,8 @@ if (file.info(matrix1)$size == 0) {
   
   if (is.null(h_hat)) {
     print("Unable to calculate smoothing parameter - SCC note computed")
+    h_hat = NA
+    scc = NA
   } else {
     # Downsample matrices to the same sequencing depth
     min_sample = as.integer(min(sum(m1[,-c(1:3)]), sum(m2[,-c(1:3)])))
