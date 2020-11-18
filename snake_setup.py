@@ -160,13 +160,17 @@ def load_coords(files):
 
 def get_allele_groupings(samples):
 
-    allele_groups = defaultdict(list)
+    allele_groups = {}
     allele_samples = []
     for sample in samples:
         sample = sample.split('-')
         group = sample[0]
         rep = sample[1]
         allele_samples.extend([f'{group}_a1-{rep}', f'{group}_a2-{rep}'])
+        if f'{group}_a1' not in allele_groups:
+            allele_groups[f'{group}_a1'] = []
+        if f'{group}_a2' not in allele_groups:
+            allele_groups[f'{group}_a2'] = [] 
         allele_groups[f'{group}_a1'].append(rep)
         allele_groups[f'{group}_a2'].append(rep)
 
