@@ -611,10 +611,10 @@ rule SNPsplit:
 
 rule mergeSNPsplit:
     input:
-        'dat/snpsplit/{pre_group}-{rep}.fixed.G{allele}_G{allele}.bam',
-        'dat/snpsplit/{pre_group}-{rep}.fixed.G{allele}_UA.bam'
+        'dat/snpsplit/{pre_group}-{rep}.hic.G{allele}_G{allele}.bam',
+        'dat/snpsplit/{pre_group}-{rep}.hic.G{allele}_UA.bam'
     output:
-        'dat/snpsplit/merged/{pre_group}_a{allele}-{rep}.fixed.bam'
+        'dat/snpsplit/merged/{pre_group}_a{allele}-{rep}.hic.bam'
     group:
         'SNPsplit'
     log:
@@ -627,7 +627,7 @@ rule mergeSNPsplit:
 
 rule aggregateSNPsplit:
     input:
-        expand('dat/snpsplit/merged/{sample}.fixed.bam', sample=SAMPLES)
+        expand('dat/snpsplit/merged/{sample}.hic.bam', sample=SAMPLES)
     output:
         touch(temp('dat/snpsplit/.tmp-snpsplit'))
     group:
@@ -636,7 +636,7 @@ rule aggregateSNPsplit:
 
 def splitInput(wc):
     if ALLELE_SPECIFIC:
-        return 'dat/snpsplit/merged/{sample}.fixed.bam'
+        return 'dat/snpsplit/merged/{sample}.hic.bam'
     else:
         return 'dat/mapped/{sample}.fixed.bam'
 
