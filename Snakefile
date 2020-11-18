@@ -95,10 +95,12 @@ regionBin = filterRegions(REGIONS, BINS, nbins=config['HiCParams']['minBins'])
 if config['phased_vcf']:
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
     ALLELE_SPECIFIC = True
+    SNPSPLIT = ['dat/snpsplit/.tmp-snpsplit']
 else:
     SAMPLES = ORIGINAL_SAMPLES
     GROUPS = ORIGINAL_GROUPS
     ALLELE_SPECIFIC = False
+    SNPSPLIT = []
 
 if config['phase'] and not ALLELE_SPECIFIC:
     if config['gatk']['all_known']:
@@ -144,7 +146,6 @@ HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
                 region=region, bin=regionBin[region]) for region in regionBin]]
 
 
-
 # Create a per-sample BAM, for each sample, of only valid HiC reads
 if config['createValidBam']:
     validBAM = [expand('dat/mapped/{sample}-validHiC.bam', sample=SAMPLES)]
@@ -156,8 +157,10 @@ rule all:
     input:
         preQC_mode,
         HiC_mode,
+        SNPSPLIT,
         phase,
         validBAM
+
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -589,7 +592,7 @@ rule SNPsplit:
         bam = rules.removeUnmapped.output,
         snps = SNPsplit_input
     output:
-        expand('dat/snpsplit/{{pre_sample}}.fixed.{ext}',
+        expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
             ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
                    'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
                    'UA_UA.bam', 'allele_flagged.bam'])
@@ -620,6 +623,15 @@ rule mergeSNPsplit:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools merge -n {output} {input} &> {log}'
+
+
+rule aggregateSNPsplit:
+    input:
+        expand('dat/snpsplit/merged/{sample}.fixed.bam', sample=SAMPLES)
+    output:
+        touch(temp('dat/snpsplit/.tmp-snpsplit'))
+    group:
+        'SNPsplit' if config['groupJobs'] else 'aggregateSNPsplit'
 
 
 def splitInput(wc):
