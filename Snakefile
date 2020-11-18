@@ -539,7 +539,6 @@ rule collateBam:
         'samtools collate -Ou {input} {params.tmpPrefix} > {output} 2> {log}'
 
 
-# Input to SNPsplit
 rule fixmateBam:
     input:
         rules.collateBam.output
@@ -557,6 +556,24 @@ rule fixmateBam:
         'samtools fixmate -@ {threads} -mp {input} {output} 2> {log}'
 
 
+# Input to SNPsplit
+rule removeUnmapped:
+    input:
+        rules.fixmateBam.output
+    output:
+        'dat/mapped/{pre_sample}.hic.bam'
+    group:
+        'prepareBAM'
+    log:
+        'logs/removeUnmapped/{pre_sample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools view -@ {threads} -b -F 12 {input} {output} 2> {log}'
+
+
 def SNPsplit_input(wildcards):
     """ Retrieve cell type associated with sample. """
 
@@ -569,7 +586,7 @@ def SNPsplit_input(wildcards):
 
 rule SNPsplit:
     input:
-        bam = rules.fixmateBam.output,
+        bam = rules.removeUnmapped.output,
         snps = SNPsplit_input
     output:
         expand('dat/snpsplit/{{pre_sample}}.fixed.{ext}',
@@ -655,10 +672,11 @@ def getRestSites(wildcards):
 
     try:
         sample = wildcards.sample
+        if ALLELE_SPECIFIC:
+            sample = sample[:-3]
     except AttributeError:
         sample = wildcards.pre_sample
-    if ALLELE_SPECIFIC:
-        sample = sample[:-3]
+
     for cellType, originalSamples in CELL_TYPES.items():
         if sample in originalSamples:
             type = cellType
