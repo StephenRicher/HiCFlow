@@ -153,7 +153,7 @@ def load_coords(files):
             for line in fh:
                 chr, start, end, region = line.strip().split()
                 if region not in coords:
-                    corrds[region] = []
+                    coords[region] = []
                 coords[region].append(f'{chr}_{start}_{end}')
     return coords
 
@@ -170,7 +170,7 @@ def get_allele_groupings(samples):
         if f'{group}_a1' not in allele_groups:
             allele_groups[f'{group}_a1'] = []
         if f'{group}_a2' not in allele_groups:
-            allele_groups[f'{group}_a2'] = [] 
+            allele_groups[f'{group}_a2'] = []
         allele_groups[f'{group}_a1'].append(rep)
         allele_groups[f'{group}_a2'].append(rep)
 
