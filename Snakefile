@@ -143,11 +143,14 @@ HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
             [expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
                 region=region, bin=regionBin[region]) for region in regionBin]]
 
+
+
 # Create a per-sample BAM, for each sample, of only valid HiC reads
 if config['createValidBam']:
     validBAM = [expand('dat/mapped/{sample}-validHiC.bam', sample=SAMPLES)]
 else:
     validBAM = []
+
 
 rule all:
     input:
@@ -654,14 +657,12 @@ def getRestSites(wildcards):
         sample = wildcards.sample
     except AttributeError:
         sample = wildcards.pre_sample
-    for cellType, samples in CELL_TYPES.items():
-        if ALLELE_SPECIFIC:
-            alleleGroups, alleleSamples = get_allele_groupings(samples)
-            samples += alleleSamples
-        if sample in samples:
+    if ALLELE_SPECIFIC:
+        sample = sample[:-3]
+    for cellType, originalSamples in CELL_TYPES.items():
+        if sample in originalSamples:
             type = cellType
             break
-
     return expand('dat/genome/{cellType}-{re}-restSites.bed',
         cellType=cellType, re=config['restrictionSeqs'].keys())
 
@@ -752,7 +753,7 @@ rule mergeBins:
         'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.h5'
     params:
         bin = config['binsize'],
-        nbins = lambda wildcards: int(int(wildcards.bin) / BASE_BIN)
+        nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     group:
         'processHiC' if config['groupJobs'] else 'mergeBins'
     log:
@@ -1079,7 +1080,6 @@ rule OnTAD:
         bed = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad.bed',
         tad = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad.tad'
     params:
-        bin = BINS,
         chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
