@@ -2,7 +2,6 @@
 
 import sys
 import pandas as pd
-from collections import defaultdict
 
 class ConfigurationError(Exception):
     pass
@@ -146,13 +145,15 @@ def load_regions(regions_file):
 
 def load_coords(files):
     """ Read plot coordinates from plot coordinate and region BED file. """
-    coords = defaultdict(list)
+    coords = {}
     for file in files:
         if not file:
             continue
         with open(file) as fh:
             for line in fh:
                 chr, start, end, region = line.strip().split()
+                if region not in coords:
+                    corrds[region] = []
                 coords[region].append(f'{chr}_{start}_{end}')
     return coords
 
