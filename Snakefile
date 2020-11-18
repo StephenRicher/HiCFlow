@@ -571,7 +571,7 @@ rule removeUnmapped:
     threads:
         THREADS
     shell:
-        'samtools view -@ {threads} -b -F 12 {input} {output} 2> {log}'
+        'samtools view -@ {threads} -b -F 12 {input} > {output} 2> {log}'
 
 
 def SNPsplit_input(wildcards):
