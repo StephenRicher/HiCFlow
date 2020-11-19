@@ -1395,6 +1395,8 @@ rule hicCompareBedgraph:
     output:
         up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up.bedgraph',
         down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down.bedgraph'
+    params:
+        maxDistance = 100000
     group:
         'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
@@ -1403,7 +1405,8 @@ rule hicCompareBedgraph:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/hicCompareBedgraph.py --binSize {wildcards.bin} '
-        '--upOut {output.up} --downOut {output.down} {input} &> {log}'
+        '--maxDistance {params.maxDistance} --upOut {output.up} '
+        '--downOut {output.down} {input} &> {log}'
 
 
 rule homerToH5:

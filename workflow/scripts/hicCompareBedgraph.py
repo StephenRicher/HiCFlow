@@ -10,12 +10,17 @@ from utilities import setDefaults
 __version__ = '1.0.0'
 
 
-def hicCompareBedgraph(file: str, upOut: str, downOut: str, binSize: int):
+def hicCompareBedgraph(
+        file: str, upOut: str, downOut: str, binSize: int, maxDistance: float):
 
     positions, mat = readHomer(file, binSize)
+    mat['seperation'] = abs(mat['end'] - mat['start'])
+    # Remove paired interactions above max distance
+    if maxDistance:
+        mat = mat.loc[mat['seperation'] < maxDistance]
     mat['upFC'] = mat['score'] > 0
     mat['score'] = abs(mat['score'])
-    mat = mat.groupby(['bin', 'upFC']).sum().reset_index('upFC')
+    mat = mat.groupby(['region', 'upFC']).sum().reset_index('upFC')
 
     for upFC in [True, False]:
         out = upOut if upFC else downOut
@@ -31,16 +36,21 @@ def hicCompareBedgraph(file: str, upOut: str, downOut: str, binSize: int):
 
 def readHomer(matrix, binSize):
     """ Read Homer matrix format and convert to long format """
+
     mat = pd.read_csv(matrix, skiprows=1, header=None, sep='\t').drop(0, axis=1)
-    # Extract chromsome and start coordinates
+    # Split chromosome and start into 2 column DF
     positions = mat[1].str.split('-', expand=True)
     # Add end positions
     positions[2] = positions[1].astype(int) + binSize
+    # Add full region position and set as index
     positions['pos'] = mat[1]
     positions =  positions.set_index('pos')
-    # Convert to long and drop 'otherBin' column
-    mat = mat.melt(id_vars=1).drop('variable', axis=1)
-    mat.columns = ['bin', 'score']
+    # Set columns
+    mat.columns = pd.Series('region').append(positions[1])
+    mat['end'] = positions[1].values.astype(int)
+
+    mat = mat.melt(id_vars=['region', 'end'], var_name='start', value_name='score')
+    mat['start'] = mat['start'].astype(int)
 
     return positions, mat
 
@@ -50,6 +60,9 @@ def parseArgs():
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument('file', help='HiC matrix in homer format.')
+    parser.add_argument(
+        '--maxDistance', type=float,
+        help='Only consider interactions within this distance.')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--binSize', required=True,
