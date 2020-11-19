@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-""" Perform multidimensional scalling of HiC subtraction matrix """
-
+""" Compute sum logFC for up and down interactions """
 
 import sys
 import argparse
