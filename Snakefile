@@ -52,9 +52,10 @@ default_config = {
          'logFC' :       1            ,
          'multi' :       False        ,},
     'compareMatrices':
-        {'vMin' :        -2.5         ,
-         'vMax' :        2.5          ,
-         'size':         1            ,},
+        {'vMin'       : -2.5          ,
+         'vMax'       :  2.5          ,
+         'size'       :  1            ,
+         'maxDistance':  1000000      ,},
     'gatk':
         {'true_snp1' :   None         ,
          'true_snp2' :   None         ,
@@ -1396,7 +1397,7 @@ rule hicCompareBedgraph:
         up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up.bedgraph',
         down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down.bedgraph'
     params:
-        maxDistance = 100000
+        maxDistance = config['compareMatrices']['maxDistance']
     group:
         'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
