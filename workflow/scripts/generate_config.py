@@ -46,13 +46,13 @@ def main():
         '--log_matrix2', default=False, action='store_true',
         help='Log transform counts of matrix 2.')
     parser.add_argument(
-        '--links', nargs=2, default=None,
-        help = 'UP and DOWN links files showing differential interactions.')
-    parser.add_argument(
         '--bigWig', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
         help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
+    parser.add_argument(
+        '--sumLogFC', metavar='UP,DOWN', type=commaPair,
+        help='Pair of bigWig files for sum logFC of UP and DOWN interactions.')
     parser.add_argument(
         '--bed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
@@ -90,7 +90,7 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                links, bigWig, bed, compare,
+                bigWig, bed, compare, sumLogFC,
                 depth, colourmap, vMin, vMax, flip):
 
 
@@ -115,25 +115,26 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         if not_empty(inverted_matrix):
             write_matrix(inverted_matrix, cmap=colourmap, depth=depth,
                 vMin=vMin, vMax=vMax, invert=True, log=log_transform)
+
     print('[spacer]')
+
+    if sumLogFC is not None:
+        title = 'sum(logFC)'
+        for i, file in enumerate(sumLogFC):
+            if not_empty(file):
+                if i == 0:
+                    overlay = 'no'
+                    colour = '#FF000080'
+                else:
+                    overlay = 'share-y'
+                    colour = '#0000FF80'
+                write_bigwig(file=file, title=title, type='bedgraph', alpha=0.5, colour=colour, overlay=overlay)
+
 
     if insulations is not None:
         for i, insulation in enumerate(insulations):
             if not_empty(insulation):
                 write_insulation(insulation = insulation, i = i)
-        print('[spacer]')
-
-
-    if links is not None:
-        for i, link in enumerate(links):
-            if i == 0:
-                overlay = False
-                direction = 'up'
-            else:
-                overlay = True
-                direction = 'down'
-            if not_empty(link):
-                write_links(link, overlay=overlay, direction=direction)
         print('[spacer]')
 
 
@@ -230,44 +231,20 @@ def write_insulation(insulation, i,
           f'overlay_previous = {overlay}', sep = '\n')
 
 
-def write_links(link, direction, overlay=False):
-
-    overlay = 'share-y' if overlay else 'no'
-    colour = 'Reds' if direction == 'up' else 'Blues'
-    group1, group2 = get_links_groups(link)
-    if direction == 'up':
-        title = f'Differential interactions - Red (UP in {group2})'
-    else:
-        title = ''
-
-    print(f'[{group1} vs {group2} - DI {direction}]',
-          f'file = {link}',
-          f'title = {title}',
-          f'line_style = dashed',
-          f'color = {colour}',
-          f'height = 10',
-          f'overlay_previous = {overlay}',
-          f'file_type = links', sep = '\n')
-
-
-def get_links_groups(path):
-    """ Retrieve group name pairs from links path. """
-    base = os.path.basename(path).split('-')
-    return base[0], base[2]
-
-
-def write_bigwig(file, title, type='bigwig'):
+def write_bigwig(file, title, alpha=1, colour='#33a02c', type='bigwig', overlay='no'):
 
     print(f'[{type} - {title}]',
           f'file = {file}',
           f'title = {title}',
+          f'color = {colour}',
+          f'alpha = {alpha}',
           f'height = 3',
           f'number_of_bins = 500',
           f'nans_to_zeros = True',
           f'summary_method = mean',
           f'show_data_range = true',
           f'file_type = {type}',
-          f'overlay_previous = no', sep = '\n')
+          f'overlay_previous = {overlay}', sep = '\n')
 
 
 def write_bed(file, title):
