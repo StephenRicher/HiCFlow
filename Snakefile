@@ -1346,6 +1346,8 @@ rule hicMDS:
         rules.HiCcompare.output.Z
     output:
         'dat/MDS/{region}/{bin}/{group1}-vs-{group2}-MDS.bedgraph'
+    group:
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/hicMDS/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
