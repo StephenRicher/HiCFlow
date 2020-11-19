@@ -78,9 +78,6 @@ compare_plot = paste(qcdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep 
 out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
 out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
 out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
-out_fdr = paste(outdir, '/', group1, '-vs-', group2, '-fdr.homer', sep = '')
-out_Z = paste(outdir, '/', group1, '-vs-', group2, '-Z.homer', sep = '')
-out_medianAdjM = paste(outdir, '/', group1, '-vs-', group2, '-absZ.bedgraph', sep = '')
 
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
 
@@ -102,40 +99,11 @@ dev.off()
 
 hic.table = as.data.frame(hic.table)
 
-# Write mean adjM per interval as bedgraph
-require(data.table)
-medianAdjM = data.table(hic.table)
-medianAdjM = medianAdjM[order(medianAdjM$start1), list(abs.Z = mean(abs(Z), na.rm = TRUE), adjM.count=length(adj.M)),
-                        by=c("chr1","start1", "end1")]
-
-# Ensure start and end bedgraph intervals extend to to full interval
-if (min(medianAdjM$start1) > start) {
-  medianAdjM = rbindlist(list(
-    list(chr, start, min(medianAdjM$start1), 0, 0), medianAdjM))
-}
-if (max(medianAdjM$end1) < end) {
-  medianAdjM = rbindlist(list(
-    medianAdjM, list(chr, max(medianAdjM$end1), end, 0, 0)))
-}
-# Set all median values computed by less than 'n' values to 0
-medianAdjM[medianAdjM$adjM.count < 10, 'abs.Z'] = 0
-write.table(medianAdjM, out_medianAdjM, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
-
 # Write matrix of logFC values
 writeMatrix(hic.table, out_matrix, chr, start, end, binsize, 'adj.M')
 
-# Write matrix of Z scores
-writeMatrix(hic.table, out_Z, chr, start, end, binsize, 'Z')
-
 # Write matrix of of significant FDR values
 writeMatrix(hic.table[hic.table$p.adj <= fdr,], out_sig, chr, start, end, binsize, 'adj.M')
-
-# Write matrix of signed inverted adjusted P values
-hic.table$scale.p.adj = 1 - as.double(hic.table$p.adj)
-hic.table$sign.p.adj = ifelse(hic.table$adj.M > 0, hic.table$scale.p.adj, -hic.table$scale.p.adj)
-
-writeMatrix(hic.table, out_fdr, chr, start, end, binsize, "sign.p.adj")
-
 
 hic.table$abs.adj.M = abs(hic.table$adj.M)
 hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
