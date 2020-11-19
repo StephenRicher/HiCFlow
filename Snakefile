@@ -1318,10 +1318,7 @@ rule HiCcompare:
     output:
         all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
         sig = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
-        fdr = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer',
-        Z = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-Z.homer',
         links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links',
-        absZ = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-absZ.bedgraph'
     params:
         dir = lambda wc: f'dat/HiCcompare/{wc.region}/{wc.bin}',
         qcdir = lambda wc: f'qc/HiCcompare/{wc.region}/{wc.bin}',
@@ -1339,22 +1336,6 @@ rule HiCcompare:
         '{SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} {params.chr} '
         '{params.start} {params.end} {wildcards.bin} {params.fdr} {input} '
         '&> {log}'
-
-
-rule hicMDS:
-    input:
-        rules.HiCcompare.output.Z
-    output:
-        'dat/MDS/{region}/{bin}/{group1}-vs-{group2}-MDS.bedgraph'
-    group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
-    log:
-        'logs/hicMDS/{region}/{bin}/{group1}-vs-{group2}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/hicMDS.py --binSize {wildcards.bin} {input} '
-        '> {output} 2> {log}'
 
 
 rule multiHiCcompare:
@@ -1408,6 +1389,23 @@ rule applyMedianFilter:
         '> {output} 2> {log}'
 
 
+rule hicCompareBedgraph:
+    input:
+        rules.applyMedianFilter.output
+    output:
+        up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up.bedgraph',
+        down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down.bedgraph'
+    group:
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
+    log:
+        'logs/hicCompareBedgraph/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/hicCompareBedgraph.py --binSize {wildcards.bin} '
+        '--upOut {output.up} --downOut {output.down} {input} &> {log}'
+
+
 rule homerToH5:
     input:
         'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.homer'
@@ -1448,7 +1446,8 @@ rule filterHiCcompare:
 rule createCompareConfig:
     input:
         mat = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5',
-        MDS = 'dat/MDS/{region}/{bin}/{group1}-vs-{group2}-MDS.bedgraph'
+        upBed = rules.hicCompareBedgraph.output.up,
+        downBed = rules.hicCompareBedgraph.output.down
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}.ini',
     params:
@@ -1465,8 +1464,8 @@ rule createCompareConfig:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
-        '--bigWig MDS,{input.MDS} {params.tracks} '
-        '--depth {params.depth} --colourmap {params.colourmap} '
+        '--sumLogFC {input.upBed},{input.downBed} '
+        '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
 
@@ -1521,7 +1520,7 @@ rule plotCompare:
 rule aggregateProcessHiC:
     input:
         lambda wc: expand('plots/{{region}}/{{bin}}/{tool}/{set}/{compare}-{{region}}-{coords}-{{bin}}-{set}.png',
-            coords=COORDS[wc.region], compare=COMPARES, set=['logFC', 'sig', 'fdr'],
+            coords=COORDS[wc.region], compare=COMPARES, set=['logFC', 'sig'],
             tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare']),
         lambda wc: expand('plots/{{region}}/{{bin}}/pyGenomeTracks/{group}-{{region}}-{coords}-{{bin}}.png',
             coords=COORDS[wc.region], group=list(GROUPS)),
