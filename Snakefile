@@ -143,9 +143,8 @@ preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc']
 HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
             'qc/hicup/.tmp.aggregatehicupTruncate',
-            [expand('plots/{region}/{bin}/.tmp.aggregateProcessHiC',
-                region=region, bin=regionBin[region]) for region in regionBin]]
-
+            expand('plots/{region}/.tmp.aggregateProcessHiC',
+                region=regionBin.keys())]
 
 # Create a per-sample BAM, for each sample, of only valid HiC reads
 if config['createValidBam']:
@@ -1523,15 +1522,15 @@ rule plotCompare:
 
 rule aggregateProcessHiC:
     input:
-        lambda wc: expand('plots/{{region}}/{{bin}}/{tool}/{set}/{compare}-{{region}}-{coords}-{{bin}}-{set}.png',
-            coords=COORDS[wc.region], compare=COMPARES, set=['logFC', 'sig'],
+        lambda wc: expand('plots/{{region}}/{bin}/{tool}/{set}/{compare}-{{region}}-{coords}-{bin}-{set}.png',
+            coords=COORDS[wc.region], compare=COMPARES, set=['logFC', 'sig'], bin=regionBin[wc.region],
             tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare']),
-        lambda wc: expand('plots/{{region}}/{{bin}}/pyGenomeTracks/{group}-{{region}}-{coords}-{{bin}}.png',
-            coords=COORDS[wc.region], group=list(GROUPS)),
-        expand('plots/{{region}}/{{bin}}/obs_exp/{all}-{{region}}-{{bin}}.png',
-            all=SAMPLES+list(GROUPS))
+        lambda wc: expand('plots/{{region}}/{bin}/pyGenomeTracks/{group}-{{region}}-{coords}-{bin}.png',
+            coords=COORDS[wc.region], group=list(GROUPS), bin=regionBin[wc.region]),
+        lambda wc: expand('plots/{{region}}/{bin}/obs_exp/{all}-{{region}}-{bin}.png',
+            all=SAMPLES+list(GROUPS), bin=regionBin[wc.region])
     output:
-        touch(temp('plots/{region}/{bin}/.tmp.aggregateProcessHiC'))
+        touch(temp('plots/{region}/.tmp.aggregateProcessHiC'))
     group:
         'processHiC' if config['groupJobs'] else 'aggregateTarget'
 
