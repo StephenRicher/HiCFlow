@@ -344,8 +344,8 @@ rule cutadapt:
     input:
         lambda wc: samples.xs(wc.pre_sample, level=2)['path']
     output:
-        trimmed = ['dat/fastq/trimmed/{pre_sample}-R1.trim.fastq.gz',
-                   'dat/fastq/trimmed/{pre_sample}-R2.trim.fastq.gz'],
+        trimmed = [temp('dat/fastq/trimmed/{pre_sample}-R1.trim.fastq.gz'),
+                   temp('dat/fastq/trimmed/{pre_sample}-R2.trim.fastq.gz')],
         qc = 'qc/cutadapt/unmod/{pre_sample}.cutadapt.txt'
     group:
         'cutadapt'
@@ -393,8 +393,8 @@ rule hicupTruncate:
     input:
         rules.cutadapt.output.trimmed
     output:
-        truncated = ['dat/fastq/truncated/{pre_sample}-R1.trunc.fastq.gz',
-                     'dat/fastq/truncated/{pre_sample}-R2.trunc.fastq.gz'],
+        truncated = [temp('dat/fastq/truncated/{pre_sample}-R1.trunc.fastq.gz'),
+                     temp('dat/fastq/truncated/{pre_sample}-R2.trunc.fastq.gz')],
         summary = 'qc/hicup/{pre_sample}-truncate-summary.txt'
     params:
         re1 = lambda wc: list(restrictionSeqs[wc.pre_sample].values())[0],
@@ -462,7 +462,8 @@ rule bowtie2:
         qc = 'qc/bowtie2/{pre_sample}-{read}.bowtie2.txt'
     params:
         index = bowtie2Basename,
-        cellType = getCellType
+        cellType = getCellType,
+        sensitivity = 'sensitive'
     group:
         'bowtie2'
     log:
@@ -473,8 +474,8 @@ rule bowtie2:
         THREADS - 2 if THREADS > 1 else 1
     shell:
         'bowtie2 -x {params.index} -U {input.fastq} '
-        '--reorder --threads {threads} '
-        '--very-sensitive > {output.sam} 2> {log} && cp {log} {output.qc}'
+        '--reorder --threads {threads} {params.sensitivity} '
+        '> {output.sam} 2> {log} && cp {log} {output.qc}'
 
 
 rule addReadFlag:
@@ -499,7 +500,7 @@ rule sam2bam:
     input:
         rules.addReadFlag.output
     output:
-        'dat/mapped/{pre_sample}-{read}-addFlag.bam'
+        temp('dat/mapped/{pre_sample}-{read}-addFlag.bam')
     group:
         'bowtie2'
     log:
@@ -548,7 +549,7 @@ rule fixmateBam:
     input:
         rules.collateBam.output
     output:
-        'dat/mapped/{pre_sample}.fixed.bam'
+        temp('dat/mapped/{pre_sample}.fixed.bam')
     group:
         'prepareBAM'
     log:
@@ -566,7 +567,7 @@ rule removeUnmapped:
     input:
         rules.fixmateBam.output
     output:
-        'dat/mapped/{pre_sample}.hic.bam'
+        temp('dat/mapped/{pre_sample}.hic.bam')
     group:
         'prepareBAM'
     log:
@@ -594,10 +595,10 @@ rule SNPsplit:
         bam = rules.removeUnmapped.output,
         snps = SNPsplit_input
     output:
-        expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
+        temp(expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
             ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
                    'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
-                   'UA_UA.bam', 'allele_flagged.bam'])
+                   'UA_UA.bam', 'allele_flagged.bam']))
     params:
         outdir = 'dat/snpsplit/'
     group:
@@ -616,7 +617,7 @@ rule mergeSNPsplit:
         'dat/snpsplit/{pre_group}-{rep}.hic.G{allele}_G{allele}.bam',
         'dat/snpsplit/{pre_group}-{rep}.hic.G{allele}_UA.bam'
     output:
-        'dat/snpsplit/merged/{pre_group}_a{allele}-{rep}.hic.bam'
+        temp('dat/snpsplit/merged/{pre_group}_a{allele}-{rep}.hic.bam')
     group:
         'SNPsplit'
     log:
