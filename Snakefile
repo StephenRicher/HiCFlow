@@ -474,7 +474,7 @@ rule bowtie2:
         THREADS - 2 if THREADS > 1 else 1
     shell:
         'bowtie2 -x {params.index} -U {input.fastq} '
-        '--reorder --threads {threads} {params.sensitivity} '
+        '--reorder --threads {threads} --{params.sensitivity} '
         '> {output.sam} 2> {log} && cp {log} {output.qc}'
 
 
