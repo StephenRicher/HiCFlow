@@ -80,7 +80,8 @@ def filterRegions(regions, binSizes, nbins=100):
 def load_samples(samples_file):
 
     samples = pd.read_table(
-        samples_file, sep = ',', dtype = {'rep' : str})
+        samples_file, sep = ',', dtype = {'rep' : str},
+        usecols=['cell_type', 'group', 'rep', 'read', 'path'])
 
     # Validate read file input with wildcard definitions
     if not samples['cell_type'].str.match(r'[^-\.\/]+').all():
@@ -175,3 +176,51 @@ def get_allele_groupings(samples):
         allele_groups[f'{group}_a2'].append(rep)
 
     return allele_groups, allele_samples
+
+
+def processRestriction(samplesFile, restrictionSeqs):
+    """ Match each sample with the correct set of restriction sequences based
+        on the the experiment asignment. """
+    samples = pd.read_csv(samplesFile, dtype = {'rep' : str})
+    samples['sample'] = (samples[['group', 'rep']]
+        .apply(lambda x: '-'.join(x), axis = 1))
+
+    restrictionSeqsAdapt = {}
+    for sample in samples['sample'].unique():
+        experiment = samples.loc[samples['sample'] == sample, 'experiment'].to_list()[0]
+        try:
+            restrictionSeqsAdapt[sample] = restrictionSeqs[experiment]
+        except KeyError:
+            sys.exit(f'No restriction sequences defined '
+                     f'for experiment {experiment}.')
+    return restrictionSeqsAdapt
+
+
+def unpackRestrictionSeqs(restrictionSeqs):
+    unpackedRestrictionSeqs = {}
+    for REpair in restrictionSeqs.values():
+        for name, seq in REpair.items():
+            if name in unpackedRestrictionSeqs:
+                if unpackedRestrictionSeqs[name] != seq:
+                    sys.exit(f'Sequence of {name} must be'
+                              'consistent across experiments.')
+            else:
+                unpackedRestrictionSeqs[name] = seq
+    return unpackedRestrictionSeqs
+
+
+def addRestrictionAllle(restrictionSeqs):
+    """ Add allele specific sample to restriction seq dictionary """
+    alleleREseqs = restrictionSeqs.copy()
+    for sample, REs in restrictionSeqs.items():
+        group, rep = sample.split('-')
+        for allele in ['a1', 'a2']:
+            alleleSample = f'{group}_{allele}-{rep}'
+            alleleREseqs[alleleSample] = REs
+    return alleleREseqs
+
+
+def allele2sample(sample):
+    """ Convert allele specific sample name to normal sample """
+    group, rep = sample.split('-')
+    return f'{group[:-3]}-{rep}'

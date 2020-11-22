@@ -46,7 +46,8 @@ cutadapt:
 # List of restriction sequence in order of protocol usage. Cut site is denoted
 # using the '^' symbol. Ensure restriction enzyme names are given as strings.
 restrictionSeqs:
-    'DpnII' : '^GATC'
+    A:
+        DpnII : '^GATC'
 
 HiCParams:
     minDistance: 300

@@ -7,7 +7,7 @@ import math
 import tempfile
 import itertools
 import pandas as pd
-from snake_setup import set_config, load_samples, get_grouping, load_regions, get_allele_groupings, load_coords, filterRegions
+from snake_setup import set_config, load_samples, get_grouping, load_regions, get_allele_groupings, load_coords, filterRegions, processRestriction, unpackRestrictionSeqs, addRestrictionAllle, allele2sample
 
 BASE = workflow.basedir
 
@@ -90,11 +90,15 @@ ORIGINAL_SAMPLES, ORIGINAL_GROUPS, CELL_TYPES = get_grouping(samples)
 
 REGIONS = load_regions(config['regions'])
 
+restrictionSeqs = processRestriction(config['data'], config['restrictionSeqs'])
+unpackedRestriction = unpackRestrictionSeqs(config['restrictionSeqs'])
+
 # Remove region-binSize combinations with too few bins
 regionBin = filterRegions(REGIONS, BINS, nbins=config['HiCParams']['minBins'])
 
 if config['phased_vcf']:
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
+    restrictionSeqs = addRestrictionAllle(restrictionSeqs)
     ALLELE_SPECIFIC = True
     SNPSPLIT = ['dat/snpsplit/.tmp-snpsplit']
 else:
@@ -152,7 +156,6 @@ if config['createValidBam']:
 else:
     validBAM = []
 
-
 rule all:
     input:
         preQC_mode,
@@ -160,7 +163,6 @@ rule all:
         SNPSPLIT,
         phase,
         validBAM
-
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -395,7 +397,7 @@ rule hicupTruncate:
                      'dat/fastq/truncated/{pre_sample}-R2.trunc.fastq.gz'],
         summary = 'qc/hicup/{pre_sample}-truncate-summary.txt'
     params:
-        re1 = list(config['restrictionSeqs'].values())[0],
+        re1 = lambda wc: list(restrictionSeqs[wc.pre_sample].values())[0],
         fill = '--nofill' if config['HiCParams']['nofill'] else ''
     group:
         'hicupTruncate'
@@ -667,7 +669,7 @@ rule findRestSites:
     output:
         'dat/genome/{cell_type}-{re}-restSites.bed'
     params:
-        reSeq = lambda wc: config['restrictionSeqs'][wc.re].replace('^', '')
+        reSeq = lambda wc: unpackedRestriction[wc.re].replace('^', '')
     group:
         'prepareBAM'
     log:
@@ -685,7 +687,7 @@ def getRestSites(wildcards):
     try:
         sample = wildcards.sample
         if ALLELE_SPECIFIC:
-            sample = sample[:-3]
+            sample = allele2sample(sample)
     except AttributeError:
         sample = wildcards.pre_sample
 
@@ -694,12 +696,12 @@ def getRestSites(wildcards):
             type = cellType
             break
     return expand('dat/genome/{cellType}-{re}-restSites.bed',
-        cellType=cellType, re=config['restrictionSeqs'].keys())
+        cellType=cellType, re=restrictionSeqs[sample].keys())
 
 
 def getRestrictionSeqs(wc):
     enzymes = ''
-    for enzyme in config['restrictionSeqs'].values():
+    for enzyme in restrictionSeqs[wc.sample].values():
         enzyme = enzyme.replace('^', '')
         enzymes += f'{enzyme} '
     return enzymes
@@ -707,7 +709,7 @@ def getRestrictionSeqs(wc):
 
 def getDanglingSequences(wc):
     danglingSequences = ''
-    for enzyme in config['restrictionSeqs'].values():
+    for enzyme in restrictionSeqs[wc.sample].values():
         sequence = enzyme.replace('^', '')
         cutIndex = enzyme.index('^')
         danglingSequence = sequence[cutIndex:len(sequence) - cutIndex]
