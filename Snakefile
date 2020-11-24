@@ -594,8 +594,8 @@ rule SNPsplit:
     output:
         temp(expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
             ext = ['G1_G1.bam', 'G1_UA.bam',
-                   'G2_G2.bam', 'G2_UA.bam'.
-                   'G1_G2.bam', 'UA_UA.bam']))
+                   'G2_G2.bam', 'G2_UA.bam',
+                   'G1_G2.bam', 'UA_UA.bam'])),
         expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
             ext = ['SNPsplit_report.txt', 'SNPsplit_sort.txt'])
     params:
@@ -955,7 +955,7 @@ rule detectLoops:
         '--pValuePreselection {params.pValuePre} '
         '--pValue {params.pValue} '
         '--peakInteractionsThreshold {params.peakInter} '
-        '--threads {threads} '
+        '--threads 1 --threadsPerChromosome {threads} '
         '&> {log} || touch {output} && touch {output} '
 
 
