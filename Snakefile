@@ -100,12 +100,10 @@ if config['phased_vcf']:
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
     restrictionSeqs = addRestrictionAllle(restrictionSeqs)
     ALLELE_SPECIFIC = True
-    SNPSPLIT = ['dat/snpsplit/.tmp-snpsplit']
 else:
     SAMPLES = ORIGINAL_SAMPLES
     GROUPS = ORIGINAL_GROUPS
     ALLELE_SPECIFIC = False
-    SNPSPLIT = []
 
 if config['phase'] and not ALLELE_SPECIFIC:
     if config['gatk']['all_known']:
@@ -160,7 +158,6 @@ rule all:
     input:
         preQC_mode,
         HiC_mode,
-        SNPSPLIT,
         phase,
         validBAM
 
@@ -596,9 +593,11 @@ rule SNPsplit:
         snps = SNPsplit_input
     output:
         temp(expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
-            ext = ['G1_G1.bam', 'G1_G2.bam', 'G1_UA.bam', 'G2_G2.bam',
-                   'G2_UA.bam', 'SNPsplit_report.txt', 'SNPsplit_sort.txt',
-                   'UA_UA.bam', 'allele_flagged.bam']))
+            ext = ['G1_G1.bam', 'G1_UA.bam',
+                   'G2_G2.bam', 'G2_UA.bam'.
+                   'G1_G2.bam', 'UA_UA.bam']))
+        expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
+            ext = ['SNPsplit_report.txt', 'SNPsplit_sort.txt'])
     params:
         outdir = 'dat/snpsplit/'
     group:
@@ -626,15 +625,6 @@ rule mergeSNPsplit:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools merge -n {output} {input} &> {log}'
-
-
-rule aggregateSNPsplit:
-    input:
-        expand('dat/snpsplit/merged/{sample}.hic.bam', sample=SAMPLES)
-    output:
-        touch(temp('dat/snpsplit/.tmp-snpsplit'))
-    group:
-        'SNPsplit' if config['groupJobs'] else 'aggregateSNPsplit'
 
 
 def splitInput(wc):
@@ -943,8 +933,7 @@ rule detectLoops:
     output:
         'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}.bedgraph'
     params:
-        minLoop = 5000,
-        maxLoop = 1000000,
+        maxLoop = 2000000,
         windowSize = 10,
         peakWidth = 6,
         pValuePre = 0.05,
@@ -960,7 +949,6 @@ rule detectLoops:
         THREADS
     shell:
         'hicDetectLoops --matrix {input} --outFileName {output} '
-        '--minLoopDistance {params.minLoop} '
         '--maxLoopDistance {params.maxLoop} '
         '--windowSize {params.windowSize} '
         '--peakWidth {params.peakWidth} '
