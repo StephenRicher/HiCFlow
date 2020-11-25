@@ -1640,19 +1640,23 @@ if not ALLELE_SPECIFIC:
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            recal_table = 'dat/gatk/baseRecalibrator/{cell_type}.recal.table'
+            'dat/gatk/baseRecalibrator/{cell_type}-{region}.recal.table'
         params:
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir'],
             known = known_sites(config['gatk']['all_known']),
             extra = ''
         log:
-            'logs/gatk/baseRecalibrator/{cell_type}.log'
+            'logs/gatk/baseRecalibrator/{cell_type}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
              'gatk BaseRecalibrator {params.extra} {params.known} '
              '--input {input.bam} --reference {input.ref} '
-             '--output {output.recal_table} '
+             '--intervals {params.chr}:{params.start}-{params.end} '
+             '--output {output} '
              '--sequence-dictionary {input.ref_dict} '
              '--tmp-dir {params.tmp} &> {log}'
 
@@ -1666,12 +1670,15 @@ if not ALLELE_SPECIFIC:
             ref_dict = rules.createSequenceDictionary.output,
             recal_table = rules.baseRecalibrator.output
         output:
-            'dat/mapped/mergeByCell/{cell_type}.recalibrated.bam'
+            'dat/mapped/mergeByCell/{cell_type}-{region}.recalibrated.bam'
         params:
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir'],
             extra = ''
         log:
-            'logs/gatk/applyBQSR/{cell_type}.log'
+            'logs/gatk/applyBQSR/{cell_type}-{region}.log'
         threads:
             THREADS
         conda:
@@ -1679,6 +1686,7 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk ApplyBQSR {params.extra} '
             '--input {input.bam} --reference {input.ref} '
+            '--intervals {params.chr}:{params.start}-{params.end} '
             '--bqsr-recal-file {input.recal_table} --output {output} '
             '--tmp-dir {params.tmp} &> {log}'
 
@@ -1696,7 +1704,6 @@ if not ALLELE_SPECIFIC:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region],
             end = lambda wc: REGIONS['end'][wc.region],
-            intervals = config['regions'],
             java_opts = '-Xmx6G',
             min_prune = 2, # Increase to speed up
             downsample = 50, # Decrease to speed up
@@ -1801,7 +1808,6 @@ if not ALLELE_SPECIFIC:
             'gatk SelectVariants --reference {input.ref} '
             '--variant {input.vcf} --select-type-to-include {wildcards.mode} '
             '--tmp-dir {params.tmp} --output {output} &> {log}'
-
 
 
     rule variantRecalibratorSNPs:
