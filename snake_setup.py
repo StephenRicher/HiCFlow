@@ -117,7 +117,6 @@ def get_grouping(samples):
     cell_types = {}
     for cell in samples['cell_type']:
         cell_types[cell] = list(samples.xs(cell, level=0)['sample'].unique())
-        cell_types[cell].extend(list(samples.xs(cell, level=0)['group'].unique()))
 
     groups = {}
     for group in samples['group']:
@@ -165,8 +164,6 @@ def get_allele_groupings(samples):
     allele_groups = {}
     allele_samples = []
     for sample in samples:
-        if sample.count('-') == 1:
-            continue
         sample = sample.split('-')
         group = sample[0]
         rep = sample[1]
@@ -189,14 +186,13 @@ def processRestriction(samplesFile, restrictionSeqs):
         .apply(lambda x: '-'.join(x), axis = 1))
 
     restrictionSeqsAdapt = {}
-    for type in ['group', 'sample']:
-        for name in samples[type].unique():
-            experiment = samples.loc[samples[type] == name, 'experiment'].to_list()[0]
-            try:
-                restrictionSeqsAdapt[name] = restrictionSeqs[experiment]
-            except KeyError:
-                sys.exit(f'No restriction sequences defined '
-                         f'for experiment {experiment}.')
+    for sample in samples['sample'].unique():
+        experiment = samples.loc[samples['sample'] == sample, 'experiment'].to_list()[0]
+        try:
+            restrictionSeqsAdapt[sample] = restrictionSeqs[experiment]
+        except KeyError:
+            sys.exit(f'No restriction sequences defined '
+                     f'for experiment {experiment}.')
     return restrictionSeqsAdapt
 
 
@@ -217,15 +213,10 @@ def addRestrictionAllle(restrictionSeqs):
     """ Add allele specific sample to restriction seq dictionary """
     alleleREseqs = restrictionSeqs.copy()
     for sample, REs in restrictionSeqs.items():
-        if '-' in sample:
-            group, rep = sample.split('-')
-            for allele in ['a1', 'a2']:
-                alleleSample = f'{group}_{allele}-{rep}'
-                alleleREseqs[alleleSample] = REs
-        else:
-            for allele in ['a1', 'a2']:
-                alleleSample = f'{sample}_{allele}'
-                alleleREseqs[alleleSample] = REs
+        group, rep = sample.split('-')
+        for allele in ['a1', 'a2']:
+            alleleSample = f'{group}_{allele}-{rep}'
+            alleleREseqs[alleleSample] = REs
     return alleleREseqs
 
 

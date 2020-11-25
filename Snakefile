@@ -676,7 +676,7 @@ def getRestSites(wildcards):
     """ Retrieve restSite files associated with sample wildcard """
 
     try:
-        sample = wildcards.all
+        sample = wildcards.sample
         if ALLELE_SPECIFIC:
             sample = allele2sample(sample)
     except AttributeError:
@@ -692,7 +692,7 @@ def getRestSites(wildcards):
 
 def getRestrictionSeqs(wc):
     enzymes = ''
-    for enzyme in restrictionSeqs[wc.all].values():
+    for enzyme in restrictionSeqs[wc.sample].values():
         enzyme = enzyme.replace('^', '')
         enzymes += f'{enzyme} '
     return enzymes
@@ -700,7 +700,7 @@ def getRestrictionSeqs(wc):
 
 def getDanglingSequences(wc):
     danglingSequences = ''
-    for enzyme in restrictionSeqs[wc.all].values():
+    for enzyme in restrictionSeqs[wc.sample].values():
         sequence = enzyme.replace('^', '')
         cutIndex = enzyme.index('^')
         danglingSequence = sequence[cutIndex:len(sequence) - cutIndex]
@@ -708,34 +708,14 @@ def getDanglingSequences(wc):
     return danglingSequences
 
 
-rule sumReplicates:
-    input:
-        lambda wc: expand(
-            'dat/mapped/split/{group}-{rep}-{{read}}.bam',
-            group=wc.group, rep=GROUPS[wc.group])
-    output:
-        'dat/mapped/split/{group}-{read}.bam'
-    params:
-        # Add '/' to path if not present
-        tmpPrefix = os.path.join(config['tmpdir'], '')
-    group:
-        'processHiC'
-    log:
-        'logs/sumReplicates/{group}-{read}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools collate -O {input} {params.tmpPrefix} > {output} 2> {log}'
-
-
 rule buildBaseMatrix:
     input:
-        bams = expand('dat/mapped/split/{{all}}-{read}.bam', read=READS),
+        bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=READS),
         restSites = getRestSites
     output:
-        hic = f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}.h5',
-        bam = 'dat/matrix/{region}/{all}-{region}.bam',
-        qc = directory(f'qc/hicexplorer/{{all}}-{{region}}.{BASE_BIN}_QC')
+        hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
+        bam = 'dat/matrix/{region}/{sample}-{region}.bam',
+        qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}_QC')
     params:
         bin = BASE_BIN,
         chr = lambda wc: REGIONS['chr'][wc.region],
@@ -752,7 +732,7 @@ rule buildBaseMatrix:
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
     log:
-        'logs/buildBaseMatrix/{all}-{region}.log'
+        'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
         4 if THREADS > 4 else THREADS
     conda:
@@ -791,21 +771,39 @@ rule mergeValidHiC:
 
 rule mergeBins:
     input:
-        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}.h5'
+        f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5'
     output:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.h5'
     params:
         bin = config['binsize'],
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     group:
         'processHiC'
     log:
-        'logs/mergeBins/{all}-{region}-{bin}.log'
+        'logs/mergeBins/{sample}-{region}-{bin}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
         '--outFileName {output} &> {log} || touch {output}'
+
+
+rule sumReplicates:
+    input:
+        lambda wc: expand(
+            'dat/matrix/{{region}}/{{bin}}/raw/{group}-{rep}-{{region}}-{{bin}}.h5',
+            group=wc.group, rep=GROUPS[wc.group])
+    output:
+        'dat/matrix/{region}/{bin}/raw/{group}-{region}-{bin}.h5'
+    group:
+        'processHiC'
+    log:
+        'logs/sumReplicates/{group}-{bin}-{region}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicSumMatrices --matrices {input} --outFileName {output} '
+        '&> {log} || touch {output}'
 
 
 rule IceMatrix:
@@ -1184,6 +1182,23 @@ rule plotHiC:
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
+
+
+rule mergeBamByReplicate:
+    input:
+        lambda wildcards: expand(
+            'dat/matrix/{{region}}/{group}-{rep}-{{region}}.bam',
+            group = wildcards.group, rep = GROUPS[wildcards.group])
+    output:
+        'dat/matrix/{region}/{group}-{region}.bam'
+    log:
+        'logs/mergeBamByReplicate/{region}/{group}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools merge -@ {threads} {output} {input} 2> {log}'
 
 
 rule reformatPre:
