@@ -165,6 +165,8 @@ def get_allele_groupings(samples):
     allele_groups = {}
     allele_samples = []
     for sample in samples:
+        if sample.count('-') == 1:
+            continue
         sample = sample.split('-')
         group = sample[0]
         rep = sample[1]
@@ -215,10 +217,15 @@ def addRestrictionAllle(restrictionSeqs):
     """ Add allele specific sample to restriction seq dictionary """
     alleleREseqs = restrictionSeqs.copy()
     for sample, REs in restrictionSeqs.items():
-        group, rep = sample.split('-')
-        for allele in ['a1', 'a2']:
-            alleleSample = f'{group}_{allele}-{rep}'
-            alleleREseqs[alleleSample] = REs
+        if '-' in sample:
+            group, rep = sample.split('-')
+            for allele in ['a1', 'a2']:
+                alleleSample = f'{group}_{allele}-{rep}'
+                alleleREseqs[alleleSample] = REs
+        else:
+            for allele in ['a1', 'a2']:
+                alleleSample = f'{sample}_{allele}'
+                alleleREseqs[alleleSample] = REs
     return alleleREseqs
 
 
