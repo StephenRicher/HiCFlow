@@ -145,6 +145,8 @@ preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc']
 HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
             'qc/hicup/.tmp.aggregatehicupTruncate',
+            expand('dat/matrix/{region}/.tmp.mergeBins',
+                region=regionBin.keys()),
             expand('plots/{region}/.tmp.aggregateProcessHiC',
                 region=regionBin.keys())]
 
@@ -778,7 +780,7 @@ rule mergeBins:
         bin = config['binsize'],
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     group:
-        'processHiC'
+        'mergeBins'
     log:
         'logs/mergeBins/{sample}-{region}-{bin}.log'
     conda:
@@ -786,6 +788,16 @@ rule mergeBins:
     shell:
         'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
         '--outFileName {output} &> {log} || touch {output}'
+
+
+rule aggregateMergeBins:
+    input:
+        expand('dat/matrix/{{region}}/{bin}/raw/{sample}-{{region}}-{bin}.h5',
+            bin=config['binsize'], sample=SAMPLES)
+    output:
+        touch(temp('dat/matrix/{region}/.tmp.mergeBins'))
+    group:
+        'mergeBins' if config['groupJobs'] else 'aggregateTarget'
 
 
 rule sumReplicates:
