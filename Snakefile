@@ -800,11 +800,22 @@ rule aggregateMergeBins:
         'mergeBins' if config['groupJobs'] else 'aggregateTarget'
 
 
+def gatherMatrices(wc):
+    """ Gather all replicates with non-zero file size. """
+
+    allMatrices = expand(
+        'dat/matrix/{region}/{bin}/raw/{group}-{rep}-{region}-{bin}.h5',
+        region=wc.region, bin=wc.bin, group=wc.group, rep=GROUPS[wc.group])
+    nonZeroMatrices = []
+    for matrix in allMatrices:
+        if os.path.exists(matrix) and os.stat(matrix).st_size > 0:
+            nonZeroMatrices.append(matrix)
+    return nonZeroMatrices
+
+
 rule sumReplicates:
     input:
-        lambda wc: expand(
-            'dat/matrix/{{region}}/{{bin}}/raw/{group}-{rep}-{{region}}-{{bin}}.h5',
-            group=wc.group, rep=GROUPS[wc.group])
+        gatherMatrices
     output:
         'dat/matrix/{region}/{bin}/raw/{group}-{region}-{bin}.h5'
     group:
