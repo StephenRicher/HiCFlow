@@ -815,7 +815,10 @@ def gatherMatrices(wc):
 
 rule sumReplicates:
     input:
-        gatherMatrices
+        lambda wc: expand(
+            'dat/matrix/{region}/{bin}/raw/{group}-{rep}-{region}-{bin}.h5',
+            region=wc.region, bin=wc.bin, group=wc.group, rep=GROUPS[wc.group]),
+        nonZero = gatherMatrices
     output:
         'dat/matrix/{region}/{bin}/raw/{group}-{region}-{bin}.h5'
     group:
@@ -825,7 +828,7 @@ rule sumReplicates:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicSumMatrices --matrices {input} --outFileName {output} '
+        'hicSumMatrices --matrices {input.nonZero} --outFileName {output} '
         '&> {log} || touch {output}'
 
 
