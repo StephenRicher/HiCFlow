@@ -64,7 +64,9 @@ default_config = {
          'true_indel' :  None         ,
          'known' :       None         ,
          'all_known':    None         ,},
-    'binsize':           [5000, 10000],
+    'resolution':
+        {'base':          5000        ,
+         'bins':         [5000, 10000],},
     'plot_coordinates':  None,
     'fastq_screen':      None,
     'phase':             True,
@@ -79,9 +81,7 @@ config = set_config(config, default_config)
 workdir: config['workdir']
 THREADS = config['threads']
 READS = ['R1', 'R2']
-BINS = config['binsize']
-BASE_BIN = BINS[0]
-
+BASE_BIN = config['resolution']['base']
 # Read path to samples in pandas
 samples = load_samples(config['data'])
 
@@ -94,7 +94,7 @@ restrictionSeqs = processRestriction(config['data'], config['restrictionSeqs'])
 unpackedRestriction = unpackRestrictionSeqs(config['restrictionSeqs'])
 
 # Remove region-binSize combinations with too few bins
-regionBin = filterRegions(REGIONS, BINS, nbins=config['HiCParams']['minBins'])
+regionBin = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
 
 if config['phased_vcf']:
     GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
@@ -143,7 +143,8 @@ COORDS = load_coords([config['plot_coordinates'], config['regions']])
 
 preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc']
-HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
+HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep',
+             bin=config['resolution']['bins']),
             'qc/hicup/.tmp.aggregatehicupTruncate',
             expand('plots/{region}/.tmp.aggregateProcessHiC',
                 region=regionBin.keys())]
@@ -806,7 +807,6 @@ rule mergeBins:
     output:
         'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
     params:
-        bin = config['binsize'],
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     group:
         'processHiC' if config['groupJobs'] else 'mergeBins'
@@ -1257,7 +1257,7 @@ rule juicerPre:
         'UCSCcompatible/{region}/{all}-{region}.hic'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
-        resolutions = ','.join([str(bin) for bin in BINS])
+        resolutions = ','.join([str(bin) for bin in config['resolution']['bins']])
     group:
         'bam2hic'
     log:

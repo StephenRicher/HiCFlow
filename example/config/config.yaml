@@ -25,12 +25,14 @@ phase : True
 # The HiCFlow phasing pipeline (see above) outputs a phased VCF for each cell
 # type which is valid input here.
 phased_vcf:
-    #S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
+    S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
 
 # List of binsizes to analyse HiC data at different resolutions.
 # The first binsize defines the base resolution, all subsequence bin sizes
 # must be whole divisible by the base bin size e.g. [1000, 1500] is invalid.
-binsize : [1000, 3000]
+resolution:
+    base : 1000
+    bins : [1000, 3000]
 
 # Parameters for cutadapt - see https://cutadapt.readthedocs.io/en/stable/guide.html
 cutadapt:
