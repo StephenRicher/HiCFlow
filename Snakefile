@@ -145,8 +145,6 @@ preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc']
 HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep', bin=BINS),
             'qc/hicup/.tmp.aggregatehicupTruncate',
-            expand('dat/matrix/{region}/.tmp.mergeBins',
-                region=regionBin.keys()),
             expand('plots/{region}/.tmp.aggregateProcessHiC',
                 region=regionBin.keys())]
 
@@ -780,7 +778,7 @@ rule mergeBins:
         bin = config['binsize'],
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     group:
-        'mergeBins'
+        'processHiC' if config['groupJobs'] else 'mergeBins'
     log:
         'logs/mergeBins/{sample}-{region}-{bin}.log'
     conda:
@@ -790,45 +788,21 @@ rule mergeBins:
         '--outFileName {output} &> {log} || touch {output}'
 
 
-rule aggregateMergeBins:
-    input:
-        expand('dat/matrix/{{region}}/{bin}/raw/{sample}-{{region}}-{bin}.h5',
-            bin=config['binsize'], sample=SAMPLES)
-    output:
-        touch(temp('dat/matrix/{region}/.tmp.mergeBins'))
-    group:
-        'mergeBins' if config['groupJobs'] else 'aggregateTarget'
-
-
-def gatherMatrices(wc):
-    """ Gather all replicates with non-zero file size. """
-
-    allMatrices = expand(
-        'dat/matrix/{region}/{bin}/raw/{group}-{rep}-{region}-{bin}.h5',
-        region=wc.region, bin=wc.bin, group=wc.group, rep=GROUPS[wc.group])
-    nonZeroMatrices = []
-    for matrix in allMatrices:
-        if os.path.exists(matrix) and os.stat(matrix).st_size > 0:
-            nonZeroMatrices.append(matrix)
-    return nonZeroMatrices
-
-
 rule sumReplicates:
     input:
-        lambda wc: expand(
-            'dat/matrix/{region}/{bin}/raw/{group}-{rep}-{region}-{bin}.h5',
-            region=wc.region, bin=wc.bin, group=wc.group, rep=GROUPS[wc.group]),
-        nonZero = gatherMatrices
+        lambda wildcards: expand(
+            'dat/matrix/{{region}}/{{bin}}/raw/{group}-{rep}-{{region}}-{{bin}}.h5',
+            group=wildcards.group, rep=GROUPS[wildcards.group])
     output:
         'dat/matrix/{region}/{bin}/raw/{group}-{region}-{bin}.h5'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'sumReplicates'
     log:
         'logs/sumReplicates/{group}-{bin}-{region}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicSumMatrices --matrices {input.nonZero} --outFileName {output} '
+        'hicSumMatrices --matrices {input} --outFileName {output} '
         '&> {log} || touch {output}'
 
 
@@ -842,7 +816,7 @@ rule IceMatrix:
         iternum = 1000,
         upper_threshold = 5
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'IceMatrix'
     log:
         'logs/IceMatrix/{all}-{region}-{bin}.log'
     conda:
@@ -861,7 +835,7 @@ rule distanceNormalise:
     params:
         method = 'obs_exp'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'distanceNormalise'
     log:
         'logs/distanceNormalise/{all}-{region}-{bin}.log'
     conda:
@@ -884,7 +858,7 @@ rule plotMatrix:
         dpi = 600,
         colour = 'YlGn'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'plotMatrix'
     log:
         'logs/plotMatrix/{all}-{region}-{bin}.log'
     conda:
@@ -917,7 +891,7 @@ rule TadInsulation:
         max_depth = lambda wc: int(wc.bin) * 10,
         prefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'TadInsulation'
     threads:
         THREADS
     log:
@@ -945,7 +919,7 @@ rule detectLoops:
         pValue = 0.05,
         peakInter = 5
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'detectLoops'
     log:
         'logs/detectLoops/{all}-{region}-{bin}.log'
     conda:
@@ -973,7 +947,7 @@ rule hicPCA:
         method = "dist_norm",
         format = 'bedgraph'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'hicPCA'
     log:
         'logs/hicPCA/{all}-{region}-{bin}.log'
     conda:
@@ -993,7 +967,7 @@ rule fixBedgraph:
     params:
         pos = lambda wc: REGIONS['end'][wc.region]
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'hicPCA'
     log:
         'logs/fixBedgraph/{all}-{region}-{bin}.log'
     conda:
@@ -1009,7 +983,7 @@ rule reformatHomer:
     output:
         'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.gz'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'reformatMatrices'
     log:
         'logs/reformatHomer/{all}-{region}-{bin}-{method}.log'
     conda:
@@ -1025,7 +999,7 @@ rule reformatNxN3p:
     output:
         'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.nxnp3.tsv'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'reformatMatrices'
     log:
         'logs/reformatNxN3p/{sample}-{region}-{bin}.log'
     conda:
@@ -1089,7 +1063,7 @@ rule reformatNxN:
     output:
         'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.nxn.tsv'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'OnTAD'
     log:
         'logs/reformatNxN/{region}/{bin}/{all}.log'
     conda:
@@ -1110,7 +1084,7 @@ rule OnTAD:
         length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'OnTAD'
     log:
         'logs/OnTAD/{region}/{bin}/{all}.log'
     shell:
@@ -1126,7 +1100,7 @@ rule reformatLinks:
     params:
         start = lambda wc: REGIONS['start'][wc.region]
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'OnTAD'
     log:
         'logs/reformatLinks/{region}/{bin}/{all}.log'
     conda:
@@ -1160,7 +1134,7 @@ rule createConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = config['colourmap']
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'plotHiC'
     conda:
         f'{ENVS}/python3.yaml'
     log:
@@ -1195,7 +1169,7 @@ rule plotHiC:
         title = '"{group} : {region} at {bin} bin size"',
         dpi = 600
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'plotHiC'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
@@ -1295,7 +1269,7 @@ rule straw:
         start = lambda wc: REGIONS['start'][wc.region],
         end = lambda wc: REGIONS['end'][wc.region]
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'straw'
     log:
         'logs/straw/{region}/{bin}/{all}.log'
     conda:
@@ -1323,7 +1297,7 @@ rule HiCcompare:
         end = lambda wc: REGIONS['end'][wc.region],
         fdr = config['HiCcompare']['fdr']
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1355,7 +1329,7 @@ rule multiHiCcompare:
         end = lambda wc: REGIONS['end'][wc.region],
         fdr = config['HiCcompare']['fdr']
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1375,7 +1349,7 @@ rule applyMedianFilter:
     params:
         size = config['compareMatrices']['size']
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/applyMedianFilter/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1394,7 +1368,7 @@ rule hicCompareBedgraph:
     params:
         maxDistance = config['compareMatrices']['maxDistance']
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/hicCompareBedgraph/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1411,7 +1385,7 @@ rule homerToH5:
     output:
         'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5'
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.log'
     conda:
@@ -1431,7 +1405,7 @@ rule filterHiCcompare:
         p_value = config['HiCcompare']['fdr'],
         log_fc = config['HiCcompare']['logFC'],
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/filterHiCcompare/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1456,7 +1430,7 @@ rule createCompareConfig:
         vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
         vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
     group:
-        'processHiC'
+        'processHiC' if config['groupJobs'] else 'HiCcompare'
     log:
         'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}-{set}.log'
     conda:
