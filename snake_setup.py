@@ -117,6 +117,7 @@ def get_grouping(samples):
     cell_types = {}
     for cell in samples['cell_type']:
         cell_types[cell] = list(samples.xs(cell, level=0)['sample'].unique())
+        cell_types[cell].extend(list(samples.xs(cell, level=0)['group'].unique()))
 
     groups = {}
     for group in samples['group']:
@@ -186,13 +187,14 @@ def processRestriction(samplesFile, restrictionSeqs):
         .apply(lambda x: '-'.join(x), axis = 1))
 
     restrictionSeqsAdapt = {}
-    for sample in samples['sample'].unique():
-        experiment = samples.loc[samples['sample'] == sample, 'experiment'].to_list()[0]
-        try:
-            restrictionSeqsAdapt[sample] = restrictionSeqs[experiment]
-        except KeyError:
-            sys.exit(f'No restriction sequences defined '
-                     f'for experiment {experiment}.')
+    for type in ['group', 'sample']:
+        for name in samples[type].unique():
+            experiment = samples.loc[samples[type] == name, 'experiment'].to_list()[0]
+            try:
+                restrictionSeqsAdapt[name] = restrictionSeqs[experiment]
+            except KeyError:
+                sys.exit(f'No restriction sequences defined '
+                         f'for experiment {experiment}.')
     return restrictionSeqsAdapt
 
 
