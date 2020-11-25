@@ -769,11 +769,24 @@ rule mergeValidHiC:
         'samtools merge -@ {threads} {output} {input} 2> {log}'
 
 
+def validMatrices(wc):
+    """ Remove empty files which break sum replicates. """
+    matrices = []
+    allMatrices = expand(
+        'dat/matrix/{region}/base/raw/{group}-{rep}-{region}.{bin}.h5',
+        region=wc.region, group=wc.group, rep=GROUPS[wc.group], bin=BASE_BIN)
+    for matrix in allMatrices:
+        if os.path.exists(matrix) and os.path.getsize(matrix) > 0:
+            matrices.append(matrix)
+    return matrices
+
+
 rule sumReplicates:
     input:
         lambda wc: expand(
             'dat/matrix/{region}/base/raw/{group}-{rep}-{region}.{bin}.h5',
-            region=wc.region, group=wc.group, rep=GROUPS[wc.group], bin=BASE_BIN)
+            region=wc.region, group=wc.group, rep=GROUPS[wc.group], bin=BASE_BIN),
+        nonEmpty = validMatrices
     output:
         f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}.h5'
     group:
@@ -783,7 +796,7 @@ rule sumReplicates:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicSumMatrices --matrices {input} --outFileName {output} '
+        'hicSumMatrices --matrices {input.nonEmpty} --outFileName {output} '
         '&> {log} || touch {output}'
 
 
