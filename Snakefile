@@ -769,41 +769,41 @@ rule mergeValidHiC:
         'samtools merge -@ {threads} {output} {input} 2> {log}'
 
 
+rule sumReplicates:
+    input:
+        lambda wc: expand(
+            'dat/matrix/{region}/base/raw/{group}-{rep}-{region}.{bin}.h5',
+            region=wc.region, group=wc.group, rep=GROUPS[wc.group], bin=BASE_BIN)
+    output:
+        f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}.h5'
+    group:
+        'processHiC' if config['groupJobs'] else 'sumReplicates'
+    log:
+        'logs/sumReplicates/{group}-{region}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicSumMatrices --matrices {input} --outFileName {output} '
+        '&> {log} || touch {output}'
+
+
 rule mergeBins:
     input:
-        f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5'
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}.h5'
     output:
-        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
     params:
         bin = config['binsize'],
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     group:
         'processHiC' if config['groupJobs'] else 'mergeBins'
     log:
-        'logs/mergeBins/{sample}-{region}-{bin}.log'
+        'logs/mergeBins/{all}-{region}-{bin}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
         '--outFileName {output} &> {log} || touch {output}'
-
-
-rule sumReplicates:
-    input:
-        lambda wildcards: expand(
-            'dat/matrix/{{region}}/{{bin}}/raw/{group}-{rep}-{{region}}-{{bin}}.h5',
-            group=wildcards.group, rep=GROUPS[wildcards.group])
-    output:
-        'dat/matrix/{region}/{bin}/raw/{group}-{region}-{bin}.h5'
-    group:
-        'processHiC' if config['groupJobs'] else 'sumReplicates'
-    log:
-        'logs/sumReplicates/{group}-{bin}-{region}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicSumMatrices --matrices {input} --outFileName {output} '
-        '&> {log} || touch {output}'
 
 
 rule IceMatrix:
