@@ -2,6 +2,8 @@
 
 import sys
 import pandas as pd
+import itertools
+
 
 class ConfigurationError(Exception):
     pass
@@ -77,54 +79,183 @@ def filterRegions(regions, binSizes, nbins=100):
     return regionBin
 
 
-def load_samples(samples_file):
+class HiCSamples:
 
-    samples = pd.read_table(
-        samples_file, sep = ',', dtype = {'rep' : str},
-        usecols=['cell_type', 'group', 'rep', 'read', 'path'])
+    def __init__(self, samplesFile: str, restrictionSeqs: dict, alleleSpecific: bool, sep='\s+'):
+        self.alleleSpecific = alleleSpecific
+        self.table = self.readSamples(samplesFile, sep=sep)
+        self.experimentRestriction = restrictionSeqs
 
-    # Validate read file input with wildcard definitions
-    if not samples['cell_type'].str.match(r'[^-\.\/]+').all():
-        sys.exit(f'Invalid cell_type definition in {samples_file}.\n'
-            'Cell types must not contain the following characters: - . /')
-    if not samples['group'].str.match(r'[^-\.\/a]+').all():
-        sys.exit(f'Invalid group definition in {samples_file}.\n'
-            'Groups must not contain the following characters: - / . a')
-    if not samples['rep'].str.match(r'\d+').all():
-        sys.exit(f'Invalid replicate definition in {samples_file}.\n'
-            'Replicates must only contain integers.')
-    if not samples['read'].str.match(r'R[12]').all():
-        sys.exit(f'Invalid read definition in {samples_file}.\n'
-            'Reads must only be either "R1" or "R2".')
+    def readSamples(self, samplesFile, sep='\s+'):
+        table = pd.read_table(
+            samplesFile, sep=sep, dtype={'rep': str},
+            usecols=['experiment', 'cell_type', 'group', 'rep', 'R1', 'R2'])
 
-    # Define single and sample names from definitions.
-    samples['single'] = (samples[['group', 'rep', 'read']]
-        .apply(lambda x: '-'.join(x), axis = 1))
-    samples['sample'] = (samples[['group', 'rep']]
-        .apply(lambda x: '-'.join(x), axis = 1))
-    # Ensure no duplicate names
-    if samples['single'].duplicated().all():
-        sys.exit(f'Duplicate sample name definitions in {samples_file}.\n')
+        # Validate read file input with wildcard definitions
+        if not table['cell_type'].str.match(r'[^-\.\/]+').all():
+            raise ValueError(
+                'Cell types must not contain the following characters: - . /')
+        if not table['group'].str.match(r'[^-\.\/]+').all():
+            raise ValueError(
+                'Groups must not contain the following characters: - . /')
+        if (table.groupby('group')['cell_type'].nunique() > 1).any():
+            raise ValueError(
+                'An experimental group must contain only 1 cell type.')
 
-    samples = samples.set_index(
-        ['cell_type', 'group', 'sample', 'single'], drop = False)
+        table['sample'] = (table[['group', 'rep']].apply(lambda x: '-'.join(x), axis=1))
 
-    return samples
+        # Ensure no duplicate names
+        if table['sample'].duplicated().any():
+            raise ValueError(f'Duplicate sample name definitions in {samplesFile}.')
+
+        return table
 
 
-def get_grouping(samples):
+    def cellTypes(self):
+        """ Return dict mapping cellType to sample """
+        return self.table.groupby('cell_type')['sample'].apply(list).to_dict()
 
-    cell_types = {}
-    for cell in samples['cell_type']:
-        cell_types[cell] = list(samples.xs(cell, level=0)['sample'].unique())
 
-    groups = {}
-    for group in samples['group']:
-        groups[group] = list(samples.xs(group, level=1)['rep'].unique())
-    # Extract sample names
-    sample_list = list(samples['sample'].unique())
+    def originalGroups(self):
+        """ Return unmodified group-rep dictionary """
+        return self.table.groupby('group')['rep'].apply(list).to_dict()
 
-    return sample_list, groups, cell_types
+
+    def groups(self):
+        """ Return group-rep dictionary """
+        if self.alleleSpecific:
+            groups = {}
+            for group, reps in self.originalGroups().items():
+                for alleleGroup in self.group2Allele(group):
+                    groups[alleleGroup] = reps
+        else:
+            groups = self.originalGroups()
+        return groups
+
+    def groupName(self, name):
+        """ Return true is name is a group name """
+        return name.count('-') == 0
+
+
+    def originalSamples(self):
+        """ Return unmodified sample list """
+        return self.table['sample']
+
+
+    def allOriginal(self):
+        """ Return all unmodified sample and group names """
+        return list(self.originalSamples()) + list(self.originalGroups().keys())
+
+    def samples(self):
+        """ Return sample list """
+        if self.alleleSpecific:
+            samples = []
+            for sample in self.originalSamples():
+                samples.extend(list(self.sample2Allele(sample)))
+        else:
+            samples = self.originalSamples().to_list()
+        return samples
+
+
+    def groupCompares(self):
+        """ Return list of pairwise group comparison """
+        pairs = itertools.combinations(list(self.groups()), 2)
+        return [f'{i[0]}-vs-{i[1]}' for i in pairs]
+
+    def sampleCompares(self):
+        """ Return list of pairwise sample comparison """
+        pairs = itertools.combinations(self.samples(), 2)
+        return [f'{i[0]}-vs-{i[1]}' for i in pairs]
+
+
+    def sample2Cell(self):
+        """ Return dict mapping sample name to cell type """
+        sampleCell = {}
+        for originalName in self.allOriginal():
+            if self.groupName(originalName):
+                column = 'group'
+                nameConverter = self.group2Allele
+            else:
+                column = 'sample'
+                nameConverter = self.sample2Allele
+            cellType = (self.table
+                .loc[self.table[column] == originalName, 'cell_type'].to_list()[0])
+            nameA1, name2A2 = nameConverter(originalName)
+            # Add sample and allele specific sample names to dictionary
+            for name in [originalName, nameA1, name2A2]:
+                sampleCell[name] = cellType
+        return sampleCell
+
+
+    def sample2Allele(self, sample):
+        """ Convert sample name to allelic sample names """
+        group, rep = sample.split('-')
+        return f'{group}_a1-{rep}', f'{group}_a2-{rep}'
+
+
+    def group2Allele(self, group):
+        """ Convert group name """
+        return f'{group}_a1', f'{group}_a2'
+
+
+    def path(self, sample, read):
+        """ Return path of sample-read """
+        paths = self.table.loc[self.table['sample'] == sample, list(read)]
+        return paths.values.tolist()[0]
+
+
+    def restrictionSeqs(self, removeCut=False, dangling=False):
+        """ Return dict mapping samples to restriction seqs """
+
+        if removeCut and dangling:
+            raise ValueError('Cannot set removeCut and dangling to True.')
+        reSeqs = {}
+        for sample in self.originalSamples():
+            # Get experiment associated with sample
+            experiment = (self.table
+                .loc[self.table['sample'] == sample, 'experiment'].to_list()[0])
+            # Get restriction seqs associated with experiment
+            seqs = self.experimentRestriction[experiment]
+            if dangling:
+                seqs = self.restriction2dangling(seqs)
+            elif removeCut:
+                seqs = self.removeCutSite(seqs)
+            sampleA1, sampleA2 = self.sample2Allele(sample)
+            # Add sample and allele specific sample names to dictionary
+            for name in [sample, sampleA1, sampleA2]:
+                reSeqs[name] = seqs
+        return reSeqs
+
+    def restriction2dangling(self, seqs):
+        """ Convert restriction sequence to dangling sequence """
+        dangling = {}
+        for name, sequence in seqs.items():
+            cutIndex = sequence.index('^')
+            sequence = sequence.replace('^', '')
+            sequence = sequence[cutIndex:len(sequence) - cutIndex]
+            dangling[name] = sequence
+        return dangling
+
+    def removeCutSite(self, seqs):
+        """ Remove caret symbol from restriction sequence """
+        noCut = {}
+        for name, sequence in seqs.items():
+            noCut[name] = sequence.replace('^', '')
+        return noCut
+
+    def restrictionNames(self, removeCut=False):
+        """ Return dict mapping restriction name to sequence """
+        rSeqs = {}
+        for sequences in self.experimentRestriction.values():
+            if removeCut:
+                sequences = self.removeCutSite(sequences)
+            for name, sequence in sequences.items():
+                if name in rSeqs and rSeqs[name] != sequence:
+                    raise ValueError(
+                        f'Sequence of {name} not consistent across experiments.')
+                else:
+                    rSeqs[name] = sequence
+        return rSeqs
 
 
 def load_regions(regions_file):
@@ -157,70 +288,3 @@ def load_coords(files):
                     coords[region] = []
                 coords[region].append(f'{chr}_{start}_{end}')
     return coords
-
-
-def get_allele_groupings(samples):
-
-    allele_groups = {}
-    allele_samples = []
-    for sample in samples:
-        sample = sample.split('-')
-        group = sample[0]
-        rep = sample[1]
-        allele_samples.extend([f'{group}_a1-{rep}', f'{group}_a2-{rep}'])
-        if f'{group}_a1' not in allele_groups:
-            allele_groups[f'{group}_a1'] = []
-        if f'{group}_a2' not in allele_groups:
-            allele_groups[f'{group}_a2'] = []
-        allele_groups[f'{group}_a1'].append(rep)
-        allele_groups[f'{group}_a2'].append(rep)
-
-    return allele_groups, allele_samples
-
-
-def processRestriction(samplesFile, restrictionSeqs):
-    """ Match each sample with the correct set of restriction sequences based
-        on the the experiment asignment. """
-    samples = pd.read_csv(samplesFile, dtype = {'rep' : str})
-    samples['sample'] = (samples[['group', 'rep']]
-        .apply(lambda x: '-'.join(x), axis = 1))
-
-    restrictionSeqsAdapt = {}
-    for sample in samples['sample'].unique():
-        experiment = samples.loc[samples['sample'] == sample, 'experiment'].to_list()[0]
-        try:
-            restrictionSeqsAdapt[sample] = restrictionSeqs[experiment]
-        except KeyError:
-            sys.exit(f'No restriction sequences defined '
-                     f'for experiment {experiment}.')
-    return restrictionSeqsAdapt
-
-
-def unpackRestrictionSeqs(restrictionSeqs):
-    unpackedRestrictionSeqs = {}
-    for REpair in restrictionSeqs.values():
-        for name, seq in REpair.items():
-            if name in unpackedRestrictionSeqs:
-                if unpackedRestrictionSeqs[name] != seq:
-                    sys.exit(f'Sequence of {name} must be'
-                              'consistent across experiments.')
-            else:
-                unpackedRestrictionSeqs[name] = seq
-    return unpackedRestrictionSeqs
-
-
-def addRestrictionAllle(restrictionSeqs):
-    """ Add allele specific sample to restriction seq dictionary """
-    alleleREseqs = restrictionSeqs.copy()
-    for sample, REs in restrictionSeqs.items():
-        group, rep = sample.split('-')
-        for allele in ['a1', 'a2']:
-            alleleSample = f'{group}_{allele}-{rep}'
-            alleleREseqs[alleleSample] = REs
-    return alleleREseqs
-
-
-def allele2sample(sample):
-    """ Convert allele specific sample name to normal sample """
-    group, rep = sample.split('-')
-    return f'{group[:-3]}-{rep}'

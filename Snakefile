@@ -5,9 +5,7 @@ import re
 import sys
 import math
 import tempfile
-import itertools
-import pandas as pd
-from snake_setup import set_config, load_samples, get_grouping, load_regions, get_allele_groupings, load_coords, filterRegions, processRestriction, unpackRestrictionSeqs, addRestrictionAllle, allele2sample
+from snake_setup import set_config, load_regions, load_coords, filterRegions, HiCSamples
 
 BASE = workflow.basedir
 
@@ -80,46 +78,30 @@ config = set_config(config, default_config)
 
 workdir: config['workdir']
 THREADS = config['threads']
-READS = ['R1', 'R2']
 BASE_BIN = config['resolution']['base']
-# Read path to samples in pandas
-samples = load_samples(config['data'])
+ALLELE_SPECIFIC = True if config['phased_vcf'] else False
 
-# Extract groups and replicates.
-ORIGINAL_SAMPLES, ORIGINAL_GROUPS, CELL_TYPES = get_grouping(samples)
-
+HiC = HiCSamples(config['data'], config['restrictionSeqs'], ALLELE_SPECIFIC)
 REGIONS = load_regions(config['regions'])
-
-restrictionSeqs = processRestriction(config['data'], config['restrictionSeqs'])
-unpackedRestriction = unpackRestrictionSeqs(config['restrictionSeqs'])
 
 # Remove region-binSize combinations with too few bins
 regionBin = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
-
-if config['phased_vcf']:
-    GROUPS, SAMPLES = get_allele_groupings(ORIGINAL_SAMPLES)
-    restrictionSeqs = addRestrictionAllle(restrictionSeqs)
-    ALLELE_SPECIFIC = True
-else:
-    SAMPLES = ORIGINAL_SAMPLES
-    GROUPS = ORIGINAL_GROUPS
-    ALLELE_SPECIFIC = False
 
 if config['phase'] and not ALLELE_SPECIFIC:
     if config['gatk']['all_known']:
         PHASE_MODE = 'GATK'
     else:
         PHASE_MODE = 'BCFTOOLS'
-    phase = [expand('phasedVCFs/{cell_type}-phased.vcf',
-        cell_type=list(CELL_TYPES))]
+    phase = [expand('phasedVCFs/{cellType}-phased.vcf',
+        cellType=HiC.cellTypes())]
 else:
     phase = []
     PHASE_MODE = None
 
 wildcard_constraints:
-    cell_type = rf'{"|".join(CELL_TYPES)}',
-    pre_group = rf'{"|".join(ORIGINAL_GROUPS)}',
-    pre_sample = rf'{"|".join(ORIGINAL_SAMPLES)}',
+    cellType = rf'{"|".join(HiC.cellTypes())}',
+    preGroup = rf'{"|".join(HiC.originalGroups())}',
+    preSample = rf'{"|".join(HiC.originalSamples())}',
     region = rf'{"|".join(REGIONS.index)}',
     allele = r'[12]',
     rep = r'\d+',
@@ -128,30 +110,39 @@ wildcard_constraints:
     mode = r'SNP|INDEL',
     set = r'logFC|sig|fdr',
     compare = r'HiCcompare|multiHiCcompare',
-    group = rf'{"|".join(GROUPS)}',
-    group1 = rf'{"|".join(GROUPS)}',
-    group2 = rf'{"|".join(GROUPS)}',
-    sample = rf'{"|".join(SAMPLES)}',
-    all = rf'{"|".join(SAMPLES + list(GROUPS))}'
-
-# Generate list of group comparisons - this avoids self comparison
-COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(GROUPS), 2)]
-SAMPLE_COMPARES = [f'{i[0]}-vs-{i[1]}' for i in itertools.combinations(list(SAMPLES), 2)]
+    group = rf'{"|".join(HiC.groups())}',
+    group1 = rf'{"|".join(HiC.groups())}',
+    group2 = rf'{"|".join(HiC.groups())}',
+    sample = rf'{"|".join(HiC.samples())}',
+    all = rf'{"|".join(HiC.samples() + list(HiC.groups()))}'
 
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords([config['plot_coordinates'], config['regions']])
 
 preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
               'qc/fastqc/.tmp.aggregateFastqc']
-HiC_mode = [expand('qc/hicrep/.tmp.{bin}-hicrep',
-             bin=config['resolution']['bins']),
-            'qc/hicup/.tmp.aggregatehicupTruncate',
-            expand('plots/{region}/.tmp.aggregateProcessHiC',
-                region=regionBin.keys())]
+
+tools = (
+    ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
+    else ['HiCcompare'])
+HiC_mode = ([
+    [expand('qc/hicrep/{region}-{bin}-hicrep.png', region=region,
+        bin=regionBin[region]) for region in regionBin],
+    [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
+        region=region, coords=COORDS[region], set=['logFC', 'sig'],
+        compare=HiC.groupCompares(), bin=regionBin[region],
+        tool=tools) for region in regionBin],
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coords}-{bin}.png',
+        region=region, coords=COORDS[region],
+        group=HiC.groups(), bin=regionBin[region]) for region in regionBin],
+    [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
+        region=region, all=HiC.samples()+list(HiC.groups()),
+        bin=regionBin[region]) for region in regionBin],
+    'qc/hicup/.tmp.aggregatehicupTruncate'])
 
 # Create a per-sample BAM, for each sample, of only valid HiC reads
 if config['createValidBam']:
-    validBAM = [expand('dat/mapped/{sample}-validHiC.bam', sample=SAMPLES)]
+    validBAM = expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
 else:
     validBAM = []
 
@@ -165,14 +156,14 @@ rule all:
 if ALLELE_SPECIFIC:
     rule maskPhased:
         input:
-            genome = lambda wc: config['genome'][wc.cell_type],
-            vcf = lambda wc: config['phased_vcf'][wc.cell_type]
+            genome = lambda wc: config['genome'][wc.cellType],
+            vcf = lambda wc: config['phased_vcf'][wc.cellType]
         output:
-            'dat/genome/masked/{cell_type}.fa'
+            'dat/genome/masked/{cellType}.fa'
         group:
             'prepareGenome'
         log:
-            'logs/maskPhased/{cell_type}.log'
+            'logs/maskPhased/{cellType}.log'
         conda:
             f'{ENVS}/bedtools.yaml'
         shell:
@@ -183,11 +174,13 @@ if ALLELE_SPECIFIC:
 
 rule vcf2SNPsplit:
     input:
-        lambda wc: config['phased_vcf'][wc.cell_type]
+        lambda wc: config['phased_vcf'][wc.cellType]
     output:
-        'snpsplit/{cell_type}-snpsplit.txt'
+        'snpsplit/{cellType}-snpsplit.txt'
+    group:
+        'prepareGenome'
     log:
-        'logs/vcf2SNPsplit/{cell_type}.log'
+        'logs/vcf2SNPsplit/{cellType}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -196,13 +189,13 @@ rule vcf2SNPsplit:
 
 rule bgzipGenome:
     input:
-        lambda wc: config['genome'][wc.cell_type]
+        lambda wc: config['genome'][wc.cellType]
     output:
-        'dat/genome/{cell_type}.fa.gz'
+        'dat/genome/{cellType}.fa.gz'
     group:
         'prepareGenome'
     log:
-        'logs/bgzipGenome/{cell_type}.log'
+        'logs/bgzipGenome/{cellType}.log'
     conda:
         f'{ENVS}/tabix.yaml'
     shell:
@@ -217,7 +210,7 @@ rule indexGenome:
     group:
         'prepareGenome'
     log:
-        'logs/indexGenome/{cell_type}-indexGenome.log'
+        'logs/indexGenome/{cellType}-indexGenome.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -228,13 +221,31 @@ rule getChromSizes:
     input:
         rules.indexGenome.output
     output:
-        'dat/genome/chrom_sizes/{cell_type}.chrom.sizes'
+        'dat/genome/chrom_sizes/{cellType}.chrom.sizes'
     group:
         'prepareGenome'
     log:
-        'logs/getChromSizes/{cell_type}.log'
+        'logs/getChromSizes/{cellType}.log'
     shell:
         'cut -f 1,2 {input} > {output} 2> {log}'
+
+
+rule findRestSites:
+    input:
+        rules.bgzipGenome.output
+    output:
+        'dat/genome/{cellType}-{re}-restSites.bed'
+    params:
+        reSeq = lambda wc: HiC.restrictionNames(removeCut=True)[wc.re]
+    group:
+        'prepareGenome'
+    log:
+        'logs/findRestSites/{cellType}-{re}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicFindRestSite --fasta {input} --searchPattern {params.reSeq} '
+        '--outFile {output} &> {log}'
 
 
 def bowtie2BuildInput(wildcards):
@@ -248,14 +259,14 @@ rule bowtie2Build:
     input:
         bowtie2BuildInput
     output:
-        expand('dat/genome/index/{{cell_type}}.{n}.bt2',
+        expand('dat/genome/index/{{cellType}}.{n}.bt2',
                n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
     params:
-        basename = lambda wc: f'dat/genome/index/{wc.cell_type}'
+        basename = lambda wc: f'dat/genome/index/{wc.cellType}'
     group:
         'prepareGenome'
     log:
-        'logs/bowtie2Build/{cell_type}.log'
+        'logs/bowtie2Build/{cellType}.log'
     conda:
         f'{ENVS}/bowtie2.yaml'
     threads:
@@ -266,44 +277,44 @@ rule bowtie2Build:
 
 rule fastQC:
     input:
-        lambda wc: samples.xs(wc.single, level=3)['path']
+        lambda wc: HiC.path(wc.preSample, [wc.read])
     output:
-        html = 'qc/fastqc/{single}.raw_fastqc.html',
-        zip = 'qc/fastqc/unmod/{single}.raw.fastqc.zip'
+        html = 'qc/fastqc/{preSample}-{read}.raw_fastqc.html',
+        zip = 'qc/fastqc/unmod/{preSample}-{read}.raw.fastqc.zip'
     group:
         'fastqc'
     log:
-        'logs/fastqc/{single}.log'
+        'logs/fastqc/{preSample}-{read}.log'
     wrapper:
         '0.49.0/bio/fastqc'
 
 
 rule reformatFastQC:
     input:
-        'qc/fastqc/unmod/{single}.raw.fastqc.zip'
+        rules.fastQC.output.zip
     output:
-        'qc/fastqc/{single}.raw_fastqc.zip'
+        'qc/fastqc/{preSample}-{read}.raw_fastqc.zip'
     group:
         'fastqc'
     log:
-        'logs/reformatFastQC/{single}.raw.log'
+        'logs/reformatFastQC/{preSample}-{read}.raw.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/modifyFastQC.py {input} {output} '
-        '{wildcards.single} &> {log}'
+        '{wildcards.preSample}-{wildcards.read} &> {log}'
 
 
 rule fastQCTrimmed:
     input:
-        'dat/fastq/trimmed/{single}.trim.fastq.gz'
+        'dat/fastq/trimmed/{preSample}-{read}.trim.fastq.gz'
     output:
-        html = 'qc/fastqc/{single}.trim_fastqc.html',
-        zip = 'qc/fastqc/{single}.trim_fastqc.zip'
+        html = 'qc/fastqc/{preSample}-{read}.trim_fastqc.html',
+        zip = 'qc/fastqc/{preSample}-{read}.trim_fastqc.zip'
     group:
         'fastqc'
     log:
-        'logs/fastqc_trimmed/{single}.log'
+        'logs/fastqc_trimmed/{preSample}-{read}.log'
     wrapper:
         '0.49.0/bio/fastqc'
 
@@ -311,7 +322,8 @@ rule fastQCTrimmed:
 rule aggregateFastqc:
     input:
         expand('qc/fastqc/{sample}-{read}.{type}_fastqc.zip',
-            sample=ORIGINAL_SAMPLES, read=READS, type=['trim', 'raw'])
+            sample=HiC.originalSamples(),
+            read=['R1', 'R2'], type=['trim', 'raw'])
     output:
         touch(temp('qc/fastqc/.tmp.aggregateFastqc'))
     group:
@@ -322,16 +334,16 @@ if config['fastq_screen'] is not None:
 
     rule fastQScreen:
         input:
-            'dat/fastq/trimmed/{single}.trim.fastq.gz'
+            'dat/fastq/trimmed/{preSample}-{read}.trim.fastq.gz'
         output:
-            txt = 'qc/fastq_screen/{single}.fastq_screen.txt',
-            png = 'qc/fastq_screen/{single}.fastq_screen.png'
+            txt = 'qc/fastq_screen/{preSample}-{read}.fastq_screen.txt',
+            png = 'qc/fastq_screen/{preSample}-{read}.fastq_screen.png'
         params:
             fastq_screen_config = config['fastq_screen'],
             subset = 100000,
             aligner = 'bowtie2'
         log:
-            'logs/fastq_screen/{single}.log'
+            'logs/fastq_screen/{preSample}-{read}.log'
         threads:
             THREADS
         wrapper:
@@ -340,11 +352,11 @@ if config['fastq_screen'] is not None:
 
 rule cutadapt:
     input:
-        lambda wc: samples.xs(wc.pre_sample, level=2)['path']
+        lambda wc: HiC.path(wc.preSample, ['R1', 'R2'])
     output:
-        trimmed = [temp('dat/fastq/trimmed/{pre_sample}-R1.trim.fastq.gz'),
-                   temp('dat/fastq/trimmed/{pre_sample}-R2.trim.fastq.gz')],
-        qc = 'qc/cutadapt/unmod/{pre_sample}.cutadapt.txt'
+        trimmed = [temp('dat/fastq/trimmed/{preSample}-R1.trim.fastq.gz'),
+                   temp('dat/fastq/trimmed/{preSample}-R2.trim.fastq.gz')],
+        qc = 'qc/cutadapt/unmod/{preSample}.cutadapt.txt'
     group:
         'cutadapt'
     params:
@@ -356,7 +368,7 @@ rule cutadapt:
         qualityCutoff = config['cutadapt']['qualityCutoff'],
         GCcontent = config['cutadapt']['GCcontent']
     log:
-        'logs/cutadapt/{pre_sample}.log'
+        'logs/cutadapt/{preSample}.log'
     conda:
         f'{ENVS}/cutadapt.yaml'
     threads:
@@ -375,15 +387,15 @@ rule reformatCutadapt:
     input:
         rules.cutadapt.output.qc
     output:
-        'qc/cutadapt/{pre_sample}.cutadapt.txt'
+        'qc/cutadapt/{preSample}.cutadapt.txt'
     group:
         'cutadapt'
     log:
-        'logs/reformatCutadapt/{pre_sample}.log'
+        'logs/reformatCutadapt/{preSample}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/modifyCutadapt.py {wildcards.pre_sample} {input} '
+        '{SCRIPTS}/modifyCutadapt.py {wildcards.preSample} {input} '
         '> {output} 2> {log}'
 
 
@@ -391,18 +403,18 @@ rule hicupTruncate:
     input:
         rules.cutadapt.output.trimmed
     output:
-        truncated = [temp('dat/fastq/truncated/{pre_sample}-R1.trunc.fastq.gz'),
-                     temp('dat/fastq/truncated/{pre_sample}-R2.trunc.fastq.gz')],
-        summary = 'qc/hicup/{pre_sample}-truncate-summary.txt'
+        truncated = [temp('dat/fastq/truncated/{preSample}-R1.trunc.fastq.gz'),
+                     temp('dat/fastq/truncated/{preSample}-R2.trunc.fastq.gz')],
+        summary = 'qc/hicup/{preSample}-truncate-summary.txt'
     params:
-        re1 = lambda wc: list(restrictionSeqs[wc.pre_sample].values())[0],
+        re1 = lambda wc: list(HiC.restrictionSeqs()[wc.preSample].values())[0],
         fill = '--nofill' if config['HiCParams']['nofill'] else ''
     group:
         'hicupTruncate'
     threads:
         2 if THREADS > 2 else THREADS
     log:
-        'logs/hicupTruncate/{pre_sample}.log'
+        'logs/hicupTruncate/{preSample}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
@@ -416,56 +428,41 @@ rule hicupTruncate:
 rule aggregatehicupTruncate:
     input:
         expand('qc/hicup/{sample}-truncate-summary.txt',
-            sample=ORIGINAL_SAMPLES)
+            sample=HiC.originalSamples())
     output:
         touch(temp('qc/hicup/.tmp.aggregatehicupTruncate'))
     group:
         'hicupTruncate' if config['groupJobs'] else 'aggregateTarget'
 
 
-def bowtie2Index(wildcards):
+def bowtie2Index(wc):
     """ Retrieve bowtie2 index associated with sample. """
-
-    for cell_type, samples in CELL_TYPES.items():
-        if wildcards.pre_sample in samples:
-            type = cell_type
-
-    return expand('dat/genome/index/{cell_type}.{n}.bt2',
-        cell_type=type, n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
+    return expand('dat/genome/index/{cellType}.{n}.bt2',
+        cellType=HiC.sample2Cell()[wc.preSample],
+        n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
 
 
-def bowtie2Basename(wildcards):
+def bowtie2Basename(wc):
     """ Retrieve bowtie2 index basename associated with sample. """
+    cellType = HiC.sample2Cell()[wc.preSample]
+    return f'dat/genome/index/{cellType}'
 
-    for cell_type, samples in CELL_TYPES.items():
-        if wildcards.pre_sample in samples:
-            type = cell_type
-
-    return expand('dat/genome/index/{cell_type}', cell_type=type)
-
-
-def getCellType(wc):
-    """ Retrieve cell type associated with sample. """
-
-    for cellType, samples in CELL_TYPES.items():
-        if wc.pre_sample in samples:
-            return cellType
 
 rule bowtie2:
     input:
-        fastq = 'dat/fastq/truncated/{pre_sample}-{read}.trunc.fastq.gz',
+        fastq = 'dat/fastq/truncated/{preSample}-{read}.trunc.fastq.gz',
         bt2_index = bowtie2Index
     output:
-        sam = pipe('dat/mapped/{pre_sample}-{read}.sam'),
-        qc = 'qc/bowtie2/{pre_sample}-{read}.bowtie2.txt'
+        sam = pipe('dat/mapped/{preSample}-{read}.sam'),
+        qc = 'qc/bowtie2/{preSample}-{read}.bowtie2.txt'
     params:
         index = bowtie2Basename,
-        cellType = getCellType,
+        cellType = lambda wc: HiC.sample2Cell()[wc.preSample],
         sensitivity = 'sensitive'
     group:
         'bowtie2'
     log:
-        'logs/bowtie2/{pre_sample}-{read}.log'
+        'logs/bowtie2/{preSample}-{read}.log'
     conda:
         f'{ENVS}/bowtie2.yaml'
     threads:
@@ -480,13 +477,13 @@ rule addReadFlag:
     input:
         rules.bowtie2.output.sam
     output:
-        pipe('dat/mapped/{pre_sample}-{read}-addFlag.sam')
+        pipe('dat/mapped/{preSample}-{read}-addFlag.sam')
     params:
         flag = lambda wc: '0x41' if wc.read == 'R1' else '0x81'
     group:
         'bowtie2'
     log:
-        'logs/addReadFlag/{pre_sample}-{read}.log'
+        'logs/addReadFlag/{preSample}-{read}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -498,11 +495,11 @@ rule sam2bam:
     input:
         rules.addReadFlag.output
     output:
-        temp('dat/mapped/{pre_sample}-{read}-addFlag.bam')
+        temp('dat/mapped/{preSample}-{read}-addFlag.bam')
     group:
         'bowtie2'
     log:
-        'logs/sam2bam/{pre_sample}-{read}.log'
+        'logs/sam2bam/{preSample}-{read}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -511,14 +508,14 @@ rule sam2bam:
 
 rule catBam:
     input:
-        'dat/mapped/{pre_sample}-R1-addFlag.bam',
-        'dat/mapped/{pre_sample}-R2-addFlag.bam'
+        'dat/mapped/{preSample}-R1-addFlag.bam',
+        'dat/mapped/{preSample}-R2-addFlag.bam'
     output:
-        pipe('dat/mapped/{pre_sample}-merged.bam')
+        pipe('dat/mapped/{preSample}-merged.bam')
     group:
         'prepareBAM'
     log:
-        'logs/catBam/{pre_sample}.log'
+        'logs/catBam/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -529,14 +526,14 @@ rule collateBam:
     input:
         rules.catBam.output
     output:
-        pipe('dat/mapped/{pre_sample}-collate.bam')
+        pipe('dat/mapped/{preSample}-collate.bam')
     params:
         # Add '/' to path if not present
         tmpPrefix = os.path.join(config['tmpdir'], '')
     group:
         'prepareBAM'
     log:
-        'logs/collateBam/{pre_sample}.log'
+        'logs/collateBam/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -547,11 +544,11 @@ rule fixmateBam:
     input:
         rules.collateBam.output
     output:
-        temp('dat/mapped/{pre_sample}.fixed.bam')
+        temp('dat/mapped/{preSample}.fixed.bam')
     group:
         'prepareBAM'
     log:
-        'logs/fixmateBam/{pre_sample}.log'
+        'logs/fixmateBam/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
@@ -565,11 +562,11 @@ rule removeUnmapped:
     input:
         rules.fixmateBam.output
     output:
-        temp('dat/mapped/{pre_sample}.hic.bam')
+        temp('dat/mapped/{preSample}.hic.bam')
     group:
         'prepareBAM'
     log:
-        'logs/removeUnmapped/{pre_sample}.log'
+        'logs/removeUnmapped/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
@@ -578,33 +575,29 @@ rule removeUnmapped:
         'samtools view -@ {threads} -b -F 12 {input} > {output} 2> {log}'
 
 
-def SNPsplit_input(wildcards):
+def SNPsplitInput(wc):
     """ Retrieve cell type associated with sample. """
-
-    for cell_type, samples in CELL_TYPES.items():
-        if wildcards.pre_sample in samples:
-            type = cell_type
-
-    return f'snpsplit/{type}-snpsplit.txt'
+    cellType = HiC.sample2Cell()[wc.preSample]
+    return f'snpsplit/{cellType}-snpsplit.txt'
 
 
 rule SNPsplit:
     input:
         bam = rules.removeUnmapped.output,
-        snps = SNPsplit_input
+        snps = SNPsplitInput
     output:
-        temp(expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
+        temp(expand('dat/snpsplit/{{preSample}}.hic.{ext}',
             ext = ['G1_G1.bam', 'G1_UA.bam',
                    'G2_G2.bam', 'G2_UA.bam',
                    'G1_G2.bam', 'UA_UA.bam'])),
-        expand('dat/snpsplit/{{pre_sample}}.hic.{ext}',
+        expand('dat/snpsplit/{{preSample}}.hic.{ext}',
             ext = ['SNPsplit_report.txt', 'SNPsplit_sort.txt'])
     params:
         outdir = 'dat/snpsplit/'
     group:
         'SNPsplit'
     log:
-        'logs/SNPsplit/SNPsplit-{pre_sample}.log'
+        'logs/SNPsplit/SNPsplit-{preSample}.log'
     conda:
         f'{ENVS}/snpsplit.yaml'
     shell:
@@ -614,14 +607,14 @@ rule SNPsplit:
 
 rule mergeSNPsplit:
     input:
-        'dat/snpsplit/{pre_group}-{rep}.hic.G{allele}_G{allele}.bam',
-        'dat/snpsplit/{pre_group}-{rep}.hic.G{allele}_UA.bam'
+        'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_G{allele}.bam',
+        'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_UA.bam'
     output:
-        temp('dat/snpsplit/merged/{pre_group}_a{allele}-{rep}.hic.bam')
+        temp('dat/snpsplit/merged/{preGroup}_a{allele}-{rep}.hic.bam')
     group:
         'SNPsplit'
     log:
-        'logs/mergeSNPsplit/{pre_group}_a{allele}-{rep}.log'
+        'logs/mergeSNPsplit/{preGroup}_a{allele}-{rep}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -655,63 +648,30 @@ rule splitPairedReads:
         '> {output} 2> {log}'
 
 
-rule findRestSites:
-    input:
-        rules.bgzipGenome.output
-    output:
-        'dat/genome/{cell_type}-{re}-restSites.bed'
-    params:
-        reSeq = lambda wc: unpackedRestriction[wc.re].replace('^', '')
-    group:
-        'prepareBAM'
-    log:
-        'logs/findRestSites/{cell_type}-{re}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicFindRestSite --fasta {input} --searchPattern {params.reSeq} '
-        '--outFile {output} &> {log}'
-
-
-def getRestSites(wildcards):
+def getRestSites(wc):
     """ Retrieve restSite files associated with sample wildcard """
-
     try:
-        sample = wildcards.sample
-        if ALLELE_SPECIFIC:
-            sample = allele2sample(sample)
+        sample = wc.sample
     except AttributeError:
-        sample = wildcards.pre_sample
-
-    for cellType, originalSamples in CELL_TYPES.items():
-        if sample in originalSamples:
-            type = cellType
-            break
+        sample = wc.preSample
     return expand('dat/genome/{cellType}-{re}-restSites.bed',
-        cellType=cellType, re=restrictionSeqs[sample].keys())
+        cellType=HiC.sample2Cell()[sample],
+        re=HiC.restrictionSeqs()[sample])
 
 
 def getRestrictionSeqs(wc):
-    enzymes = ''
-    for enzyme in restrictionSeqs[wc.sample].values():
-        enzyme = enzyme.replace('^', '')
-        enzymes += f'{enzyme} '
-    return enzymes
+    sequences = HiC.restrictionSeqs(removeCut=True)[wc.sample].values()
+    return ' '.join(sequences)
 
 
 def getDanglingSequences(wc):
-    danglingSequences = ''
-    for enzyme in restrictionSeqs[wc.sample].values():
-        sequence = enzyme.replace('^', '')
-        cutIndex = enzyme.index('^')
-        danglingSequence = sequence[cutIndex:len(sequence) - cutIndex]
-        danglingSequences += f'{danglingSequence} '
-    return danglingSequences
+    sequences = HiC.restrictionSeqs(dangling=True)[wc.sample].values()
+    return ' '.join(sequences)
 
 
 rule buildBaseMatrix:
     input:
-        bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=READS),
+        bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=['R1', 'R2']),
         restSites = getRestSites
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
@@ -732,6 +692,8 @@ rule buildBaseMatrix:
             '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
+    group:
+        'buildBaseMatrix'
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
@@ -760,6 +722,8 @@ rule mergeValidHiC:
             region=regionBin.keys())
     output:
         'dat/mapped/{sample}-validHiC.bam'
+    group:
+        'buildBaseMatrix'
     log:
         'logs/mergeValidHiC/{sample}.log'
     conda:
@@ -774,8 +738,8 @@ def validMatrices(wc):
     """ Remove empty files which break sum replicates. """
     matrices = []
     allMatrices = expand(
-        'dat/matrix/{region}/base/raw/{group}-{rep}-{region}.{bin}.h5',
-        region=wc.region, group=wc.group, rep=GROUPS[wc.group], bin=BASE_BIN)
+        'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}.h5',
+        rep=HiC.groups()[wc.group], bin=BASE_BIN)
     for matrix in allMatrices:
         if os.path.exists(matrix) and os.path.getsize(matrix) > 0:
             matrices.append(matrix)
@@ -785,13 +749,11 @@ def validMatrices(wc):
 rule sumReplicates:
     input:
         lambda wc: expand(
-            'dat/matrix/{region}/base/raw/{group}-{rep}-{region}.{bin}.h5',
-            region=wc.region, group=wc.group, rep=GROUPS[wc.group], bin=BASE_BIN),
+            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}.h5',
+            rep=HiC.groups()[wc.group], bin=BASE_BIN),
         nonEmpty = validMatrices
     output:
         f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}.h5'
-    group:
-        'processHiC' if config['groupJobs'] else 'sumReplicates'
     log:
         'logs/sumReplicates/{group}-{region}.log'
     conda:
@@ -809,7 +771,7 @@ rule mergeBins:
     params:
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     group:
-        'processHiC' if config['groupJobs'] else 'mergeBins'
+        'processHiC'
     log:
         'logs/mergeBins/{all}-{region}-{bin}.log'
     conda:
@@ -829,7 +791,7 @@ rule IceMatrix:
         iternum = 1000,
         upper_threshold = 5
     group:
-        'processHiC' if config['groupJobs'] else 'IceMatrix'
+        'processHiC'
     log:
         'logs/IceMatrix/{all}-{region}-{bin}.log'
     conda:
@@ -838,52 +800,6 @@ rule IceMatrix:
         '{SCRIPTS}/hicCorrect.sh -p {output.plot} '
         '-o {output.matrix} -u {params.upper_threshold} '
         '-i {params.iternum} {input} &> {log} || touch {output}'
-
-
-rule distanceNormalise:
-    input:
-        rules.IceMatrix.output.matrix
-    output:
-        'dat/matrix/{region}/{bin}/ice/obs_exp/{all}-{region}-{bin}.h5'
-    params:
-        method = 'obs_exp'
-    group:
-        'processHiC' if config['groupJobs'] else 'distanceNormalise'
-    log:
-        'logs/distanceNormalise/{all}-{region}-{bin}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicTransform -m {input} --method {params.method} -o {output} '
-        '&> {log} || touch {output}'
-
-
-rule plotMatrix:
-    input:
-        rules.distanceNormalise.output
-    output:
-        'plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png'
-    params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
-        title = '"{all} : {region} at {bin} bin size"',
-        dpi = 600,
-        colour = 'YlGn'
-    group:
-        'processHiC' if config['groupJobs'] else 'plotMatrix'
-    log:
-        'logs/plotMatrix/{all}-{region}-{bin}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicPlotMatrix --matrix {input} '
-        '--outFileName {output} '
-        '--region {params.chr}:{params.start}-{params.end} '
-        '--colorMap {params.colour} '
-        '--title {params.title} '
-        '--vMin 0 --vMax 2 --dpi {params.dpi} '
-        '&> {log} || touch {output}'
 
 
 rule TadInsulation:
@@ -904,7 +820,7 @@ rule TadInsulation:
         max_depth = lambda wc: int(wc.bin) * 10,
         prefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}'
     group:
-        'processHiC' if config['groupJobs'] else 'TadInsulation'
+        'processHiC'
     threads:
         THREADS
     log:
@@ -932,7 +848,7 @@ rule detectLoops:
         pValue = 0.05,
         peakInter = 5
     group:
-        'processHiC' if config['groupJobs'] else 'detectLoops'
+        'processHiC'
     log:
         'logs/detectLoops/{all}-{region}-{bin}.log'
     conda:
@@ -960,7 +876,7 @@ rule hicPCA:
         method = "dist_norm",
         format = 'bedgraph'
     group:
-        'processHiC' if config['groupJobs'] else 'hicPCA'
+        'processHiC'
     log:
         'logs/hicPCA/{all}-{region}-{bin}.log'
     conda:
@@ -980,7 +896,7 @@ rule fixBedgraph:
     params:
         pos = lambda wc: REGIONS['end'][wc.region]
     group:
-        'processHiC' if config['groupJobs'] else 'hicPCA'
+        'processHiC'
     log:
         'logs/fixBedgraph/{all}-{region}-{bin}.log'
     conda:
@@ -996,7 +912,7 @@ rule reformatHomer:
     output:
         'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.gz'
     group:
-        'processHiC' if config['groupJobs'] else 'reformatMatrices'
+        'processHiC'
     log:
         'logs/reformatHomer/{all}-{region}-{bin}-{method}.log'
     conda:
@@ -1006,77 +922,13 @@ rule reformatHomer:
         '--inputFormat h5 --outputFormat homer &> {log} || touch {output}'
 
 
-rule reformatNxN3p:
-    input:
-        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.gz'
-    output:
-        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.nxnp3.tsv'
-    group:
-        'processHiC' if config['groupJobs'] else 'reformatMatrices'
-    log:
-        'logs/reformatNxN3p/{sample}-{region}-{bin}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/reformatNxN3p.py {wildcards.bin} {wildcards.region} '
-        '<(zcat {input}) > {output} 2> {log}'
-
-
-rule HiCRep:
-    input:
-        'dat/matrix/{region}/{bin}/raw/{sample1}-{region}-{bin}.nxnp3.tsv',
-        'dat/matrix/{region}/{bin}/raw/{sample2}-{region}-{bin}.nxnp3.tsv',
-    output:
-        'qc/hicrep/data/{sample1}-vs-{sample2}-{region}-{bin}-hicrep.csv'
-    params:
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region]
-    group:
-        'HiCRep'
-    log:
-        'logs/HiCRep/{sample1}-vs-{sample2}-{region}-{bin}.log'
-    conda:
-        f'{ENVS}/hicrep.yaml'
-    shell:
-        '{SCRIPTS}/runHiCRep.R {output} {wildcards.bin} '
-        '{params.start} {params.end} {input} &> {log}'
-
-
-rule plotHiCRep:
-    input:
-        expand('qc/hicrep/data/{compare}-{{region}}-{{bin}}-hicrep.csv',
-            compare=SAMPLE_COMPARES)
-    output:
-        'qc/hicrep/{region}-{bin}-hicrep.png'
-    params:
-        dpi = 600,
-    group:
-        'HiCRep'
-    log:
-        'logs/plotHiCRep/{region}-{bin}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/plotHiCRep.py --out {output} --dpi {params.dpi} '
-        '{input} &> {log}'
-
-
-rule aggregateHiCRep:
-    input:
-        expand('qc/hicrep/{region}-{{bin}}-hicrep.png', region=regionBin.keys())
-    output:
-        touch(temp('qc/hicrep/.tmp.{bin}-hicrep'))
-    group:
-        'HiCRep' if config['groupJobs'] else 'aggregateTarget'
-
-
 rule reformatNxN:
     input:
         'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.gz'
     output:
         'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.nxn.tsv'
     group:
-        'processHiC' if config['groupJobs'] else 'OnTAD'
+        'processHiC'
     log:
         'logs/reformatNxN/{region}/{bin}/{all}.log'
     conda:
@@ -1097,7 +949,7 @@ rule OnTAD:
         length = lambda wc: REGIONS['length'][wc.region],
         outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
     group:
-        'processHiC' if config['groupJobs'] else 'OnTAD'
+        'processHiC'
     log:
         'logs/OnTAD/{region}/{bin}/{all}.log'
     shell:
@@ -1113,7 +965,7 @@ rule reformatLinks:
     params:
         start = lambda wc: REGIONS['start'][wc.region]
     group:
-        'processHiC' if config['groupJobs'] else 'OnTAD'
+        'processHiC'
     log:
         'logs/reformatLinks/{region}/{bin}/{all}.log'
     conda:
@@ -1147,7 +999,7 @@ rule createConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = config['colourmap']
     group:
-        'processHiC' if config['groupJobs'] else 'plotHiC'
+        'processHiC'
     conda:
         f'{ENVS}/python3.yaml'
     log:
@@ -1182,7 +1034,7 @@ rule plotHiC:
         title = '"{group} : {region} at {bin} bin size"',
         dpi = 600
     group:
-        'processHiC' if config['groupJobs'] else 'plotHiC'
+        'processHiC'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
@@ -1197,11 +1049,112 @@ rule plotHiC:
         '--dpi {params.dpi} &> {log}'
 
 
+rule distanceNormalise:
+    input:
+        rules.IceMatrix.output.matrix
+    output:
+        'dat/matrix/{region}/{bin}/ice/obs_exp/{all}-{region}-{bin}.h5'
+    params:
+        method = 'obs_exp'
+    group:
+        'plotObsExp'
+    log:
+        'logs/distanceNormalise/{all}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicTransform -m {input} --method {params.method} -o {output} '
+        '&> {log} || touch {output}'
+
+
+rule plotMatrix:
+    input:
+        rules.distanceNormalise.output
+    output:
+        'plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region],
+        title = '"{all} : {region} at {bin} bin size"',
+        dpi = 600,
+        colour = 'YlGn'
+    group:
+        'plotObsExp'
+    log:
+        'logs/plotMatrix/{all}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicPlotMatrix --matrix {input} '
+        '--outFileName {output} '
+        '--region {params.chr}:{params.start}-{params.end} '
+        '--colorMap {params.colour} '
+        '--title {params.title} '
+        '--vMin 0 --vMax 2 --dpi {params.dpi} '
+        '&> {log} || touch {output}'
+
+
+rule reformatNxN3p:
+    input:
+        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.gz'
+    output:
+        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.nxnp3.tsv'
+    group:
+        'HiCRep'
+    log:
+        'logs/reformatNxN3p/{sample}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/reformatNxN3p.py {wildcards.bin} {wildcards.region} '
+        '<(zcat {input}) > {output} 2> {log}'
+
+
+rule HiCRep:
+    input:
+        'dat/matrix/{region}/{bin}/raw/{sample1}-{region}-{bin}.nxnp3.tsv',
+        'dat/matrix/{region}/{bin}/raw/{sample2}-{region}-{bin}.nxnp3.tsv',
+    output:
+        'qc/hicrep/data/{sample1}-vs-{sample2}-{region}-{bin}-hicrep.csv'
+    params:
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'HiCRep'
+    log:
+        'logs/HiCRep/{sample1}-vs-{sample2}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/hicrep.yaml'
+    shell:
+        '{SCRIPTS}/runHiCRep.R {output} {wildcards.bin} '
+        '{params.start} {params.end} {input} &> {log}'
+
+
+rule plotHiCRep:
+    input:
+        expand('qc/hicrep/data/{compare}-{{region}}-{{bin}}-hicrep.csv',
+            compare=HiC.sampleCompares())
+    output:
+        'qc/hicrep/{region}-{bin}-hicrep.png'
+    params:
+        dpi = 600,
+    group:
+        'HiCRep'
+    log:
+        'logs/plotHiCRep/{region}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotHiCRep.py --out {output} --dpi {params.dpi} '
+        '{input} &> {log}'
+
+
 rule mergeBamByReplicate:
     input:
-        lambda wildcards: expand(
-            'dat/matrix/{{region}}/{group}-{rep}-{{region}}.bam',
-            group = wildcards.group, rep = GROUPS[wildcards.group])
+        lambda wc: expand(
+            'dat/matrix/{{region}}/{{group}}-{rep}-{{region}}.bam',
+            rep = HiC.groups()[wc.group])
     output:
         'dat/matrix/{region}/{group}-{region}.bam'
     log:
@@ -1232,21 +1185,9 @@ rule reformatPre:
         '| awk -f {SCRIPTS}/bam2pre.awk > {output}) 2> {log} '
 
 
-def getChromSizes(wildcards):
+def getChromSizes(wc):
     """ Retrieve chromSizes file associated with group or sample. """
-
-    for cell_type, samples in CELL_TYPES.items():
-        if ALLELE_SPECIFIC:
-            groups, samples = get_allele_groupings(samples)
-            groups = list(groups) # Get keys from dictionary as list
-        else:
-            groups = [sample.split('-')[0] for sample in samples]
-        all = samples + groups
-        if wildcards.all in all:
-            type = cell_type
-            break
-
-    return expand('dat/genome/chrom_sizes/{cell_type}.chrom.sizes', cell_type=type)
+    return f'dat/genome/chrom_sizes/{HiC.sample2Cell()[wc.all]}.chrom.sizes',
 
 
 rule juicerPre:
@@ -1282,7 +1223,7 @@ rule straw:
         start = lambda wc: REGIONS['start'][wc.region],
         end = lambda wc: REGIONS['end'][wc.region]
     group:
-        'processHiC' if config['groupJobs'] else 'straw'
+        'HiCcompare'
     log:
         'logs/straw/{region}/{bin}/{all}.log'
     conda:
@@ -1310,7 +1251,7 @@ rule HiCcompare:
         end = lambda wc: REGIONS['end'][wc.region],
         fdr = config['HiCcompare']['fdr']
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     log:
         'logs/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1323,12 +1264,12 @@ rule HiCcompare:
 
 rule multiHiCcompare:
     input:
-        group1 = lambda wildcards: expand(
+        group1 = lambda wc: expand(
             'dat/matrix/{{region}}/{{bin}}/{group1}-{rep}-{{region}}-{{bin}}-sutm.txt',
-            group1=wildcards.group1, rep=GROUPS[wildcards.group1]),
-        group2 = lambda wildcards: expand(
+            group1=wc.group1, rep=HiC.groups()[wc.group1]),
+        group2 = lambda wc: expand(
             'dat/matrix/{{region}}/{{bin}}/{group2}-{rep}-{{region}}-{{bin}}-sutm.txt',
-            group2=wildcards.group2, rep=GROUPS[wildcards.group2])
+            group2=wc.group2, rep=HiC.groups()[wc.group2])
     output:
         all = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
         sig = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
@@ -1342,7 +1283,7 @@ rule multiHiCcompare:
         end = lambda wc: REGIONS['end'][wc.region],
         fdr = config['HiCcompare']['fdr']
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     log:
         'logs/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1362,7 +1303,7 @@ rule applyMedianFilter:
     params:
         size = config['compareMatrices']['size']
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     log:
         'logs/applyMedianFilter/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1381,7 +1322,7 @@ rule hicCompareBedgraph:
     params:
         maxDistance = config['compareMatrices']['maxDistance']
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     log:
         'logs/hicCompareBedgraph/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1398,7 +1339,7 @@ rule homerToH5:
     output:
         'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5'
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     log:
         'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.log'
     conda:
@@ -1418,7 +1359,7 @@ rule filterHiCcompare:
         p_value = config['HiCcompare']['fdr'],
         log_fc = config['HiCcompare']['logFC'],
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     log:
         'logs/filterHiCcompare/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
     conda:
@@ -1443,7 +1384,7 @@ rule createCompareConfig:
         vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
         vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     log:
         'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}-{set}.log'
     conda:
@@ -1488,7 +1429,7 @@ rule plotCompare:
         region = setRegion,
         dpi = 600
     group:
-        'processHiC' if config['groupJobs'] else 'HiCcompare'
+        'HiCcompare'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
@@ -1503,34 +1444,19 @@ rule plotCompare:
         '--dpi {params.dpi} &> {log}'
 
 
-rule aggregateProcessHiC:
-    input:
-        lambda wc: expand('plots/{{region}}/{bin}/{tool}/{set}/{compare}-{{region}}-{coords}-{bin}-{set}.png',
-            coords=COORDS[wc.region], compare=COMPARES, set=['logFC', 'sig'], bin=regionBin[wc.region],
-            tool = ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi'] else ['HiCcompare']),
-        lambda wc: expand('plots/{{region}}/{bin}/pyGenomeTracks/{group}-{{region}}-{coords}-{bin}.png',
-            coords=COORDS[wc.region], group=list(GROUPS), bin=regionBin[wc.region]),
-        lambda wc: expand('plots/{{region}}/{bin}/obs_exp/{all}-{{region}}-{bin}.png',
-            all=SAMPLES+list(GROUPS), bin=regionBin[wc.region])
-    output:
-        touch(temp('plots/{region}/.tmp.aggregateProcessHiC'))
-    group:
-        'processHiC' if config['groupJobs'] else 'aggregateTarget'
-
-
 if not ALLELE_SPECIFIC:
 
     rule sortBam:
         input:
             rules.fixmateBam.output
         output:
-            pipe('dat/mapped/{pre_sample}.sorted.bam')
+            pipe('dat/mapped/{preSample}.sorted.bam')
         params:
             mem = '1G'
         threads:
             max(math.ceil(THREADS * 0.5), 1)
         log:
-            'logs/sortBam/{pre_sample}.log'
+            'logs/sortBam/{preSample}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
@@ -1542,12 +1468,12 @@ if not ALLELE_SPECIFIC:
         input:
             rules.sortBam.output
         output:
-            bam = 'dat/mapped/{pre_sample}.dedup.bam',
-            qc = 'qc/deduplicate/{pre_sample}.txt'
+            bam = temp('dat/mapped/{preSample}.dedup.bam'),
+            qc = 'qc/deduplicate/{preSample}.txt'
         threads:
             max(math.floor(THREADS * 0.5), 1)
         log:
-            'logs/deduplicate/{pre_sample}.log'
+            'logs/deduplicate/{preSample}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
@@ -1557,14 +1483,14 @@ if not ALLELE_SPECIFIC:
 
     rule mergeBamByCellType:
         input:
-            lambda wc: expand('dat/mapped/{pre_sample}.dedup.bam',
-                pre_sample = CELL_TYPES[wc.cell_type])
+            lambda wc: expand('dat/mapped/{preSample}.dedup.bam',
+                preSample = HiC.cellTypes()[wc.cellType])
         output:
-            pipe('dat/mapped/mergeByCell/{cell_type}.merged.bam')
+            pipe('dat/mapped/mergeByCell/{cellType}.merged.bam')
         group:
             'mergeCellType'
         log:
-            'logs/mergeBamByCellType/{cell_type}.log'
+            'logs/mergeBamByCellType/{cellType}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         threads:
@@ -1577,18 +1503,18 @@ if not ALLELE_SPECIFIC:
         input:
             rules.mergeBamByCellType.output
         output:
-            'dat/mapped/mergeByCell/{cell_type}.fixed-RG.bam'
+            'dat/mapped/mergeByCell/{cellType}.fixed-RG.bam'
         group:
             'mergeCellType'
         log:
-            'logs/addReadGroup/{cell_type}.log'
+            'logs/addReadGroup/{cellType}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         threads:
             max(math.floor(THREADS * 0.5), 1)
         shell:
             'samtools addreplacerg -@ {threads} '
-            '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cell_type}" '
+            '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cellType}" '
             '-O BAM {input} > {output} 2> {log}'
 
 
@@ -1600,7 +1526,7 @@ if not ALLELE_SPECIFIC:
         threads:
             THREADS
         log:
-            'logs/indexMergedBam/{cell_type}.log'
+            'logs/indexMergedBam/{cellType}.log'
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
@@ -1612,11 +1538,11 @@ if not ALLELE_SPECIFIC:
         input:
             rules.bgzipGenome.output
         output:
-            'dat/genome/{cell_type}.dict'
+            'dat/genome/{cellType}.dict'
         params:
             tmp = config['tmpdir']
         log:
-            'logs/gatk/createSequenceDictionary/{cell_type}.log'
+            'logs/gatk/createSequenceDictionary/{cellType}.log'
         conda:
             f'{ENVS}/picard.yaml'
         shell:
@@ -1640,7 +1566,7 @@ if not ALLELE_SPECIFIC:
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/baseRecalibrator/{cell_type}-{region}.recal.table'
+            'dat/gatk/baseRecalibrator/{cellType}-{region}.recal.table'
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region],
@@ -1649,7 +1575,7 @@ if not ALLELE_SPECIFIC:
             known = known_sites(config['gatk']['all_known']),
             extra = ''
         log:
-            'logs/gatk/baseRecalibrator/{cell_type}-{region}.log'
+            'logs/gatk/baseRecalibrator/{cellType}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1670,7 +1596,7 @@ if not ALLELE_SPECIFIC:
             ref_dict = rules.createSequenceDictionary.output,
             recal_table = rules.baseRecalibrator.output
         output:
-            'dat/mapped/mergeByCell/{cell_type}-{region}.recalibrated.bam'
+            'dat/mapped/mergeByCell/{cellType}-{region}.recalibrated.bam'
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region],
@@ -1678,7 +1604,7 @@ if not ALLELE_SPECIFIC:
             tmp = config['tmpdir'],
             extra = ''
         log:
-            'logs/gatk/applyBQSR/{cell_type}-{region}.log'
+            'logs/gatk/applyBQSR/{cellType}-{region}.log'
         threads:
             THREADS
         conda:
@@ -1699,7 +1625,7 @@ if not ALLELE_SPECIFIC:
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/split/{cell_type}-{region}-g.vcf.gz'
+            'dat/gatk/split/{cellType}-{region}-g.vcf.gz'
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region],
@@ -1710,7 +1636,7 @@ if not ALLELE_SPECIFIC:
             tmp = config['tmpdir'],
             extra = ''
         log:
-            'logs/gatk/haplotypeCaller/{cell_type}-{region}.log'
+            'logs/gatk/haplotypeCaller/{cellType}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1724,8 +1650,8 @@ if not ALLELE_SPECIFIC:
 
     def gatherVCFsInput(wc):
         input = ''
-        gvcfs = expand('dat/gatk/split/{cell_type}-{region}-g.vcf.gz',
-            region=REGIONS.index, cell_type=wc.cell_type)
+        gvcfs = expand('dat/gatk/split/{cellType}-{region}-g.vcf.gz',
+            region=REGIONS.index, cellType=wc.cellType)
         for gvcf in gvcfs:
             input += f' -I {gvcf}'
         return input
@@ -1733,16 +1659,16 @@ if not ALLELE_SPECIFIC:
 
     rule gatherVCFs:
         input:
-            expand('dat/gatk/split/{{cell_type}}-{region}-g.vcf.gz',
+            expand('dat/gatk/split/{{cellType}}-{region}-g.vcf.gz',
                 region=REGIONS.index)
         output:
-            'dat/gatk/{cell_type}-g.vcf.gz'
+            'dat/gatk/{cellType}-g.vcf.gz'
         params:
             gvcfs = gatherVCFsInput,
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/gatherGVCFs/{cell_type}.log'
+            'logs/gatk/gatherGVCFs/{cellType}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1759,7 +1685,7 @@ if not ALLELE_SPECIFIC:
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/indexFeatureFile/{cell_type}.log'
+            'logs/gatk/indexFeatureFile/{cellType}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1775,13 +1701,13 @@ if not ALLELE_SPECIFIC:
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/{cell_type}.vcf.gz'
+            'dat/gatk/{cellType}.vcf.gz'
         params:
             tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/genotypeGVCFs/{cell_type}.log'
+            'logs/gatk/genotypeGVCFs/{cellType}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1797,11 +1723,11 @@ if not ALLELE_SPECIFIC:
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/{cell_type}-{mode}.vcf.gz'
+            'dat/gatk/{cellType}-{mode}.vcf.gz'
         params:
             tmp = config['tmpdir']
         log:
-            'logs/gatk/selectVariants/{cell_type}-{mode}.log'
+            'logs/gatk/selectVariants/{cellType}-{mode}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1812,13 +1738,13 @@ if not ALLELE_SPECIFIC:
 
     rule variantRecalibratorSNPs:
         input:
-            vcf = 'dat/gatk/{cell_type}-SNP.vcf.gz',
+            vcf = 'dat/gatk/{cellType}-SNP.vcf.gz',
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            recal = 'dat/gatk/{cell_type}-SNP.vcf.recal',
-            tranches = 'dat/gatk/{cell_type}-SNP.vcf.tranches'
+            recal = 'dat/gatk/{cellType}-SNP.vcf.recal',
+            tranches = 'dat/gatk/{cellType}-SNP.vcf.tranches'
         params:
             tmp = config['tmpdir'],
             true_snp1 = f'--resource:hapmap,known=false,training=true,truth=true,'
@@ -1833,7 +1759,7 @@ if not ALLELE_SPECIFIC:
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/variantRecalibrator/{cell_type}-SNP.log'
+            'logs/gatk/variantRecalibrator/{cellType}-SNP.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1849,13 +1775,13 @@ if not ALLELE_SPECIFIC:
 
     rule variantRecalibratorINDELS:
         input:
-            vcf = 'dat/gatk/{cell_type}-INDEL.vcf.gz',
+            vcf = 'dat/gatk/{cellType}-INDEL.vcf.gz',
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            recal = 'dat/gatk/{cell_type}-INDEL.vcf.recal',
-            tranches = 'dat/gatk/{cell_type}-INDEL.vcf.tranches'
+            recal = 'dat/gatk/{cellType}-INDEL.vcf.recal',
+            tranches = 'dat/gatk/{cellType}-INDEL.vcf.tranches'
         params:
             tmp = config['tmpdir'],
             true_indel = f'--resource:mills,known=false,training=true,truth=true,'
@@ -1866,7 +1792,7 @@ if not ALLELE_SPECIFIC:
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/variantRecalibrator/{cell_type}-INDEL.log'
+            'logs/gatk/variantRecalibrator/{cellType}-INDEL.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1881,17 +1807,17 @@ if not ALLELE_SPECIFIC:
     rule applyVQSR:
         input:
             vcf = rules.selectVariants.output,
-            tranches = 'dat/gatk/{cell_type}-{mode}.vcf.tranches',
-            recal = 'dat/gatk/{cell_type}-{mode}.vcf.recal',
+            tranches = 'dat/gatk/{cellType}-{mode}.vcf.tranches',
+            recal = 'dat/gatk/{cellType}-{mode}.vcf.recal',
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/{cell_type}-{mode}.filt.vcf.gz'
+            'dat/gatk/{cellType}-{mode}.filt.vcf.gz'
         params:
             tmp = config['tmpdir']
         log:
-            'logs/gatk/applyVQSR/{cell_type}-{mode}.log'
+            'logs/gatk/applyVQSR/{cellType}-{mode}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1904,14 +1830,14 @@ if not ALLELE_SPECIFIC:
 
     rule mergeVCFs:
         input:
-            SNP = 'dat/gatk/{cell_type}-SNP.filt.vcf.gz',
-            INDEL = 'dat/gatk/{cell_type}-INDEL.filt.vcf.gz',
+            SNP = 'dat/gatk/{cellType}-SNP.filt.vcf.gz',
+            INDEL = 'dat/gatk/{cellType}-INDEL.filt.vcf.gz',
         output:
-            'dat/gatk/{cell_type}-all.filt.vcf.gz'
+            'dat/gatk/{cellType}-all.filt.vcf.gz'
         params:
             tmp = config['tmpdir']
         log:
-            'logs/picard/merge_vcfs/{cell_type}.log'
+            'logs/picard/merge_vcfs/{cellType}.log'
         conda:
             f'{ENVS}/picard.yaml'
         shell:
@@ -1923,13 +1849,13 @@ if not ALLELE_SPECIFIC:
         input:
             rules.mergeVCFs.output
         output:
-            'dat/gatk/{cell_type}-all-{region}.filt.vcf'
+            'dat/gatk/{cellType}-all-{region}.filt.vcf'
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region] + 1,
             end = lambda wc: REGIONS['end'][wc.region]
         log:
-            'logs/splitVCFS/{region}/{cell_type}.log'
+            'logs/splitVCFS/{region}/{cellType}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
@@ -1945,7 +1871,7 @@ if not ALLELE_SPECIFIC:
             bam_index = rules.indexMergedBam.output,
             genome = rules.bgzipGenome.output,
         output:
-            pipe('dat/bcftools/{region}/{cell_type}-{region}-mpileup.bcf')
+            pipe('dat/bcftools/{region}/{cellType}-{region}-mpileup.bcf')
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1953,7 +1879,7 @@ if not ALLELE_SPECIFIC:
         group:
             'bcftoolsVariants'
         log:
-            'logs/mpileup/{region}/{cell_type}.log'
+            'logs/mpileup/{region}/{cellType}.log'
         threads:
             (THREADS - 4) * 0.5
         conda:
@@ -1969,11 +1895,11 @@ if not ALLELE_SPECIFIC:
         input:
             rules.mpileup.output
         output:
-            pipe('dat/bcftools/{region}/{cell_type}-{region}-calls.bcf')
+            pipe('dat/bcftools/{region}/{cellType}-{region}-calls.bcf')
         group:
             'bcftoolsVariants'
         log:
-            'logs/callVariants/{region}/{cell_type}.log'
+            'logs/callVariants/{region}/{cellType}.log'
         threads:
             (THREADS - 4) * 0.5
         conda:
@@ -1988,11 +1914,11 @@ if not ALLELE_SPECIFIC:
         input:
             rules.callVariants.output
         output:
-            'dat/bcftools/{region}/{cell_type}-{region}.filt.vcf'
+            'dat/bcftools/{region}/{cellType}-{region}.filt.vcf'
         group:
             'bcftoolsVariants'
         log:
-            'logs/filterVariants/{region}/{cell_type}.log'
+            'logs/filterVariants/{region}/{cellType}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
@@ -2012,7 +1938,7 @@ if not ALLELE_SPECIFIC:
             vcf = hapCut2Input,
             bam = rules.addReadGroup.output
         output:
-            'dat/phasing/{region}/{cell_type}-{region}.fragments'
+            'dat/phasing/{region}/{cellType}-{region}.fragments'
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region],
@@ -2020,7 +1946,7 @@ if not ALLELE_SPECIFIC:
         group:
             'hapcut2'
         log:
-            'logs/extractHAIRS/{region}/{cell_type}.log'
+            'logs/extractHAIRS/{region}/{cellType}.log'
         conda:
             f'{ENVS}/hapcut2.yaml'
         shell:
@@ -2034,12 +1960,12 @@ if not ALLELE_SPECIFIC:
             fragments = rules.extractHAIRS.output,
             vcf = hapCut2Input
         output:
-            block = 'dat/phasing/{region}/{cell_type}-{region}',
-            vcf = 'dat/phasing/{region}/{cell_type}-{region}.phased.VCF'
+            block = 'dat/phasing/{region}/{cellType}-{region}',
+            vcf = 'dat/phasing/{region}/{cellType}-{region}.phased.VCF'
         group:
             'hapcut2'
         log:
-            'logs/hapCut2/{region}/{cell_type}.log'
+            'logs/hapCut2/{region}/{cellType}.log'
         conda:
             f'{ENVS}/hapcut2.yaml'
         shell:
@@ -2053,7 +1979,7 @@ if not ALLELE_SPECIFIC:
         output:
             f'{rules.hapCut2.output.vcf}.gz'
         log:
-            'logs/bgzip_phased/{region}/{cell_type}.log'
+            'logs/bgzip_phased/{region}/{cellType}.log'
         conda:
             f'{ENVS}/tabix.yaml'
         shell:
@@ -2066,7 +1992,7 @@ if not ALLELE_SPECIFIC:
         output:
             f'{rules.bgzipPhased.output}.tbi'
         log:
-            'logs/index_phased/{region}/{cell_type}.log'
+            'logs/index_phased/{region}/{cellType}.log'
         conda:
             f'{ENVS}/tabix.yaml'
         shell:
@@ -2077,9 +2003,9 @@ if not ALLELE_SPECIFIC:
         input:
             rules.hapCut2.output.block
         output:
-            'dat/phasing/{region}/{cell_type}-{region}.tsv'
+            'dat/phasing/{region}/{cellType}-{region}.tsv'
         log:
-            'logs/extractBestPhase/{region}/{cell_type}.log'
+            'logs/extractBestPhase/{region}/{cellType}.log'
         conda:
             f'{ENVS}/python3.yaml'
         shell:
@@ -2092,9 +2018,9 @@ if not ALLELE_SPECIFIC:
             vcf = rules.bgzipPhased.output,
             vcf_index = rules.indexPhased.output
         output:
-            'dat/phasing/{region}/{cell_type}-{region}-best.vcf'
+            'dat/phasing/{region}/{cellType}-{region}-best.vcf'
         log:
-            'logs/extractVCF/{region}/{cell_type}.log'
+            'logs/extractVCF/{region}/{cellType}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
@@ -2108,7 +2034,7 @@ if not ALLELE_SPECIFIC:
         output:
             f'{rules.extractVCF.output}.gz'
         log:
-            'logs/bgzipVCF/{region}/{cell_type}.log'
+            'logs/bgzipVCF/{region}/{cellType}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
@@ -2121,19 +2047,19 @@ if not ALLELE_SPECIFIC:
         output:
             f'{rules.bgzipVCF.output}.csi'
         log:
-            'logs/indexVCF/{region}/{cell_type}.log'
+            'logs/indexVCF/{region}/{cellType}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
             'bcftools index -f {input} 2> {log} || touch {output}'
 
 
-    def validVCFS(wildcards):
+    def validVCFS(wc):
         """ Remove empty files which break bcftools concat. """
         VCFs = []
         allVCFs = expand(
-            'dat/phasing/{region}/{cell_type}-{region}-best.vcf.gz',
-            region=REGIONS.index, cell_type=wildcards.cell_type)
+            'dat/phasing/{region}/{cellType}-{region}-best.vcf.gz',
+            region=REGIONS.index, cellType=wc.cellType)
         for vcf in allVCFs:
             if os.path.exists(vcf) and os.path.getsize(vcf) > 0:
                 VCFs.append(vcf)
@@ -2151,16 +2077,16 @@ if not ALLELE_SPECIFIC:
     rule mergeVCFsbyRegion:
         input:
             expand(
-                'dat/phasing/{region}/{{cell_type}}-{region}-best.vcf.gz',
+                'dat/phasing/{region}/{{cellType}}-{region}-best.vcf.gz',
                 region=REGIONS.index),
             expand(
-                'dat/phasing/{region}/{{cell_type}}-{region}-best.vcf.gz.csi',
+                'dat/phasing/{region}/{{cellType}}-{region}-best.vcf.gz.csi',
                 region=REGIONS.index),
             vcfs = validVCFS
         output:
-            'phasedVCFs/{cell_type}-phased.vcf'
+            'phasedVCFs/{cellType}-phased.vcf'
         log:
-            'logs/mergeVCFsbyRegion/{cell_type}.log'
+            'logs/mergeVCFsbyRegion/{cellType}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
@@ -2171,29 +2097,22 @@ if not ALLELE_SPECIFIC:
         input:
             rules.filterVariants.output
         output:
-            'qc/bcftools/{region}/{cell_type}-{region}-bcftoolsStats.txt'
+            'qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt'
         group:
             'bcftoolsVariants'
         log:
-            'logs/bcftoolsStats/{region}/{cell_type}.log'
+            'logs/bcftoolsStats/{region}/{cellType}.log'
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
             'bcftools stats {input} > {output} 2> {log}'
 
 
-def multiQCconfig():
-    if config['multiQCconfig']:
-        return f'--config {config["multiQCconfig"]}'
-    else:
-        return ''
-
-
 rule sampleReads:
     input:
-        'dat/mapped/{pre_sample}.fixed.bam'
+        'dat/mapped/{preSample}.fixed.bam'
     output:
-        'dat/mapped/subsampled/{pre_sample}-subsample.sam'
+        'dat/mapped/subsampled/{preSample}-subsample.sam'
     group:
         'filterQC'
     params:
@@ -2202,7 +2121,7 @@ rule sampleReads:
     threads:
         2 if THREADS > 2 else THREADS
     log:
-        'logs/sampleReads/{pre_sample}.log'
+        'logs/sampleReads/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -2215,11 +2134,11 @@ rule processHiC:
         reads = rules.sampleReads.output,
         digest = getRestSites
     output:
-        'dat/mapped/subsampled/{pre_sample}-processed.txt'
+        'dat/mapped/subsampled/{preSample}-processed.txt'
     group:
         'filterQC'
     log:
-        'logs/process/{pre_sample}.log'
+        'logs/process/{preSample}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -2230,13 +2149,13 @@ rule processHiC:
 rule plotQC:
     input:
         expand('dat/mapped/subsampled/{sample}-processed.txt',
-            sample=ORIGINAL_SAMPLES)
+            sample=HiC.originalSamples())
     output:
         expand('qc/filterQC/{fig}',
                fig=['trans_stats.csv', 'insert_size_frequency.png',
                     'ditag_length.png'])
     params:
-        outdir = 'qc/filterQC'
+        outdir='qc/filterQC'
     group:
         'filterQC' if config['groupJobs'] else 'plotQC'
     log:
@@ -2251,31 +2170,37 @@ rule mergeHicupQC:
     input:
         rules.hicupTruncate.output.summary,
     output:
-        'qc/hicup/HiCUP_summary_report-{pre_sample}.txt'
+        'qc/hicup/HiCUP_summary_report-{preSample}.txt'
     log:
-        'logs/mergeHicupQC/{pre_sample}.log'
+        'logs/mergeHicupQC/{preSample}.log'
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
         '{SCRIPTS}/mergeHicupSummary.py --truncater {input} > {output} 2> {log}'
 
+def multiQCconfig():
+    if config['multiQCconfig']:
+        return f'--config {config["multiQCconfig"]}'
+    else:
+        return ''
 
 rule multiqc:
     input:
-        [expand('qc/fastqc/{sample}-{read}.raw_fastqc.zip',
-            sample=ORIGINAL_SAMPLES, read=READS),
-         expand('qc/cutadapt/{sample}.cutadapt.txt', sample=ORIGINAL_SAMPLES),
-         expand('qc/fastqc/{sample}-{read}.trim_fastqc.zip',
-            sample=ORIGINAL_SAMPLES, read=READS),
-         expand('qc/hicup/HiCUP_summary_report-{sample}.txt', sample=ORIGINAL_SAMPLES),
+        [expand('qc/fastqc/{sample}-{read}.{mode}_fastqc.zip',
+            sample=HiC.originalSamples(),
+            read=['R1', 'R2'], mode=['raw', 'trim']),
+         expand('qc/cutadapt/{sample}.cutadapt.txt',
+            sample=HiC.originalSamples()),
+         expand('qc/hicup/HiCUP_summary_report-{sample}.txt',
+            sample=HiC.originalSamples()),
          expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
-            sample=ORIGINAL_SAMPLES, read=READS),
+            sample=HiC.originalSamples(), read=['R1', 'R2']),
         [expand('qc/hicexplorer/{sample}-{region}.{bin}_QC', region=region,
-            bin=BASE_BIN, sample=SAMPLES) for region in regionBin],
+            sample=HiC.samples(), bin=BASE_BIN) for region in regionBin],
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
-            sample=ORIGINAL_SAMPLES, read=READS) if config['fastq_screen'] else [],
-         expand('qc/bcftools/{region}/{cell_type}-{region}-bcftoolsStats.txt',
-            region=REGIONS.index, cell_type=CELL_TYPES) if PHASE_MODE=='BCFTOOLS' else []]
+            sample=HiC.originalSamples(), read=['R1', 'R2']) if config['fastq_screen'] else [],
+         expand('qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt',
+            region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []]
     output:
         directory('qc/multiqc')
     params:

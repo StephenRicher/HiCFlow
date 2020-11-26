@@ -1,9 +1,5 @@
-experiment,cell_type,group,rep,read,path
-A,S2Rplus,G1S,1,R1,../data/G1S-1-R1.fastq.gz
-A,S2Rplus,G1S,1,R2,../data/G1S-1-R2.fastq.gz
-A,S2Rplus,G1S,2,R1,../data/G1S-2-R1.fastq.gz
-A,S2Rplus,G1S,2,R2,../data/G1S-2-R2.fastq.gz
-A,S2Rplus,AS,1,R1,../data/AS-1-R1.fastq.gz
-A,S2Rplus,AS,1,R2,../data/AS-1-R2.fastq.gz
-A,S2Rplus,AS,2,R1,../data/AS-2-R1.fastq.gz
-A,S2Rplus,AS,2,R2,../data/AS-2-R2.fastq.gz
+experiment  cell_type   group   rep R1  R2
+A   S2Rplus   G1S   1 ../data/G1S-1-R1.fastq.gz    ../data/G1S-1-R2.fastq.gz
+A   S2Rplus   G1S   2 ../data/G1S-2-R1.fastq.gz    ../data/G1S-2-R2.fastq.gz
+A   S2Rplus   AS    1  ../data/AS-1-R1.fastq.gz  ../data/AS-1-R2.fastq.gz
+A   S2Rplus   AS    2  ../data/AS-2-R1.fastq.gz  ../data/AS-2-R2.fastq.gz
