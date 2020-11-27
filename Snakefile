@@ -55,13 +55,15 @@ default_config = {
          'size'       :  1            ,
          'maxDistance':  1000000      ,},
     'gatk':
-        {'true_snp1' :   None         ,
-         'true_snp2' :   None         ,
-         'nontrue_snp' : None         ,
-         'known' :       None         ,
-         'true_indel' :  None         ,
-         'known' :       None         ,
-         'all_known':    None         ,},
+        {'hapmap'    : None         ,
+         'omni'      : None         ,
+         'G1K'       : None         ,
+         'dbsnp'     : None         ,
+         'mills'     : None         ,
+         'known'     : None         ,
+         'all_known' : None         ,
+         'trustPoly' : False        ,
+         'downSample': None         ,},
     'resolution':
         {'base':          5000        ,
          'bins':         [5000, 10000],},
@@ -69,6 +71,7 @@ default_config = {
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
+    'runQC':             True,
     'colourmap':         'Purples',
     'multiQCconfig':     None,
     'groupJobs':         False,
@@ -87,16 +90,17 @@ REGIONS = load_regions(config['regions'])
 # Remove region-binSize combinations with too few bins
 regionBin = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
 
-if config['phase'] and not ALLELE_SPECIFIC:
+# Turn of phasing if allele specific mode is running
+config['phase'] = False if ALLELE_SPECIFIC else config['phase']
+
+if config['phase']:
     if config['gatk']['all_known']:
         PHASE_MODE = 'GATK'
     else:
         PHASE_MODE = 'BCFTOOLS'
-    phase = [expand('phasedVCFs/{cellType}-phased.vcf',
-        cellType=HiC.cellTypes())]
 else:
-    phase = []
     PHASE_MODE = None
+
 
 wildcard_constraints:
     cellType = rf'{"|".join(HiC.cellTypes())}',
@@ -119,9 +123,6 @@ wildcard_constraints:
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords([config['plot_coordinates'], config['regions']])
 
-preQC_mode = ['qc/multiqc', 'qc/filterQC/ditag_length.png',
-              'qc/fastqc/.tmp.aggregateFastqc']
-
 tools = (
     ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
     else ['HiCcompare'])
@@ -140,18 +141,16 @@ HiC_mode = ([
         bin=regionBin[region]) for region in regionBin],
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 
-# Create a per-sample BAM, for each sample, of only valid HiC reads
-if config['createValidBam']:
-    validBAM = expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
-else:
-    validBAM = []
-
 rule all:
     input:
-        preQC_mode,
         HiC_mode,
-        phase,
-        validBAM
+        (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
+         if config['phase'] else []),
+        (['qc/multiqc', 'qc/filterQC/ditag_length.png',
+         'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
+        (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
+         if config['createValidBam'] else [])
+
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -1498,12 +1497,18 @@ if not ALLELE_SPECIFIC:
         shell:
             'samtools merge -u -@ {threads} - {input} > {output} 2> {log}'
 
+    def addReadGroupOutput():
+        """ If using GATK treated bam output as temporary """
+        if PHASE_MODE == 'GATK':
+            return temp('dat/mapped/mergeByCell/{cellType}.fixed-RG.bam')
+        else:
+            return 'dat/mapped/mergeByCell/{cellType}.fixed-RG.bam'
 
     rule addReadGroup:
         input:
             rules.mergeBamByCellType.output
         output:
-            'dat/mapped/mergeByCell/{cellType}.fixed-RG.bam'
+            addReadGroupOutput()
         group:
             'mergeCellType'
         log:
@@ -1517,20 +1522,6 @@ if not ALLELE_SPECIFIC:
             '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cellType}" '
             '-O BAM {input} > {output} 2> {log}'
 
-
-    rule indexMergedBam:
-        input:
-            rules.addReadGroup.output
-        output:
-            f'{rules.addReadGroup.output}.bai'
-        threads:
-            THREADS
-        log:
-            'logs/indexMergedBam/{cellType}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        shell:
-            'samtools index -@ {threads} {input} &> {log}'
 
     # GATK PHASE MODE #
 
@@ -1549,6 +1540,24 @@ if not ALLELE_SPECIFIC:
             'picard CreateSequenceDictionary R={input} O={output} '
             'TMP_DIR={params.tmp} &> {log}'
 
+    # Optionally downsample BAM for base recalibration
+    rule downSampleBam:
+        input:
+            rules.addReadGroup.output
+        output:
+            temp('dat/mapped/mergeByCell/{cellType}.downSample.bam')
+        params:
+            fraction = config['gatk']['downSample']
+        log:
+            'logs/downSampleBam/{cellType}.log'
+        threads:
+            THREADS
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools view -@ {threads} -s {params.fraction} {input} '
+            '> {output} 2> {log}'
+
 
     def known_sites(input_known):
         input_known_string = ""
@@ -1557,70 +1566,66 @@ if not ALLELE_SPECIFIC:
                 input_known_string += f' --known-sites {known}'
         return input_known_string
 
+    def baseRecalibratorInput(wc):
+        if config['gatk']['downSample'] is not None:
+            return rules.downSampleBam.output
+        else:
+            return rules.addReadGroup.output
 
     rule baseRecalibrator:
         input:
-            bam = rules.addReadGroup.output,
-            bam_index = rules.indexMergedBam.output,
+            bam = baseRecalibratorInput,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/baseRecalibrator/{cellType}-{region}.recal.table'
+            'dat/gatk/baseRecalibrator/{cellType}.recal.table'
         params:
-            chr = lambda wc: REGIONS['chr'][wc.region],
-            start = lambda wc: REGIONS['start'][wc.region],
-            end = lambda wc: REGIONS['end'][wc.region],
-            tmp = config['tmpdir'],
             known = known_sites(config['gatk']['all_known']),
+            tmp = config['tmpdir'],
             extra = ''
         log:
-            'logs/gatk/baseRecalibrator/{cellType}-{region}.log'
+            'logs/gatk/baseRecalibrator/{cellType}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
-             'gatk BaseRecalibrator {params.extra} {params.known} '
+             'gatk BaseRecalibrator {params.known} '
              '--input {input.bam} --reference {input.ref} '
-             '--intervals {params.chr}:{params.start}-{params.end} '
              '--output {output} '
              '--sequence-dictionary {input.ref_dict} '
-             '--tmp-dir {params.tmp} &> {log}'
+             '--tmp-dir {params.tmp} {params.extra} &> {log}'
 
 
     rule applyBQSR:
         input:
             bam = rules.addReadGroup.output,
-            bam_index = rules.indexMergedBam.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output,
             recal_table = rules.baseRecalibrator.output
         output:
-            'dat/mapped/mergeByCell/{cellType}-{region}.recalibrated.bam'
+            bam = 'dat/mapped/mergeByCell/{cellType}.recalibrated.bam',
+            index = 'dat/mapped/mergeByCell/{cellType}.recalibrated.bai'
         params:
-            chr = lambda wc: REGIONS['chr'][wc.region],
-            start = lambda wc: REGIONS['start'][wc.region],
-            end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir'],
             extra = ''
         log:
-            'logs/gatk/applyBQSR/{cellType}-{region}.log'
+            'logs/gatk/applyBQSR/{cellType}.log'
         threads:
             THREADS
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
-            'gatk ApplyBQSR {params.extra} '
+            'gatk ApplyBQSR '
             '--input {input.bam} --reference {input.ref} '
-            '--intervals {params.chr}:{params.start}-{params.end} '
-            '--bqsr-recal-file {input.recal_table} --output {output} '
-            '--tmp-dir {params.tmp} &> {log}'
+            '--bqsr-recal-file {input.recal_table} --output {output.bam} '
+            '--tmp-dir {params.tmp} {params.extra} &> {log}'
 
 
     rule haplotypeCaller:
         input:
-            bam = rules.applyBQSR.output,
-            bam_index = rules.indexMergedBam.output,
+            bam = rules.applyBQSR.output.bam,
+            bam_index = rules.applyBQSR.output.index,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
@@ -1648,44 +1653,16 @@ if not ALLELE_SPECIFIC:
             '--tmp-dir {params.tmp} -ERC GVCF &> {log}'
 
 
-    def gatherVCFsInput(wc):
-        input = ''
-        gvcfs = expand('dat/gatk/split/{cellType}-{region}-g.vcf.gz',
-            region=REGIONS.index, cellType=wc.cellType)
-        for gvcf in gvcfs:
-            input += f' -I {gvcf}'
-        return input
-
-
-    rule gatherVCFs:
-        input:
-            expand('dat/gatk/split/{{cellType}}-{region}-g.vcf.gz',
-                region=REGIONS.index)
-        output:
-            'dat/gatk/{cellType}-g.vcf.gz'
-        params:
-            gvcfs = gatherVCFsInput,
-            java_opts = '-Xmx4G',
-            extra = '',  # optional
-        log:
-            'logs/gatk/gatherGVCFs/{cellType}.log'
-        conda:
-            f'{ENVS}/gatk.yaml'
-        shell:
-             'gatk --java-options {params.java_opts} GatherVcfs '
-             '{params.gvcfs} -O {output} &> {log}'
-
-
     rule indexFeatureFile:
         input:
-            rules.gatherVCFs.output
+            rules.haplotypeCaller.output
         output:
-            f'{rules.gatherVCFs.output}.tbi'
+            f'{rules.haplotypeCaller.output}.tbi'
         params:
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/indexFeatureFile/{cellType}.log'
+            'logs/gatk/indexFeatureFile/{cellType}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1695,24 +1672,28 @@ if not ALLELE_SPECIFIC:
 
     rule genotypeGVCFs:
         input:
-            gvcf = rules.gatherVCFs.output,
+            gvcf = rules.haplotypeCaller.output,
             gvcf_idex = rules.indexFeatureFile.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/{cellType}.vcf.gz'
+            'dat/gatk/{cellType}-{region}.vcf.gz'
         params:
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/genotypeGVCFs/{cellType}.log'
+            'logs/gatk/genotypeGVCFs/{cellType}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
              'gatk --java-options {params.java_opts} GenotypeGVCFs '
              '--reference {input.ref} --variant {input.gvcf} '
+             '--intervals {params.chr}:{params.start}-{params.end} '
              '--tmp-dir {params.tmp} --output {output} &> {log}'
 
 
@@ -1723,43 +1704,51 @@ if not ALLELE_SPECIFIC:
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/{cellType}-{mode}.vcf.gz'
+            'dat/gatk/{cellType}-{region}-{mode}.vcf.gz'
         params:
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir']
         log:
-            'logs/gatk/selectVariants/{cellType}-{mode}.log'
+            'logs/gatk/selectVariants/{cellType}-{region}-{mode}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
             'gatk SelectVariants --reference {input.ref} '
             '--variant {input.vcf} --select-type-to-include {wildcards.mode} '
+            '--intervals {params.chr}:{params.start}-{params.end} '
             '--tmp-dir {params.tmp} --output {output} &> {log}'
 
 
     rule variantRecalibratorSNPs:
         input:
-            vcf = 'dat/gatk/{cellType}-SNP.vcf.gz',
+            vcf = 'dat/gatk/{cellType}-{region}-SNP.vcf.gz',
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            recal = 'dat/gatk/{cellType}-SNP.vcf.recal',
-            tranches = 'dat/gatk/{cellType}-SNP.vcf.tranches'
+            recal = 'dat/gatk/{cellType}-{region}-SNP.vcf.recal',
+            tranches = 'dat/gatk/{cellType}-{region}-SNP.vcf.tranches'
         params:
-            tmp = config['tmpdir'],
-            true_snp1 = f'--resource:hapmap,known=false,training=true,truth=true,'
-            f'prior=15.0 {config["gatk"]["true_snp1"]}' if config["gatk"]["true_snp1"]  else '',
-            true_snp2 = f'--resource:omni,known=false,training=true,truth=true,'
-            f'prior=12.0 {config["gatk"]["true_snp2"]}' if config["gatk"]["true_snp2"]  else '',
-            nontrue_snp = f'--resource:1000G,known=false,training=true,truth=false,'
-            f'prior=10.0 {config["gatk"]["nontrue_snp"]}' if config["gatk"]["nontrue_snp"]  else '',
-            known = f'--resource:dbsnp,known=true,training=false,truth=false,'
-            f'prior=2.0 {config["gatk"]["known"]}' if config["gatk"]["known"]  else '',
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
+            hapmap = f'--resource:hapmap,known=false,training=true,truth=true,'
+            f'prior=15.0 {config["gatk"]["hapmap"]}' if config["gatk"]["hapmap"]  else '',
+            omni = f'--resource:omni,known=false,training=true,truth=true,'
+            f'prior=12.0 {config["gatk"]["omni"]}' if config["gatk"]["omni"]  else '',
+            G1K = f'--resource:G1K,known=false,training=true,truth=false,'
+            f'prior=10.0 {config["gatk"]["G1K"]}' if config["gatk"]["G1K"]  else '',
+            dbsnp = f'--resource:dbsnp,known=true,training=false,truth=false,'
+            f'prior=2.0 {config["gatk"]["dbsnp"]}' if config["gatk"]["dbsnp"]  else '',
+            trustPoly = '--trust-all-polymorphic' if config['gatk']['trustPoly'] else '',
             max_gaussians = 3,
+            tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
         log:
-            'logs/gatk/variantRecalibrator/{cellType}-SNP.log'
+            'logs/gatk/variantRecalibrator/{cellType}-{region}-SNP.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1768,31 +1757,36 @@ if not ALLELE_SPECIFIC:
             '-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR '
             '--output {output.recal} --tranches-file {output.tranches} '
             '--max-gaussians {params.max_gaussians} '
-            '{params.known} {params.true_snp1} {params.true_snp2} '
-            '{params.nontrue_snp} {params.extra} '
+            '--intervals {params.chr}:{params.start}-{params.end} '
+            '{params.dbsnp} {params.hapmap} {params.omni} '
+            '{params.G1K} {params.trustPoly} {params.extra} '
             '--tmp-dir {params.tmp} &> {log}'
 
 
     rule variantRecalibratorINDELS:
         input:
-            vcf = 'dat/gatk/{cellType}-INDEL.vcf.gz',
+            vcf = 'dat/gatk/{cellType}-{region}-INDEL.vcf.gz',
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            recal = 'dat/gatk/{cellType}-INDEL.vcf.recal',
-            tranches = 'dat/gatk/{cellType}-INDEL.vcf.tranches'
+            recal = 'dat/gatk/{cellType}-{region}-INDEL.vcf.recal',
+            tranches = 'dat/gatk/{cellType}-{region}-INDEL.vcf.tranches'
         params:
-            tmp = config['tmpdir'],
-            true_indel = f'--resource:mills,known=false,training=true,truth=true,'
-            f'prior=12.0 {config["gatk"]["true_indel"]}' if config["gatk"]["true_indel"]  else '',
-            known = f'--resource:dbsnp,known=true,training=false,truth=false,'
-            f'prior=2.0 {config["gatk"]["known"]}' if config["gatk"]["known"]  else '',
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
+            mills = f'--resource:mills,known=false,training=true,truth=true,'
+            f'prior=12.0 {config["gatk"]["mills"]}' if config["gatk"]["mills"]  else '',
+            dbsnp = f'--resource:dbsnp,known=true,training=false,truth=false,'
+            f'prior=2.0 {config["gatk"]["dbsnp"]}' if config["gatk"]["dbsnp"]  else '',
+            trustPoly = '--trust-all-polymorphic' if config['gatk']['trustPoly'] else '',
             max_gaussians = 3,
             java_opts = '-Xmx4G',
+            tmp = config['tmpdir'],
             extra = '',  # optional
         log:
-            'logs/gatk/variantRecalibrator/{cellType}-INDEL.log'
+            'logs/gatk/variantRecalibrator/{cellType}-{region}-INDEL.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1801,23 +1795,28 @@ if not ALLELE_SPECIFIC:
             '-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR '
             '--output {output.recal} --tranches-file {output.tranches} '
             '--max-gaussians {params.max_gaussians} '
-            '{params.known} {params.true_indel} {params.extra} '
-            '--tmp-dir {params.tmp} &> {log}'
+            '--intervals {params.chr}:{params.start}-{params.end} '
+            '{params.dbsnp} {params.mills} {params.trustPoly} '
+            '{params.extra} --tmp-dir {params.tmp} &> {log}'
+
 
     rule applyVQSR:
         input:
             vcf = rules.selectVariants.output,
-            tranches = 'dat/gatk/{cellType}-{mode}.vcf.tranches',
-            recal = 'dat/gatk/{cellType}-{mode}.vcf.recal',
+            tranches = 'dat/gatk/{cellType}-{region}-{mode}.vcf.tranches',
+            recal = 'dat/gatk/{cellType}-{region}-{mode}.vcf.recal',
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
         output:
-            'dat/gatk/{cellType}-{mode}.filt.vcf.gz'
+            'dat/gatk/{cellType}-{region}-{mode}.filt.vcf.gz'
         params:
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir']
         log:
-            'logs/gatk/applyVQSR/{cellType}-{mode}.log'
+            'logs/gatk/applyVQSR/{cellType}-{region}-{mode}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
@@ -1825,45 +1824,41 @@ if not ALLELE_SPECIFIC:
             '--tranches-file {input.tranches} --mode {wildcards.mode} '
             '--exclude-filtered --recal-file {input.recal} '
             '--truth-sensitivity-filter-level 99.0 '
+            '--intervals {params.chr}:{params.start}-{params.end} '
             '--tmp-dir {params.tmp} --output {output} &> {log}'
 
 
     rule mergeVCFs:
         input:
-            SNP = 'dat/gatk/{cellType}-SNP.filt.vcf.gz',
-            INDEL = 'dat/gatk/{cellType}-INDEL.filt.vcf.gz',
+            SNP = 'dat/gatk/{cellType}-{region}-SNP.filt.vcf.gz',
+            INDEL = 'dat/gatk/{cellType}-{region}-INDEL.filt.vcf.gz',
         output:
-            'dat/gatk/{cellType}-all.filt.vcf.gz'
+            'dat/gatk/{cellType}-{region}-all.filt.vcf'
         params:
             tmp = config['tmpdir']
         log:
-            'logs/picard/merge_vcfs/{cellType}.log'
+            'logs/picard/merge_vcfs/{cellType}-{region}.log'
         conda:
             f'{ENVS}/picard.yaml'
         shell:
             'picard MergeVcfs INPUT={input.SNP} INPUT={input.INDEL} '
             'TMP_DIR={params.tmp} OUTPUT={output} &> {log}'
 
-
-    rule splitVCFS:
-        input:
-            rules.mergeVCFs.output
-        output:
-            'dat/gatk/{cellType}-all-{region}.filt.vcf'
-        params:
-            chr = lambda wc: REGIONS['chr'][wc.region],
-            start = lambda wc: REGIONS['start'][wc.region] + 1,
-            end = lambda wc: REGIONS['end'][wc.region]
-        log:
-            'logs/splitVCFS/{region}/{cellType}.log'
-        conda:
-            f'{ENVS}/bcftools.yaml'
-        shell:
-            'bcftools view --regions {params.chr}:{params.start}-{params.end} '
-            '{input} > {output} 2> {log}'
-
-
     # BCFTOOLS PHASE MODE #
+
+    rule indexMergedBam:
+        input:
+            rules.addReadGroup.output
+        output:
+            f'{rules.addReadGroup.output}.bai'
+        threads:
+            THREADS
+        log:
+            'logs/indexMergedBam/{cellType}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools index -@ {threads} {input} &> {log}'
 
     rule mpileup:
         input:
@@ -1926,17 +1921,22 @@ if not ALLELE_SPECIFIC:
             '{input} > {output} 2> {log}'
 
 
-    def hapCut2Input(wildcards):
+    def hapCut2vcf(wc):
         if PHASE_MODE == 'GATK':
-            return rules.splitVCFS.output
+            return rules.mergeVCFs.output
         else:
             return rules.filterVariants.output
 
+    def hapCut2bam(wc):
+        if PHASE_MODE == 'GATK':
+            return rules.applyBQSR.output.bam
+        else:
+            return rules.addReadGroup.output
 
     rule extractHAIRS:
         input:
-            vcf = hapCut2Input,
-            bam = rules.addReadGroup.output
+            vcf = hapCut2vcf,
+            bam = hapCut2bam
         output:
             'dat/phasing/{region}/{cellType}-{region}.fragments'
         params:
@@ -1958,7 +1958,7 @@ if not ALLELE_SPECIFIC:
     rule hapCut2:
         input:
             fragments = rules.extractHAIRS.output,
-            vcf = hapCut2Input
+            vcf = hapCut2vcf
         output:
             block = 'dat/phasing/{region}/{cellType}-{region}',
             vcf = 'dat/phasing/{region}/{cellType}-{region}.phased.VCF'
