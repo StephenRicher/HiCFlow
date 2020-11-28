@@ -1493,9 +1493,9 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         threads:
-            THREADS - 1
+            max(math.ceil(THREADS * 0.5), 1)
         shell:
-            'samtools merge -u -@ {threads} - {input} > {output} 2> {log}'
+            'samtools merge -@ {threads} - {input} > {output} 2> {log}'
 
     def addReadGroupOutput():
         """ If using GATK treated bam output as temporary """
@@ -1515,8 +1515,10 @@ if not ALLELE_SPECIFIC:
             'logs/addReadGroup/{cellType}.log'
         conda:
             f'{ENVS}/samtools.yaml'
+        threads:
+            max(math.floor(THREADS * 0.5), 1)
         shell:
-            'samtools addreplacerg -@ {threads} -O bam,level=0 '
+            'samtools addreplacerg -@ {threads} '
             '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cellType}" '
             '-O BAM {input} > {output} 2> {log}'
 
@@ -1557,6 +1559,21 @@ if not ALLELE_SPECIFIC:
             '> {output} 2> {log}'
 
 
+    rule indexMergedBam:
+        input:
+            rules.addReadGroup.output
+        output:
+            f'{rules.addReadGroup.output}.bai'
+        threads:
+            THREADS
+        log:
+            'logs/indexMergedBam/{cellType}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools index -@ {threads} {input} &> {log}'
+
+
     def known_sites(input_known):
         input_known_string = ""
         if input_known is not None:
@@ -1564,11 +1581,13 @@ if not ALLELE_SPECIFIC:
                 input_known_string += f' --known-sites {known}'
         return input_known_string
 
+
     def baseRecalibratorInput(wc):
         if config['gatk']['downSample'] is not None:
             return rules.downSampleBam.output
         else:
             return rules.addReadGroup.output
+
 
     rule baseRecalibrator:
         input:
@@ -1597,24 +1616,29 @@ if not ALLELE_SPECIFIC:
     rule applyBQSR:
         input:
             bam = rules.addReadGroup.output,
+            bam_index = rules.indexMergedBam.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output,
             recal_table = rules.baseRecalibrator.output
         output:
-            bam = 'dat/mapped/mergeByCell/{cellType}.recalibrated.bam',
-            index = 'dat/mapped/mergeByCell/{cellType}.recalibrated.bai'
+            bam = 'dat/mapped/mergeByCell/{cellType}-{region}.recalibrated.bam',
+            index = 'dat/mapped/mergeByCell/{cellType}-{region}.recalibrated.bai'
         params:
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir'],
             extra = ''
         log:
-            'logs/gatk/applyBQSR/{cellType}.log'
+            'logs/gatk/applyBQSR/{cellType}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
-            'gatk --java-options -Dsamjdk.compression_level=0 ApplyBQSR '
+            'gatk ApplyBQSR '
             '--input {input.bam} --reference {input.ref} '
             '--bqsr-recal-file {input.recal_table} --output {output.bam} '
+            '--intervals {params.chr}:{params.start}-{params.end} '
             '--tmp-dir {params.tmp} {params.extra} &> {log}'
 
 
@@ -1841,20 +1865,6 @@ if not ALLELE_SPECIFIC:
             'TMP_DIR={params.tmp} OUTPUT={output} &> {log}'
 
     # BCFTOOLS PHASE MODE #
-
-    rule indexMergedBam:
-        input:
-            rules.addReadGroup.output
-        output:
-            f'{rules.addReadGroup.output}.bai'
-        threads:
-            THREADS
-        log:
-            'logs/indexMergedBam/{cellType}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        shell:
-            'samtools index -@ {threads} {input} &> {log}'
 
     rule mpileup:
         input:
