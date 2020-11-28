@@ -324,7 +324,7 @@ rule aggregateFastqc:
             sample=HiC.originalSamples(),
             read=['R1', 'R2'], type=['trim', 'raw'])
     output:
-        touch(temp('qc/fastqc/.tmp.aggregateFastqc'))
+        touch('qc/fastqc/.tmp.aggregateFastqc')
     group:
         'fastqc' if config['groupJobs'] else 'aggregateTarget'
 
@@ -429,7 +429,7 @@ rule aggregatehicupTruncate:
         expand('qc/hicup/{sample}-truncate-summary.txt',
             sample=HiC.originalSamples())
     output:
-        touch(temp('qc/hicup/.tmp.aggregatehicupTruncate'))
+        touch('qc/hicup/.tmp.aggregatehicupTruncate')
     group:
         'hicupTruncate' if config['groupJobs'] else 'aggregateTarget'
 
@@ -1493,7 +1493,7 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         threads:
-            max(math.ceil(THREADS * 0.5), 1)
+            THREADS - 1
         shell:
             'samtools merge -u -@ {threads} - {input} > {output} 2> {log}'
 
@@ -1515,10 +1515,8 @@ if not ALLELE_SPECIFIC:
             'logs/addReadGroup/{cellType}.log'
         conda:
             f'{ENVS}/samtools.yaml'
-        threads:
-            max(math.floor(THREADS * 0.5), 1)
         shell:
-            'samtools addreplacerg -@ {threads} '
+            'samtools addreplacerg -@ {threads} -O bam,level=0 '
             '-r "ID:1\tPL:.\tPU:.\tLB:.\tSM:{wildcards.cellType}" '
             '-O BAM {input} > {output} 2> {log}'
 
@@ -1611,12 +1609,10 @@ if not ALLELE_SPECIFIC:
             extra = ''
         log:
             'logs/gatk/applyBQSR/{cellType}.log'
-        threads:
-            THREADS
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
-            'gatk ApplyBQSR '
+            'gatk --java-options -Dsamjdk.compression_level=0 ApplyBQSR '
             '--input {input.bam} --reference {input.ref} '
             '--bqsr-recal-file {input.recal_table} --output {output.bam} '
             '--tmp-dir {params.tmp} {params.extra} &> {log}'
