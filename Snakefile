@@ -146,6 +146,9 @@ rule all:
         HiC_mode,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
          if config['phase'] else []),
+        (expand('dat/gatk/.tmp.{cellType}-{method}', cellType=HiC.cellTypes(),
+         method=['applyBQSR', 'haplotypeCaller', 'GATK'])
+         if config['phase'] else []),
         (['qc/multiqc', 'qc/filterQC/ditag_length.png',
          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
         (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
