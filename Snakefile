@@ -1630,6 +1630,8 @@ if not ALLELE_SPECIFIC:
             end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir'],
             extra = ''
+        group:
+            'applyBQSR'
         log:
             'logs/gatk/applyBQSR/{cellType}-{region}.log'
         conda:
@@ -1640,6 +1642,16 @@ if not ALLELE_SPECIFIC:
             '--bqsr-recal-file {input.recal_table} --output {output.bam} '
             '--intervals {params.chr}:{params.start}-{params.end} '
             '--tmp-dir {params.tmp} {params.extra} &> {log}'
+
+    rule aggregateApplyBQSR:
+        input:
+            expand(
+                'dat/mapped/mergeByCell/{{cellType}}-{region}.recalibrated.bam',
+                region=REGIONS.index)
+        output:
+            touch('dat/gatk/.tmp.{cellType}-applyBQSR')
+        group:
+            'applyBQSR' if config['groupJobs'] else 'aggregateTarget'
 
 
     rule haplotypeCaller:
@@ -1660,6 +1672,8 @@ if not ALLELE_SPECIFIC:
             downsample = 50, # Decrease to speed up
             tmp = config['tmpdir'],
             extra = ''
+        group:
+            'haplotypeCaller'
         log:
             'logs/gatk/haplotypeCaller/{cellType}-{region}.log'
         conda:
@@ -1673,6 +1687,16 @@ if not ALLELE_SPECIFIC:
             '--tmp-dir {params.tmp} -ERC GVCF &> {log}'
 
 
+    rule aggregateHaplotypeCaller:
+        input:
+            expand('dat/gatk/split/{{cellType}}-{region}-g.vcf.gz',
+                region=REGIONS.index)
+        output:
+            touch('dat/gatk/.tmp.{cellType}-haplotypeCaller')
+        group:
+            'haplotypeCaller' if config['groupJobs'] else 'aggregateTarget'
+
+
     rule indexFeatureFile:
         input:
             rules.haplotypeCaller.output
@@ -1681,6 +1705,8 @@ if not ALLELE_SPECIFIC:
         params:
             java_opts = '-Xmx4G',
             extra = '',  # optional
+        group:
+            'GATK'
         log:
             'logs/gatk/indexFeatureFile/{cellType}-{region}.log'
         conda:
@@ -1706,6 +1732,8 @@ if not ALLELE_SPECIFIC:
             tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
+        group:
+            'GATK'
         log:
             'logs/gatk/genotypeGVCFs/{cellType}-{region}.log'
         conda:
@@ -1730,6 +1758,8 @@ if not ALLELE_SPECIFIC:
             start = lambda wc: REGIONS['start'][wc.region],
             end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir']
+        group:
+            'GATK'
         log:
             'logs/gatk/selectVariants/{cellType}-{region}-{mode}.log'
         conda:
@@ -1767,6 +1797,8 @@ if not ALLELE_SPECIFIC:
             tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
+        group:
+            'GATK'
         log:
             'logs/gatk/variantRecalibrator/{cellType}-{region}-SNP.log'
         conda:
@@ -1805,6 +1837,8 @@ if not ALLELE_SPECIFIC:
             java_opts = '-Xmx4G',
             tmp = config['tmpdir'],
             extra = '',  # optional
+        group:
+            'GATK'
         log:
             'logs/gatk/variantRecalibrator/{cellType}-{region}-INDEL.log'
         conda:
@@ -1835,6 +1869,8 @@ if not ALLELE_SPECIFIC:
             start = lambda wc: REGIONS['start'][wc.region],
             end = lambda wc: REGIONS['end'][wc.region],
             tmp = config['tmpdir']
+        group:
+            'GATK'
         log:
             'logs/gatk/applyVQSR/{cellType}-{region}-{mode}.log'
         conda:
@@ -1856,6 +1892,8 @@ if not ALLELE_SPECIFIC:
             'dat/gatk/{cellType}-{region}-all.filt.vcf'
         params:
             tmp = config['tmpdir']
+        group:
+            'GATK'
         log:
             'logs/picard/merge_vcfs/{cellType}-{region}.log'
         conda:
@@ -1863,6 +1901,17 @@ if not ALLELE_SPECIFIC:
         shell:
             'picard MergeVcfs INPUT={input.SNP} INPUT={input.INDEL} '
             'TMP_DIR={params.tmp} OUTPUT={output} &> {log}'
+
+
+    rule aggregateGATK:
+        input:
+            expand('dat/gatk/{{cellType}}-{region}-all.filt.vcf',
+                region=REGIONS.index)
+        output:
+            touch('dat/gatk/.tmp.{cellType}-GATK')
+        group:
+            'GATK' if config['groupJobs'] else 'aggregateTarget'
+
 
     # BCFTOOLS PHASE MODE #
 
@@ -1984,6 +2033,8 @@ if not ALLELE_SPECIFIC:
             rules.hapCut2.output.vcf
         output:
             f'{rules.hapCut2.output.vcf}.gz'
+        group:
+            'hapcut2'
         log:
             'logs/bgzip_phased/{region}/{cellType}.log'
         conda:
@@ -1997,6 +2048,8 @@ if not ALLELE_SPECIFIC:
             rules.bgzipPhased.output
         output:
             f'{rules.bgzipPhased.output}.tbi'
+        group:
+            'hapcut2'
         log:
             'logs/index_phased/{region}/{cellType}.log'
         conda:
@@ -2010,6 +2063,8 @@ if not ALLELE_SPECIFIC:
             rules.hapCut2.output.block
         output:
             'dat/phasing/{region}/{cellType}-{region}.tsv'
+        group:
+            'hapcut2'
         log:
             'logs/extractBestPhase/{region}/{cellType}.log'
         conda:
@@ -2025,6 +2080,8 @@ if not ALLELE_SPECIFIC:
             vcf_index = rules.indexPhased.output
         output:
             'dat/phasing/{region}/{cellType}-{region}-best.vcf'
+        group:
+            'hapcut2'
         log:
             'logs/extractVCF/{region}/{cellType}.log'
         conda:
@@ -2039,6 +2096,8 @@ if not ALLELE_SPECIFIC:
              rules.extractVCF.output
         output:
             f'{rules.extractVCF.output}.gz'
+        group:
+            'hapcut2'
         log:
             'logs/bgzipVCF/{region}/{cellType}.log'
         conda:
@@ -2052,6 +2111,8 @@ if not ALLELE_SPECIFIC:
             rules.bgzipVCF.output
         output:
             f'{rules.bgzipVCF.output}.csi'
+        group:
+            'hapcut2'
         log:
             'logs/indexVCF/{region}/{cellType}.log'
         conda:
@@ -2091,6 +2152,8 @@ if not ALLELE_SPECIFIC:
             vcfs = validVCFS
         output:
             'phasedVCFs/{cellType}-phased.vcf'
+        group:
+            'hapcut2' if config['groupJobs'] else 'mergeVCFsbyRegion'
         log:
             'logs/mergeVCFsbyRegion/{cellType}.log'
         conda:
