@@ -41,6 +41,7 @@ default_config = {
         {'minBins':              50  ,
          'minDistance':          300  ,
          'maxLibraryInsertSize': 1000 ,
+         'minMappingQuality':    15   ,
          'removeSelfLigation':   True ,
          'keepSelfCircles':      False,
          'skipDuplicationCheck': False,
@@ -60,7 +61,6 @@ default_config = {
          'G1K'       : None         ,
          'dbsnp'     : None         ,
          'mills'     : None         ,
-         'known'     : None         ,
          'all_known' : None         ,
          'trustPoly' : False        ,
          'downSample': None         ,},
@@ -148,7 +148,7 @@ rule all:
          if config['phase'] else []),
         (expand('dat/gatk/.tmp.{cellType}-{method}', cellType=HiC.cellTypes(),
          method=['applyBQSR', 'haplotypeCaller', 'GATK'])
-         if config['phase'] else []),
+         if (config['phase'] and PHASE_MODE == 'GATK') else []),
         (['qc/multiqc', 'qc/filterQC/ditag_length.png',
          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
         (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
@@ -539,7 +539,7 @@ rule collateBam:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools collate -Ou {input} {params.tmpPrefix} > {output} 2> {log}'
+        'samtools collate -Ofu {input} {params.tmpPrefix} > {output} 2> {log}'
 
 
 rule fixmateBam:
@@ -687,6 +687,7 @@ rule buildBaseMatrix:
         reSeqs = getRestrictionSeqs,
         danglingSequences = getDanglingSequences,
         maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
+        minMappingQuality = config['HiCParams']['minMappingQuality'],
         minDistance = config['HiCParams']['minDistance'],
         removeSelfLigation = (
             'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
@@ -709,6 +710,7 @@ rule buildBaseMatrix:
         '--restrictionSequence {params.reSeqs} '
         '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
         '--minDistance {params.minDistance} '
+        '--minMappingQuality {params.minMappingQuality} '
         '--removeSelfLigation {params.removeSelfLigation} '
         '--danglingSequence {params.danglingSequences} '
         '{params.keepSelfCircles} '
@@ -736,16 +738,15 @@ rule mergeValidHiC:
         'samtools merge -@ {threads} {output} {input} 2> {log}'
 
 
-def validMatrices(wc):
-    """ Remove empty files which break sum replicates. """
-    matrices = []
-    allMatrices = expand(
-        'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}.h5',
-        rep=HiC.groups()[wc.group], bin=BASE_BIN)
-    for matrix in allMatrices:
-        if os.path.exists(matrix) and os.path.getsize(matrix) > 0:
-            matrices.append(matrix)
-    return matrices
+def nonEmpty(wc, output, input):
+    """ Build shell find command to remove non-empty input files at runtime. """
+    findCmd = '$(find -size +0 '
+    for i, file in enumerate(input):
+        if i > 0:
+            findCmd += ' -o '
+        findCmd += f"-wholename './{file}'"
+    findCmd += ')'
+    return findCmd
 
 
 rule sumReplicates:
@@ -753,15 +754,16 @@ rule sumReplicates:
         lambda wc: expand(
             'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}.h5',
             rep=HiC.groups()[wc.group], bin=BASE_BIN),
-        nonEmpty = validMatrices
     output:
         f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}.h5'
+    params:
+        nonEmpty = nonEmpty
     log:
         'logs/sumReplicates/{group}-{region}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicSumMatrices --matrices {input.nonEmpty} --outFileName {output} '
+        'hicSumMatrices --matrices {params.nonEmpty} --outFileName {output} '
         '&> {log} || touch {output}'
 
 
@@ -1156,7 +1158,7 @@ rule mergeBamByReplicate:
     input:
         lambda wc: expand(
             'dat/matrix/{{region}}/{{group}}-{rep}-{{region}}.bam',
-            rep = HiC.groups()[wc.group])
+            rep = HiC.groups()[wc.group]),
     output:
         'dat/matrix/{region}/{group}-{region}.bam'
     log:
@@ -2124,37 +2126,14 @@ if not ALLELE_SPECIFIC:
             'bcftools index -f {input} 2> {log} || touch {output}'
 
 
-    def validVCFS(wc):
-        """ Remove empty files which break bcftools concat. """
-        VCFs = []
-        allVCFs = expand(
-            'dat/phasing/{region}/{cellType}-{region}-best.vcf.gz',
-            region=REGIONS.index, cellType=wc.cellType)
-        for vcf in allVCFs:
-            if os.path.exists(vcf) and os.path.getsize(vcf) > 0:
-                VCFs.append(vcf)
-        return VCFs
-
-    def mergeCommand():
-        """ Do not run merge with only 1 region. """
-        if len(REGIONS) > 1:
-            return ('bcftools concat --allow-overlaps {input.vcfs} '
-                    '> {output} 2> {log}')
-        else:
-            return 'bcftools view {input.vcfs} > {output} 2> {log}'
-
-
     rule mergeVCFsbyRegion:
         input:
-            expand(
-                'dat/phasing/{region}/{{cellType}}-{region}-best.vcf.gz',
-                region=REGIONS.index),
-            expand(
-                'dat/phasing/{region}/{{cellType}}-{region}-best.vcf.gz.csi',
-                region=REGIONS.index),
-            vcfs = validVCFS
+            expand('dat/phasing/{region}/{{cellType}}-{region}-best.vcf.{ext}',
+                region=REGIONS.index, ext=['gz', 'gz.csi']),
         output:
             'phasedVCFs/{cellType}-phased.vcf'
+        params:
+            nonEmpty = nonEmpty
         group:
             'hapcut2' if config['groupJobs'] else 'mergeVCFsbyRegion'
         log:
@@ -2162,7 +2141,8 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
-            mergeCommand()
+            '(bcftools concat --allow-overlaps {params.nonEmpty} > {output} '
+            '|| bcftools view {params.nonEmpty} > {output}) 2> {log} '
 
 
     rule bcftoolsStats:
