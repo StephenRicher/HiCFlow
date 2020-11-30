@@ -695,8 +695,6 @@ rule buildBaseMatrix:
             '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
-    group:
-        'buildBaseMatrix'
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
@@ -726,8 +724,6 @@ rule mergeValidHiC:
             region=regionBin.keys())
     output:
         'dat/mapped/{sample}-validHiC.bam'
-    group:
-        'buildBaseMatrix'
     log:
         'logs/mergeValidHiC/{sample}.log'
     conda:
