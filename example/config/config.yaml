@@ -25,7 +25,7 @@ phase : True
 # The HiCFlow phasing pipeline (see above) outputs a phased VCF for each cell
 # type which is valid input here.
 phased_vcf:
-    S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
+    #S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
 
 # List of binsizes to analyse HiC data at different resolutions.
 # The first binsize defines the base resolution, all subsequence bin sizes
@@ -52,12 +52,14 @@ restrictionSeqs:
         DpnII : '^GATC'
 
 HiCParams:
-    minDistance: 300
+    minBins:              50
+    minDistance:          300
     maxLibraryInsertSize: 1000
-    removeSelfLigation: True
-    keepSelfCircles: False
+    minMappingQuality:    15
+    removeSelfLigation:   True
+    keepSelfCircles:      False
     skipDuplicationCheck: False
-    nofill: False
+    nofill:               False
 
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
@@ -76,14 +78,29 @@ plot_coordinates: ../config/plot_coordinates.bed
 colourmap : 'Purples'
 
 HiCcompare:
-    fdr: 0.1 # FDR threshold for significant differential interactions.
-    logFC: 0 # Fold-change threshold for significant differential interactions.
+    fdr:   0.1  # FDR threshold for significant differential interactions.
+    logFC: 0    # Fold-change threshold for significant differential interactions.
     multi: True # Run multiHiCcompare when replicates are available.
 
 compareMatrices:
     vMin: -1.96 # Mimimum logFC value for colour scale.
     vMax: 1.96  # Maximum logFC value for colour scale.
     size: 3     # Size of median filter to denoise comparison matrix.
+
+
+# GATK variant calling best practises for human data
+gatk:
+    hapmap:     #'gatkResourceBundle/hapmap_3.3.hg38.vcf.gz'
+    omni:       #'gatkResourceBundle/1000G_omni2.5.hg38.vcf.gz'
+    G1K:        #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz'
+    dbsnp:      #'gatkResourceBundle/dbsnp_146.hg38.vcf.gz'
+    mills:      #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz'
+    all_known:  #['gatkResourceBundle/dbsnp_146.hg38.vcf.gz',
+                #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+                #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+    trustPoly:  True
+    downSample: 42.1 # Optionally downsample reads for baseRecalibrator
+
 
 # Output a BAM file containing only valid HiC read pairs within defined regions.
 createValidBam: False
