@@ -1713,12 +1713,10 @@ if not ALLELE_SPECIFIC:
             expand('dat/gatk/split/{{cellType}}-{rep}-g.vcf.gz',
                 rep=[str(i).zfill(4) for i in range(config['gatk']['scatterCount'])])
         output:
-            'dat/gatk/{cellType}-g.vcf.gz'
+            'dat/gatk/merged/{cellType}-g.vcf.gz'
         params:
             gvcfs = gatherVCFsInput,
             java_opts = '-Xmx4G'
-        group:
-            'GATK'
         log:
             'logs/gatk/gatherGVCFs/{cellType}.log'
         conda:
@@ -1732,7 +1730,7 @@ if not ALLELE_SPECIFIC:
         input:
             rules.gatherVCFs.output
         output:
-            'dat/gatk/{cellType}-sorted-g.vcf.gz'
+            'dat/gatk/merged/{cellType}-sorted-g.vcf.gz'
         params:
             tmp = config['tmpdir']
         group:
