@@ -1679,6 +1679,8 @@ if not ALLELE_SPECIFIC:
             'logs/gatk/haplotypeCaller/{cellType}-{region}.log'
         conda:
             f'{ENVS}/gatk.yaml'
+        threads:
+            min(4, THREADS)
         shell:
             'gatk --java-options {params.java_opts} HaplotypeCaller '
             '{params.extra} --input {input.bam} --output {output} '
@@ -1806,7 +1808,7 @@ if not ALLELE_SPECIFIC:
             dbsnp = f'--resource:dbsnp,known=true,training=false,truth=false,'
             f'prior=7.0 {config["gatk"]["dbsnp"]}' if config["gatk"]["dbsnp"]  else '',
             trustPoly = '--trust-all-polymorphic' if config['gatk']['trustPoly'] else '',
-            max_gaussians = 3,
+            max_gaussians = 6,
             tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
@@ -1819,7 +1821,8 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk --java-options {params.java_opts} VariantRecalibrator '
             '--reference {input.ref} --variant {input.vcf} --mode SNP '
-            '-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR '
+            '-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 '
+            '-an QD -an FS -an MQRankSum -an ReadPosRankSum -an SOR -an MQ '
             '--output {output.recal} --tranches-file {output.tranches} '
             '--max-gaussians {params.max_gaussians} '
             '{params.dbsnp} {params.hapmap} {params.omni} '
@@ -1842,7 +1845,7 @@ if not ALLELE_SPECIFIC:
             dbsnp = f'--resource:dbsnp,known=true,training=false,truth=false,'
             f'prior=2.0 {config["gatk"]["dbsnp"]}' if config["gatk"]["dbsnp"]  else '',
             trustPoly = '--trust-all-polymorphic' if config['gatk']['trustPoly'] else '',
-            max_gaussians = 3,
+            max_gaussians = 4,
             java_opts = '-Xmx4G',
             tmp = config['tmpdir'],
             extra = '',  # optional
@@ -1855,7 +1858,8 @@ if not ALLELE_SPECIFIC:
         shell:
             'gatk --java-options {params.java_opts} VariantRecalibrator '
             '--reference {input.ref} --variant {input.vcf} --mode INDEL '
-            '-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR '
+            '-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 '
+            '-an QD -an FS -an MQRankSum -an ReadPosRankSum -an SOR '
             '--output {output.recal} --tranches-file {output.tranches} '
             '--max-gaussians {params.max_gaussians} '
             '{params.dbsnp} {params.mills} {params.trustPoly} '
@@ -1873,6 +1877,7 @@ if not ALLELE_SPECIFIC:
         output:
             'dat/gatk/{cellType}-{mode}.filt.vcf.gz'
         params:
+            sensitivity = lambda wc: 99.5 if wc.mode == 'SNP' else 99.0,
             tmp = config['tmpdir']
         group:
             'GATK'
@@ -1884,7 +1889,7 @@ if not ALLELE_SPECIFIC:
             'gatk ApplyVQSR --reference {input.ref} --variant {input.vcf} '
             '--tranches-file {input.tranches} --mode {wildcards.mode} '
             '--exclude-filtered --recal-file {input.recal} '
-            '--truth-sensitivity-filter-level 99.0 '
+            '--truth-sensitivity-filter-level {params.sensitivity} '
             '--tmp-dir {params.tmp} --output {output} &> {log}'
 
 
