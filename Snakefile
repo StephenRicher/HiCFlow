@@ -1717,6 +1717,8 @@ if not ALLELE_SPECIFIC:
         params:
             gvcfs = gatherVCFsInput,
             java_opts = '-Xmx4G'
+        group:
+            'GATK'
         log:
             'logs/gatk/gatherGVCFs/{cellType}.log'
         conda:
@@ -1788,7 +1790,7 @@ if not ALLELE_SPECIFIC:
 
     rule selectVariants:
         input:
-            vcf = rules.sortGVCF.output,
+            vcf = rules.genotypeGVCFs.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
