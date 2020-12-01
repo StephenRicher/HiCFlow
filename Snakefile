@@ -1743,7 +1743,7 @@ if not ALLELE_SPECIFIC:
 
     rule genotypeGVCFs:
         input:
-            gvcf = rules.haplotypeCaller.output,
+            gvcf = rules.gatherVCFs.output,
             gvcf_idex = rules.indexFeatureFile.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
