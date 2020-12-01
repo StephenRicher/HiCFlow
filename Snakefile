@@ -1716,7 +1716,9 @@ if not ALLELE_SPECIFIC:
             'dat/gatk/{cellType}-g.vcf.gz'
         params:
             gvcfs = gatherVCFsInput,
-            java_opts = '-Xmx4G',
+            java_opts = '-Xmx4G'
+        group:
+            'GATK'
         log:
             'logs/gatk/gatherGVCFs/{cellType}.log'
         conda:
@@ -1726,13 +1728,33 @@ if not ALLELE_SPECIFIC:
              '{params.gvcfs} -O {output} &> {log}'
 
 
-    rule indexFeatureFile:
+    rule sortGVCF:
         input:
             rules.gatherVCFs.output
         output:
-            f'{rules.gatherVCFs.output}.tbi'
+            'dat/gatk/{cellType}-sorted-g.vcf.gz'
+        params:
+            tmp = config['tmpdir']
+        group:
+            'GATK'
+        log:
+            'logs/picard/sortGVCF/{cellType}.log'
+        conda:
+            f'{ENVS}/picard.yaml'
+        shell:
+            'picard SortVcf INPUT={input} TMP_DIR={params.tmp} '
+            'OUTPUT={output} &> {log}'
+
+
+    rule indexFeatureFile:
+        input:
+            rules.sortGVCF.output
+        output:
+            f'{rules.sortGVCF.output}.tbi'
         params:
             java_opts = '-Xmx4G',
+        group:
+            'GATK'
         log:
             'logs/gatk/indexFeatureFile/{cellType}.log'
         conda:
@@ -1744,7 +1766,7 @@ if not ALLELE_SPECIFIC:
 
     rule genotypeGVCFs:
         input:
-            gvcf = rules.gatherVCFs.output,
+            gvcf = rules.sortGVCF.output,
             gvcf_idex = rules.indexFeatureFile.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
@@ -1768,7 +1790,7 @@ if not ALLELE_SPECIFIC:
 
     rule selectVariants:
         input:
-            vcf = rules.genotypeGVCFs.output,
+            vcf = rules.sortGVCF.output,
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output
