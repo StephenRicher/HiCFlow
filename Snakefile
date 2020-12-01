@@ -152,7 +152,7 @@ rule all:
         (['qc/multiqc', 'qc/filterQC/ditag_length.png',
          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
         (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
-         if config['createValidBam'] else [])
+         if (config['createValidBam'] and regionBin) else [])
 
 
 if ALLELE_SPECIFIC:
