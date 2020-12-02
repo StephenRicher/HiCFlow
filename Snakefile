@@ -744,7 +744,7 @@ def nonEmpty(wc, output, input):
         elif i > 0:
             findCmd += ' -o '
         findCmd += f"-path './{file}'"
-    findCmd += '\))'
+    findCmd += ' \))'
     return findCmd
 
 
