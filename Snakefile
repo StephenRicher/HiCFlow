@@ -701,7 +701,7 @@ rule buildBaseMatrix:
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
-        4 if THREADS > 4 else THREADS
+        max(2, THREADS)
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
