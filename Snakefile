@@ -736,7 +736,7 @@ rule mergeValidHiC:
 
 def nonEmpty(wc, output, input):
     """ Build find command to remove non-empty input files at runtime. """
-    findCmd = '$(find -size +0 \('
+    findCmd = '$(find -size +0 \( '
     for i, file in enumerate(input):
         # Skip index files
         if file.endswith('.csi'):
