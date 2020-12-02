@@ -1926,7 +1926,7 @@ if not ALLELE_SPECIFIC:
             SNP = 'dat/gatk/{cellType}-SNP.filt.vcf.gz',
             INDEL = 'dat/gatk/{cellType}-INDEL.filt.vcf.gz',
         output:
-            'dat/gatk/{cellType}-all.filt.vcf'
+            'dat/gatk/{cellType}-all.filt.vcf.gz'
         params:
             tmp = config['tmpdir']
         group:
@@ -2025,7 +2025,7 @@ if not ALLELE_SPECIFIC:
 
     def hapCut2vcf(wc):
         if PHASE_MODE == 'GATK':
-            return rules.mergeVCFs.output
+            return rules.splitVCFS.output
         else:
             return rules.filterVariants.output
 
