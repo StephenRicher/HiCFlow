@@ -1453,12 +1453,14 @@ if not ALLELE_SPECIFIC:
             pipe('dat/mapped/{preSample}.sorted.bam')
         params:
             mem = '1G'
-        threads:
-            max(math.ceil(THREADS * 0.5), 1)
+        group:
+            'deduplicate'
         log:
             'logs/sortBam/{preSample}.log'
         conda:
             f'{ENVS}/samtools.yaml'
+        threads:
+            max(math.ceil(THREADS * 0.5), 1)
         shell:
             'samtools sort -@ {threads} -O bam,level=0 '
             '-m {params.mem} {input} > {output} 2> {log}'
@@ -1470,12 +1472,14 @@ if not ALLELE_SPECIFIC:
         output:
             bam = temp('dat/mapped/{preSample}.dedup.bam'),
             qc = 'qc/deduplicate/{preSample}.txt'
-        threads:
-            max(math.floor(THREADS * 0.5), 1)
+        group:
+            'deduplicate'
         log:
             'logs/deduplicate/{preSample}.log'
         conda:
             f'{ENVS}/samtools.yaml'
+        threads:
+            max(math.floor(THREADS * 0.5), 1)
         shell:
             'samtools markdup -@ {threads} '
             '-rsf {output.qc} {input} {output.bam} &> {log}'
