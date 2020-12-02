@@ -73,6 +73,7 @@ default_config = {
     'phase':             True,
     'createValidBam':    False,
     'runQC':             True,
+    'runHiCRep':         True,
     'colourmap':         'Purples',
     'multiQCconfig':     None,
     'groupJobs':         False,
@@ -128,8 +129,6 @@ tools = (
     ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
     else ['HiCcompare'])
 HiC_mode = ([
-    [expand('qc/hicrep/{region}-{bin}-hicrep.png', region=region,
-        bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
         region=region, coords=COORDS[region], set=['logFC', 'sig'],
         compare=HiC.groupCompares(), bin=regionBin[region],
@@ -151,6 +150,9 @@ rule all:
          if (config['phase'] and PHASE_MODE == 'GATK') else []),
         (['qc/multiqc', 'qc/filterQC/ditag_length.png',
          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
+        ([expand('qc/hicrep/{region}-{bin}-hicrep.png', region=region,
+            bin=regionBin[region]) for region in regionBin]
+         if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
          if (config['createValidBam'] and regionBin) else [])
 
