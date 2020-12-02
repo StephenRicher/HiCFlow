@@ -2048,7 +2048,7 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/hapcut2.yaml'
         shell:
             'extractHAIRS --hic 1 --bam {input.bam} '
-            '--region {params.chr}:{params.start}-{params.end} '
+            '--regions {params.chr}:{params.start}-{params.end} '
             '--VCF {input.vcf} --out {output} &> {log}'
 
 
