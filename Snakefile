@@ -738,7 +738,10 @@ def nonEmpty(wc, output, input):
     """ Build find command to remove non-empty input files at runtime. """
     findCmd = '$(find -size +0 '
     for i, file in enumerate(input):
-        if i > 0:
+        # Skip index files
+        if file.endswith('.csi'):
+            continue
+        elif i > 0:
             findCmd += ' -o '
         findCmd += f"-wholename './{file}'"
     findCmd += ')'
