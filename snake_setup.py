@@ -156,7 +156,11 @@ class HiCSamples:
             samples = self.originalSamples().to_list()
         return samples
 
+    def all(self):
+        """ Return groups and samples as combined list """
+        return self.samples() + list(self.groups())
 
+        
     def groupCompares(self):
         """ Return list of pairwise group comparison """
         pairs = itertools.combinations(list(self.groups()), 2)

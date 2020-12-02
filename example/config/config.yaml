@@ -101,6 +101,9 @@ gatk:
     trustPoly:  True
     downSample: 42.1 # Optionally downsample reads for baseRecalibrator
 
+plotRep: True
+
+runHiCRep: True
 
 # Output a BAM file containing only valid HiC read pairs within defined regions.
 createValidBam: False

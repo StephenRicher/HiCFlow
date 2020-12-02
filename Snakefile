@@ -74,6 +74,7 @@ default_config = {
     'createValidBam':    False,
     'runQC':             True,
     'runHiCRep':         True,
+    'plotRep':           True,
     'colourmap':         'Purples',
     'multiQCconfig':     None,
     'groupJobs':         False,
@@ -137,8 +138,8 @@ HiC_mode = ([
         region=region, coords=COORDS[region],
         group=HiC.groups(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
-        region=region, all=HiC.samples()+list(HiC.groups()),
-        bin=regionBin[region]) for region in regionBin],
+        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+        region=region, bin=regionBin[region]) for region in regionBin],
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 
 rule all:
