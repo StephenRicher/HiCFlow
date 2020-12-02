@@ -653,6 +653,23 @@ rule splitPairedReads:
         '> {output} 2> {log}'
 
 
+rule indexSplitBam:
+    input:
+        rules.splitPairedReads.output
+    output:
+        f'{rules.splitPairedReads.output}.bai'
+    group:
+        'prepareBAM'
+    log:
+        'logs/indexSplitBam/{sample}-{read}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools index -@ {threads} {input} &> {log}'
+
+
 def getRestSites(wc):
     """ Retrieve restSite files associated with sample wildcard """
     try:
@@ -677,6 +694,7 @@ def getDanglingSequences(wc):
 rule buildBaseMatrix:
     input:
         bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=['R1', 'R2']),
+        indexes = expand('dat/mapped/split/{{sample}}-{read}.bam.bai', read=['R1', 'R2']),
         restSites = getRestSites
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
