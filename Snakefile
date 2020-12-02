@@ -650,24 +650,7 @@ rule splitPairedReads:
         THREADS
     shell:
         'samtools view -@ {threads} -f {params.flag} -b {input} '
-        '> {output} 2> {log}'
-
-
-rule indexSplitBam:
-    input:
-        rules.splitPairedReads.output
-    output:
-        f'{rules.splitPairedReads.output}.bai'
-    group:
-        'prepareBAM'
-    log:
-        'logs/indexSplitBam/{sample}-{read}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools index -@ {threads} {input} &> {log}'
+        '| samtools sort > {output} 2> {log}'
 
 
 def getRestSites(wc):
@@ -694,7 +677,6 @@ def getDanglingSequences(wc):
 rule buildBaseMatrix:
     input:
         bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=['R1', 'R2']),
-        indexes = expand('dat/mapped/split/{{sample}}-{read}.bam.bai', read=['R1', 'R2']),
         restSites = getRestSites
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
