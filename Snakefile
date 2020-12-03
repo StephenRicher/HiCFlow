@@ -650,7 +650,7 @@ rule splitPairedReads:
         THREADS
     shell:
         'samtools view -@ {threads} -f {params.flag} -b {input} '
-        '| samtools sort > {output} 2> {log}'
+        ' > {output} 2> {log}'
 
 
 def getRestSites(wc):
@@ -2266,7 +2266,7 @@ rule mergeHicupQC:
     log:
         'logs/mergeHicupQC/{preSample}.log'
     conda:
-        f'{ENVS}/hicup.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/mergeHicupSummary.py --truncater {input} > {output} 2> {log}'
 
