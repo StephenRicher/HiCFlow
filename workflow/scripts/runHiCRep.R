@@ -18,6 +18,9 @@ end = as.integer(args[4])
 matrix1 = args[5]
 matrix2 = args[6]
 
+h_hat = NA
+scc = NA
+
 if (file.info(matrix1)$size == 0) {
   print(paste(matrix1 ,"is empty - SCC not computed."))
 } else if (file.info(matrix2)$size == 0) {
