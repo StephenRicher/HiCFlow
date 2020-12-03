@@ -19,9 +19,9 @@ matrix1 = args[5]
 matrix2 = args[6]
 
 if (file.info(matrix1)$size == 0) {
-  print(matrix1 ,"is empty - SCC not computed.")
+  print(paste(matrix1 ,"is empty - SCC not computed."))
 } else if (file.info(matrix2)$size == 0) {
-  print(matrix2 ,"is empty - SCC not computed.")
+  print(paste(matrix2 ,"is empty - SCC not computed."))
 } else {
   # Set max interaction as half capture region size, or 1,000,000bp
   max_interaction = min(1000000, as.integer((end - start)/2))
