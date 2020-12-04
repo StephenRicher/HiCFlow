@@ -62,9 +62,10 @@ default_config = {
          'dbsnp'       : None         ,
          'mills'       : None         ,
          'all_known'   : None         ,
+         'maxGaussians': 8            ,
          'trustPoly'   : False        ,
          'downSample'  : None         ,
-         'scatterCount': 100},
+         'scatterCount': 100          ,},
     'resolution':
         {'base':          5000        ,
          'bins':         [5000, 10000],},
@@ -1839,7 +1840,7 @@ if not ALLELE_SPECIFIC:
             dbsnp = f'--resource:dbsnp,known=true,training=false,truth=false,'
             f'prior=7.0 {config["gatk"]["dbsnp"]}' if config["gatk"]["dbsnp"]  else '',
             trustPoly = '--trust-all-polymorphic' if config['gatk']['trustPoly'] else '',
-            max_gaussians = 6,
+            maxGaussians = config['gatk']['maxGaussians'],
             tmp = config['tmpdir'],
             java_opts = '-Xmx4G',
             extra = '',  # optional
@@ -1855,7 +1856,7 @@ if not ALLELE_SPECIFIC:
             '-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 '
             '-an QD -an FS -an MQRankSum -an ReadPosRankSum -an SOR -an MQ '
             '--output {output.recal} --tranches-file {output.tranches} '
-            '--max-gaussians {params.max_gaussians} '
+            '--max-gaussians {params.maxGaussians} '
             '{params.dbsnp} {params.hapmap} {params.omni} '
             '{params.G1K} {params.trustPoly} {params.extra} '
             '--tmp-dir {params.tmp} &> {log}'
@@ -1876,7 +1877,7 @@ if not ALLELE_SPECIFIC:
             dbsnp = f'--resource:dbsnp,known=true,training=false,truth=false,'
             f'prior=2.0 {config["gatk"]["dbsnp"]}' if config["gatk"]["dbsnp"]  else '',
             trustPoly = '--trust-all-polymorphic' if config['gatk']['trustPoly'] else '',
-            max_gaussians = 4,
+            maxGaussians = config['gatk']['maxGaussians'],
             java_opts = '-Xmx4G',
             tmp = config['tmpdir'],
             extra = '',  # optional
@@ -1892,7 +1893,7 @@ if not ALLELE_SPECIFIC:
             '-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 '
             '-an QD -an FS -an MQRankSum -an ReadPosRankSum -an SOR '
             '--output {output.recal} --tranches-file {output.tranches} '
-            '--max-gaussians {params.max_gaussians} '
+            '--max-gaussians {params.maxGaussians} '
             '{params.dbsnp} {params.mills} {params.trustPoly} '
             '{params.extra} --tmp-dir {params.tmp} &> {log}'
 
