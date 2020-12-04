@@ -650,7 +650,7 @@ rule splitPairedReads:
         THREADS
     shell:
         'samtools view -@ {threads} -f {params.flag} -b {input} '
-        ' > {output} 2> {log}'
+        '> {output} 2> {log}'
 
 
 def getRestSites(wc):
@@ -1560,7 +1560,7 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/samtools.yaml'
         shell:
-            'samtools view -@ {threads} -s {params.fraction} {input} '
+            'samtools view -b -@ {threads} -s {params.fraction} {input} '
             '> {output} 2> {log}'
 
 
