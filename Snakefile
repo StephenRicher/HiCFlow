@@ -141,6 +141,8 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region]) for region in regionBin],
+     expand('dat/mapped/split/{sample}-{read}.bam',
+        sample=HiC.samples(), read=['R1', 'R2']),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 
 rule all:
@@ -1164,6 +1166,8 @@ rule mergeBamByReplicate:
             rep = HiC.groups()[wc.group]),
     output:
         'dat/matrix/{region}/{group}-{region}.bam'
+    params:
+        nonEmpty = nonEmpty
     log:
         'logs/mergeBamByReplicate/{region}/{group}.log'
     conda:
@@ -1171,7 +1175,7 @@ rule mergeBamByReplicate:
     threads:
         THREADS
     shell:
-        'samtools merge -@ {threads} {output} {input} 2> {log}'
+        'samtools merge -@ {threads} {output} {params.nonEmpty} 2> {log}'
 
 
 rule reformatPre:
