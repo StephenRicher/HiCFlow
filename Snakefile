@@ -2182,7 +2182,7 @@ if not ALLELE_SPECIFIC:
         params:
             nonEmpty = nonEmpty
         group:
-            'hapcut2' if config['groupJobs'] else 'mergeVCFsbyRegion'
+            'mergeVCFsbyRegion'
         log:
             'logs/mergeVCFsbyRegion/{cellType}.log'
         conda:
