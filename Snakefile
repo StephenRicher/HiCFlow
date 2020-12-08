@@ -132,7 +132,7 @@ tools = (
     else ['HiCcompare'])
 HiC_mode = ([
     [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
-        region=region, coords=COORDS[region], set=['logFC', 'sig'],
+        region=region, coords=COORDS[region], set=['logFC'],
         compare=HiC.groupCompares(), bin=regionBin[region],
         tool=tools) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coords}-{bin}.png',
@@ -2047,7 +2047,8 @@ if not ALLELE_SPECIFIC:
         params:
             chr = lambda wc: REGIONS['chr'][wc.region],
             start = lambda wc: REGIONS['start'][wc.region],
-            end = lambda wc: REGIONS['end'][wc.region]
+            end = lambda wc: REGIONS['end'][wc.region],
+            maxfragments = 20000000
         group:
             'hapcut2'
         log:
@@ -2056,6 +2057,7 @@ if not ALLELE_SPECIFIC:
             f'{ENVS}/hapcut2.yaml'
         shell:
             'extractHAIRS --hic 1 --bam {input.bam} '
+            '--maxfragments {params.maxfragments} '
             '--regions {params.chr}:{params.start}-{params.end} '
             '--VCF {input.vcf} --out {output} &> {log}'
 
