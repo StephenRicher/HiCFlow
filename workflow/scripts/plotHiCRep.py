@@ -13,10 +13,7 @@ from utilities import setDefaults
 __version__ = '1.0.0'
 
 
-def main(files: List, out: str, dpi: int, vmin: float, vmax: float, fontSize: float):
-
-    # Set global matplotlib fontisze
-    plt.rcParams.update({'font.size': fontSize})
+def main(files: List, out: str, dpi: int, vmin: float, vmax: float):
 
     data = pd.concat([pd.read_csv(file) for file in files])
 
@@ -60,9 +57,6 @@ def parseArgs():
     requiredNamed.add_argument(
         '--out', required=True,
         help='Output filename for HiCRep heatmap.')
-    parser.add_argument(
-        '--fontSize', type=float, default=12,
-        help='Font size for node name on circos plot (default: %(default)s)')
     parser.add_argument(
         '--dpi', type=int, default=300,
         help='Resolution for plot (default: %(default)s)')
