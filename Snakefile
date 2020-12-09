@@ -143,6 +143,9 @@ HiC_mode = ([
         region=region, bin=regionBin[region]) for region in regionBin],
      expand('dat/mapped/split/{sample}-{read}.bam',
         sample=HiC.samples(), read=['R1', 'R2']),
+     expand('qc/matrixCoverage/{region}/{all}-coverage.png',
+        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+        region=regionBin.keys()),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 
 rule all:
@@ -945,6 +948,27 @@ rule reformatNxN:
     shell:
         '{SCRIPTS}/reformatNxN.py <(zcat {input}) '
         '> {output} 2> {log} || touch {output}'
+
+
+rule plotCoverage:
+    input:
+        lambda wc: expand('dat/matrix/{{region}}/{bin}/raw/{{all}}-{{region}}-{bin}.gz',
+            bin=regionBin[wc.region])
+    output:
+        'qc/matrixCoverage/{region}/{all}-coverage.png'
+    params:
+        dpi = 300,
+        nBins = 10000,
+        fontSize = 12,
+        nonEmpty = nonEmpty
+    log:
+        'logs/plotCoverage/{region}/{all}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/contactCoverage.py {params.nonEmpty} '
+        '--out {output} --dpi {params.dpi} --nBins {params.nBins} '
+        '--fontSize {params.fontSize} &> {log}'
 
 
 rule OnTAD:
