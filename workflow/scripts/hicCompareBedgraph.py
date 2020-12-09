@@ -5,7 +5,7 @@
 import sys
 import argparse
 import pandas as pd
-from utilities import setDefaults
+from utilities import setDefaults, readHomer
 
 __version__ = '1.0.0'
 
@@ -32,27 +32,6 @@ def hicCompareBedgraph(
         bed.to_csv(
             out,  columns=[0, 1, 2, 'zscore'],
             sep='\t', index=False, header=False)
-
-
-def readHomer(matrix, binSize):
-    """ Read Homer matrix format and convert to long format """
-
-    mat = pd.read_csv(matrix, skiprows=1, header=None, sep='\t').drop(0, axis=1)
-    # Split chromosome and start into 2 column DF
-    positions = mat[1].str.split('-', expand=True)
-    # Add end positions
-    positions[2] = positions[1].astype(int) + binSize
-    # Add full region position and set as index
-    positions['pos'] = mat[1]
-    positions =  positions.set_index('pos')
-    # Set columns
-    mat.columns = pd.Series('region').append(positions[1])
-    mat['end'] = positions[1].values.astype(int)
-
-    mat = mat.melt(id_vars=['region', 'end'], var_name='start', value_name='score')
-    mat['start'] = mat['start'].astype(int)
-
-    return positions, mat
 
 
 def parseArgs():
