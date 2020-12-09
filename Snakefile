@@ -141,8 +141,6 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region]) for region in regionBin],
-     expand('dat/mapped/split/{sample}-{read}.bam',
-        sample=HiC.samples(), read=['R1', 'R2']),
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=regionBin.keys()),
