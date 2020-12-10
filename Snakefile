@@ -690,7 +690,7 @@ def splitInput(wc):
     if ALLELE_SPECIFIC:
         return 'dat/snpsplit/merged/{sample}.hic.bam'
     else:
-        return 'dat/mapped/{sample}.hic.bam'
+        return 'dat/mapped/{sample}.dedup-collate.bam'
 
 
 rule splitPairedReads:
