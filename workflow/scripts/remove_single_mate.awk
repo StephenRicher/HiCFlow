@@ -1,6 +1,6 @@
 #!/usr/bin/awk -f
 
-function header() {
+function inHeader() {
 	return $0 ~ /^@/
 }
 
@@ -14,9 +14,10 @@ BEGIN {
 }
 
 {
-if (header()) {
+if (endHeader || inHeader()) {
 	print $0
 } else {
+	endHeader=0
 	N++
 	if (first_in_pair(N)) {
 		read1qname = $1
@@ -29,7 +30,8 @@ if (header()) {
 			print read1
 			print read2
 		} else {
-			read1 = $0
+			read1 = read2
+			read1qname = read2qname
 			N++
 		}
 	}

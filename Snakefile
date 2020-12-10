@@ -625,7 +625,6 @@ rule collate2Bam:
         '> {output} 2> {log}'
 
 
-# Input to SNPsplit
 rule removeUnmapped:
     input:
         rules.collate2Bam.output
@@ -640,7 +639,7 @@ rule removeUnmapped:
     shell:
         'samtools view -h -F 12 {input} > {output} 2> {log}'
 
-
+# Input to SNPsplit
 rule removeSingleMate:
     input:
         rules.removeUnmapped.output
