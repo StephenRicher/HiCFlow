@@ -608,7 +608,7 @@ rule collate2Bam:
     input:
         rules.deduplicate.output.bam
     output:
-        temp('dat/mapped/{preSample}.dedup-collate.bam')
+        pipe('dat/mapped/{preSample}.dedup-collate.sam')
     params:
         # Add '/' to path if not present
         tmpPrefix = os.path.join(config['tmpdir'], '')
@@ -627,17 +627,30 @@ rule removeUnmapped:
     input:
         rules.collate2Bam.output
     output:
-        temp('dat/mapped/{preSample}.hic.bam')
+        pipe('dat/mapped/{preSample}.removeUnmapped.sam')
     group:
         'collateBAM'
     log:
         'logs/removeUnmapped/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
     shell:
-        'samtools view -@ {threads} -b -F 12 {input} > {output} 2> {log}'
+        'samtools view -h -F 12 {input} > {output} 2> {log}'
+
+
+rule removeSingleMate:
+    input:
+        rules.removeUnmapped.output
+    output:
+        temp('dat/mapped/{preSample}.hic.sam')
+    group:
+        'collateBAM'
+    log:
+        'logs/removeSingleMate/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        '{SCRIPTS}/remove_single_mate.awk {input} > {output} 2> {log}'
 
 
 def SNPsplitInput(wc):
@@ -648,7 +661,7 @@ def SNPsplitInput(wc):
 
 rule SNPsplit:
     input:
-        bam = rules.removeUnmapped.output,
+        bam = rules.removeSingleMate.output,
         snps = SNPsplitInput
     output:
         temp(expand('dat/snpsplit/{{preSample}}.hic.{ext}',
@@ -690,7 +703,7 @@ def splitInput(wc):
     if ALLELE_SPECIFIC:
         return 'dat/snpsplit/merged/{sample}.hic.bam'
     else:
-        return 'dat/mapped/{sample}.hic.bam'
+        return 'dat/mapped/{sample}.hic.sam'
 
 
 rule splitPairedReads:
@@ -757,7 +770,7 @@ rule buildBaseMatrix:
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
-        max(2, THREADS)
+        4
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
