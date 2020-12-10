@@ -69,7 +69,7 @@ def parseArgs():
         help='Number of bins for histogram (default: %(default)s)')
     parser.add_argument(
         '--fontSize', type=float, default=12,
-        help='Font size for node name on circos plot (default: %(default)s)')
+        help='Plot font size (default: %(default)s)')
     parser.add_argument(
         '--dpi', type=int, default=300,
         help='Resolution for plot (default: %(default)s)')
