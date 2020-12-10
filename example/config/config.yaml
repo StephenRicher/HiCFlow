@@ -18,7 +18,7 @@ genome :
     S2Rplus : ../genome/BDGP6.28.fa.gz
 
 # Set True to perform phasing and haplotype assembly pipeline.
-phase : True
+phase : False
 
 # Phased VCF file for allele specific analysis. Must specify a VCF for each
 # cell type defined in config['data']. If not set then run normal HiC mode.
@@ -58,7 +58,6 @@ HiCParams:
     minMappingQuality:    15
     removeSelfLigation:   True
     keepSelfCircles:      False
-    skipDuplicationCheck: False
     nofill:               False
 
 # Bigwig tracks for plotting below HiC plots.
@@ -80,7 +79,7 @@ colourmap : 'Purples'
 HiCcompare:
     fdr:   0.1  # FDR threshold for significant differential interactions.
     logFC: 0    # Fold-change threshold for significant differential interactions.
-    multi: True # Run multiHiCcompare when replicates are available.
+    multi: False # Run multiHiCcompare when replicates are available.
 
 compareMatrices:
     vMin: -1.96 # Mimimum logFC value for colour scale.

@@ -44,7 +44,6 @@ default_config = {
          'minMappingQuality':    15   ,
          'removeSelfLigation':   True ,
          'keepSelfCircles':      False,
-         'skipDuplicationCheck': False,
          'nofill':               False,},
     'HiCcompare':
         {'fdr' :         0.05         ,
@@ -566,14 +565,71 @@ rule fixmateBam:
         'samtools fixmate -@ {threads} -mp {input} {output} 2> {log}'
 
 
-# Input to SNPsplit
-rule removeUnmapped:
+rule sortBam:
     input:
         rules.fixmateBam.output
     output:
+        pipe('dat/mapped/{preSample}.sorted.bam')
+    params:
+        mem = '1G'
+    group:
+        'dedupBAM'
+    log:
+        'logs/sortBam/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        max(math.ceil(THREADS * 0.5), 1)
+    shell:
+        'samtools sort -@ {threads} -O bam,level=0 '
+        '-m {params.mem} {input} > {output} 2> {log}'
+
+
+rule deduplicate:
+    input:
+        rules.sortBam.output
+    output:
+        bam = temp('dat/mapped/{preSample}.dedup.bam'),
+        qc = 'qc/deduplicate/{preSample}.txt'
+    group:
+        'dedupBAM'
+    log:
+        'logs/deduplicate/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        max(math.floor(THREADS * 0.5), 1)
+    shell:
+        'samtools markdup -@ {threads} '
+        '-rsf {output.qc} {input} {output.bam} &> {log}'
+
+
+rule collate2Bam:
+    input:
+        rules.deduplicate.output.bam
+    output:
+        temp('dat/mapped/{preSample}.dedup-collate.bam')
+    params:
+        # Add '/' to path if not present
+        tmpPrefix = os.path.join(config['tmpdir'], '')
+    group:
+        'collateBAM'
+    log:
+        'logs/collateBam/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools collate -Ofu {input} {params.tmpPrefix} > {output} 2> {log}'
+
+
+# Input to SNPsplit
+rule removeUnmapped:
+    input:
+        rules.collate2Bam.output
+    output:
         temp('dat/mapped/{preSample}.hic.bam')
     group:
-        'prepareBAM'
+        'collateBAM'
     log:
         'logs/removeUnmapped/{preSample}.log'
     conda:
@@ -634,7 +690,7 @@ def splitInput(wc):
     if ALLELE_SPECIFIC:
         return 'dat/snpsplit/merged/{sample}.hic.bam'
     else:
-        return 'dat/mapped/{sample}.fixed.bam'
+        return 'dat/mapped/{sample}.hic.bam'
 
 
 rule splitPairedReads:
@@ -644,8 +700,6 @@ rule splitPairedReads:
         'dat/mapped/split/{sample}-{read}.bam'
     params:
         flag = lambda wc: '0x40' if wc.read == 'R1' else '0x80'
-    group:
-        'prepareBAM'
     log:
         'logs/splitPairedReads/{sample}-{read}.log'
     conda:
@@ -699,9 +753,7 @@ rule buildBaseMatrix:
         removeSelfLigation = (
             'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
         keepSelfCircles = (
-            '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
-        skipDuplicationCheck = (
-            '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
+            '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else '')
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
@@ -719,7 +771,7 @@ rule buildBaseMatrix:
         '--removeSelfLigation {params.removeSelfLigation} '
         '--danglingSequence {params.danglingSequences} '
         '{params.keepSelfCircles} '
-        '{params.skipDuplicationCheck} --binSize {params.bin} '
+        '--skipDuplicationCheck --binSize {params.bin} '
         '--outFileName {output.hic} --outBam {output.bam} '
         '--QCfolder {output.qc} --threads {threads} '
         '&> {log}  || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
@@ -1478,45 +1530,6 @@ rule plotCompare:
 
 
 if not ALLELE_SPECIFIC:
-
-    rule sortBam:
-        input:
-            rules.fixmateBam.output
-        output:
-            pipe('dat/mapped/{preSample}.sorted.bam')
-        params:
-            mem = '1G'
-        group:
-            'deduplicate'
-        log:
-            'logs/sortBam/{preSample}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        threads:
-            max(math.ceil(THREADS * 0.5), 1)
-        shell:
-            'samtools sort -@ {threads} -O bam,level=0 '
-            '-m {params.mem} {input} > {output} 2> {log}'
-
-
-    rule deduplicate:
-        input:
-            rules.sortBam.output
-        output:
-            bam = temp('dat/mapped/{preSample}.dedup.bam'),
-            qc = 'qc/deduplicate/{preSample}.txt'
-        group:
-            'deduplicate'
-        log:
-            'logs/deduplicate/{preSample}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        threads:
-            max(math.floor(THREADS * 0.5), 1)
-        shell:
-            'samtools markdup -@ {threads} '
-            '-rsf {output.qc} {input} {output.bam} &> {log}'
-
 
     rule mergeBamByCellType:
         input:
