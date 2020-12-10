@@ -618,8 +618,11 @@ rule collate2Bam:
         'logs/collateBam/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
+    threads:
+        max(1, THREADS - 2)
     shell:
-        'samtools collate -Ofu {input} {params.tmpPrefix} > {output} 2> {log}'
+        'samtools collate -@ {threads} -Ofu {input} {params.tmpPrefix} '
+        '> {output} 2> {log}'
 
 
 # Input to SNPsplit
