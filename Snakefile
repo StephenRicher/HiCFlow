@@ -257,6 +257,25 @@ rule findRestSites:
         '--outFile {output} &> {log}'
 
 
+rule subsetRestSites:
+    input:
+        rules.findRestSites.output
+    output:
+        'dat/genome/{region}/{cellType}-{re}-restSites.bed'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region],
+    group:
+        'prepareGenome'
+    log:
+        'logs/subsetRestSites/{cellType}-{re}-{region}.log'
+    shell:
+        '{SCRIPTS}/subsetBED.py {input} '
+        '--region {params.chr}:{params.start}-{params.end} '
+        '> {output} 2> {log}'
+
+
 def bowtie2BuildInput(wildcards):
     if ALLELE_SPECIFIC:
         return rules.maskPhased.output
@@ -663,7 +682,12 @@ def getRestSites(wc):
         sample = wc.sample
     except AttributeError:
         sample = wc.preSample
-    return expand('dat/genome/{cellType}-{re}-restSites.bed',
+    try:
+        region=f'{wc.region}/'
+    except AttributeError:
+        region=''
+    return expand('dat/genome/{region}{cellType}-{re}-restSites.bed',
+        region=region,
         cellType=HiC.sample2Cell()[sample],
         re=HiC.restrictionSeqs()[sample])
 
@@ -692,6 +716,7 @@ rule buildBaseMatrix:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
         reSeqs = getRestrictionSeqs,
+        inputBufferSize = 400000,
         danglingSequences = getDanglingSequences,
         maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
         minMappingQuality = config['HiCParams']['minMappingQuality'],
@@ -718,11 +743,12 @@ rule buildBaseMatrix:
         '--minMappingQuality {params.minMappingQuality} '
         '--removeSelfLigation {params.removeSelfLigation} '
         '--danglingSequence {params.danglingSequences} '
+        '--inputBufferSize {params.inputBufferSize} '
         '{params.keepSelfCircles} '
         '{params.skipDuplicationCheck} --binSize {params.bin} '
         '--outFileName {output.hic} --outBam {output.bam} '
         '--QCfolder {output.qc} --threads {threads} '
-        '&> {log}  || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
+        '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
 rule mergeValidHiC:
