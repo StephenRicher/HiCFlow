@@ -1,5 +1,3 @@
-#!/usr/bin/awk -f
-
 function header() {
 	return  $0 ~ /^@/
 }
@@ -18,4 +16,3 @@ BEGIN {
     }
     print $0
 }
-# ADD BOWTIE2 --RG-ID AT MAPPING STEP #
