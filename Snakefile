@@ -45,7 +45,8 @@ default_config = {
          'removeSelfLigation':   True ,
          'keepSelfCircles':      False,
          'skipDuplicationCheck': False,
-         'nofill':               False,},
+         'nofill':               False,
+         'threads':              4    ,},
     'HiCcompare':
         {'fdr' :         0.05         ,
          'logFC' :       1            ,
@@ -730,7 +731,7 @@ rule buildBaseMatrix:
     log:
         'logs/buildBaseMatrix/{sample}-{region}.log'
     threads:
-        max(2, THREADS)
+        max(2, config['HiCParams']['threads'])
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
