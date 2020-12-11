@@ -6,7 +6,3 @@ dependencies:
   - r
   - r-base
   - bioconductor-hicrep
-  - r-ggplot2
-  - r-pheatmap
-  - r-stringi
-  - r-viridislite

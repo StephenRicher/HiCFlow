@@ -1,6 +1,6 @@
-channels :
+channels:
   - conda-forge
-dependencies :
+dependencies:
   - python=3
   - pip:
     - numpy

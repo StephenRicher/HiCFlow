@@ -1,5 +1,5 @@
-channels :
+channels:
   - bioconda
   - conda-forge
-dependencies :
+dependencies:
   - hicexplorer == 3.6

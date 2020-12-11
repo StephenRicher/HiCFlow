@@ -1,6 +1,6 @@
-channels :
+channels:
   - conda-forge
   - bioconda
-dependencies :
+dependencies:
   - coreutils
   - zip

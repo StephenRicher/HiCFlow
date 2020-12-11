@@ -1,4 +1,4 @@
-channels :
+channels:
   - anaconda
-dependencies :
+dependencies:
   - openjdk=8.0.152

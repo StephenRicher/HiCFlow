@@ -1,8 +1,8 @@
-channels :
+channels:
   - conda-forge
   - bioconda
   - defaults
 channel_priority:
   - true
-dependencies :
+dependencies:
   - hapcut2 == 1.3.2

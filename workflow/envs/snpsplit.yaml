@@ -1,4 +1,4 @@
-channels :
+channels:
   - bioconda
-dependencies :
+dependencies:
   - snpsplit

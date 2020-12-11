@@ -1,9 +1,9 @@
-channels :
+channels:
   - conda-forge
   - bioconda
   - defaults
 channel_priority:
   - true
-dependencies :
+dependencies:
   - python >= 3.6
   - hicup == 0.7.3
