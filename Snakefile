@@ -153,7 +153,7 @@ rule all:
          if config['phase'] else []),
         (expand('dat/gatk/.tmp.{cellType}-applyBQSR', cellType=HiC.cellTypes())
          if (config['phase'] and PHASE_MODE == 'GATK') else []),
-        (['qc/multiqc', 'qc/filterQC/ditag_length.png',
+        (['qc/multiqc', 'qc/filterQC/ditagLength.png',
          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
         ([expand('qc/hicrep/{region}-{bin}-hicrep.png', region=region,
             bin=regionBin[region]) for region in regionBin]
@@ -193,7 +193,7 @@ rule vcf2SNPsplit:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatSNPsplit.py {input} > {output} 2> {log}'
+        'python {SCRIPTS}/reformatSNPsplit.py {input} > {output} 2> {log}'
 
 
 rule bgzipGenome:
@@ -271,7 +271,7 @@ rule subsetRestSites:
     log:
         'logs/subsetRestSites/{cellType}-{re}-{region}.log'
     shell:
-        '{SCRIPTS}/subsetBED.py {input} '
+        'python {SCRIPTS}/subsetBED.py {input} '
         '--region {params.chr}:{params.start}-{params.end} '
         '> {output} 2> {log}'
 
@@ -329,7 +329,7 @@ rule reformatFastQC:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/modifyFastQC.py {input} {output} '
+        'python {SCRIPTS}/modifyFastQC.py {input} {output} '
         '{wildcards.preSample}-{wildcards.read} &> {log}'
 
 
@@ -423,7 +423,7 @@ rule reformatCutadapt:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/modifyCutadapt.py {wildcards.preSample} {input} '
+        'python {SCRIPTS}/modifyCutadapt.py {wildcards.preSample} {input} '
         '> {output} 2> {log}'
 
 
@@ -446,7 +446,7 @@ rule hicupTruncate:
     conda:
         f'{ENVS}/hicup.yaml'
     shell:
-        '{SCRIPTS}/hicup/hicupTruncate.py {params.fill} '
+        'python {SCRIPTS}/hicup/hicupTruncate.py {params.fill} '
         '--output {output.truncated} '
         '--summary {output.summary} '
         '--re1 {params.re1} '
@@ -515,7 +515,7 @@ rule addReadFlag:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        '{SCRIPTS}/addReadFlag.awk -v flag={params.flag} {input} '
+        'awk -f {SCRIPTS}/addReadFlag.awk -v flag={params.flag} {input} '
         '> {output} 2> {log}'
 
 
@@ -833,7 +833,7 @@ rule IceMatrix:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        '{SCRIPTS}/hicCorrect.sh -p {output.plot} '
+        'bash {SCRIPTS}/hicCorrect.sh -p {output.plot} '
         '-o {output.matrix} -u {params.upper_threshold} '
         '-i {params.iternum} {input} &> {log} || touch {output}'
 
@@ -938,7 +938,7 @@ rule fixBedgraph:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/fixBedgraph.py {input} --pos {params.pos} '
+        'python {SCRIPTS}/fixBedgraph.py {input} --pos {params.pos} '
         '> {output} 2> {log}'
 
 
@@ -970,7 +970,7 @@ rule reformatNxN:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatNxN.py <(zcat {input}) '
+        'python {SCRIPTS}/reformatNxN.py <(zcat {input}) '
         '> {output} 2> {log} || touch {output}'
 
 
@@ -990,7 +990,7 @@ rule plotCoverage:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/contactCoverage.py {params.nonEmpty} '
+        'python {SCRIPTS}/contactCoverage.py {params.nonEmpty} '
         '--out {output} --dpi {params.dpi} --nBins {params.nBins} '
         '--fontSize {params.fontSize} &> {log}'
 
@@ -1028,8 +1028,8 @@ rule reformatLinks:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatLinks.py {params.start} {wildcards.bin} {input} '
-        '> {output} 2> {log}'
+        'python {SCRIPTS}/reformatLinks.py {params.start} {wildcards.bin} '
+        '{input} > {output} 2> {log}'
 
 
 def getTracks(wc):
@@ -1062,7 +1062,7 @@ rule createConfig:
     log:
         'logs/createConfig/{region}/{bin}/{group}.log'
     shell:
-        '{SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
+        'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
         '--insulations {input.insulations} --log '
         '--loops {input.loops} --colourmap {params.colourmap} '
         '--bigWig PCA1,{input.pca} '
@@ -1164,7 +1164,7 @@ rule reformatNxN3p:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/reformatNxN3p.py {wildcards.bin} {wildcards.region} '
+        'python {SCRIPTS}/reformatNxN3p.py {wildcards.bin} {wildcards.region} '
         '<(zcat {input}) > {output} 2> {log}'
 
 
@@ -1184,7 +1184,7 @@ rule HiCRep:
     conda:
         f'{ENVS}/hicrep.yaml'
     shell:
-        '{SCRIPTS}/runHiCRep.R {output} {wildcards.bin} '
+        'Rscript {SCRIPTS}/runHiCRep.R {output} {wildcards.bin} '
         '{params.start} {params.end} {input} &> {log}'
 
 
@@ -1203,7 +1203,7 @@ rule plotHiCRep:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotHiCRep.py --out {output} --dpi {params.dpi} '
+        'python {SCRIPTS}/plotHiCRep.py --out {output} --dpi {params.dpi} '
         '{input} &> {log}'
 
 
@@ -1288,7 +1288,7 @@ rule straw:
     conda:
         f'{ENVS}/hic-straw.yaml'
     shell:
-        '{SCRIPTS}/run-straw.py NONE {input} '
+        'python {SCRIPTS}/run-straw.py NONE {input} '
         '{params.chr}:{params.start}:{params.end} '
         '{params.chr}:{params.start}:{params.end} '
         'BP {wildcards.bin} {output} &> {log}'
@@ -1316,9 +1316,9 @@ rule HiCcompare:
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
-        '{SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} {params.chr} '
-        '{params.start} {params.end} {wildcards.bin} {params.fdr} {input} '
-        '&> {log}'
+        'Rscript {SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} '
+        '{params.chr} {params.start} {params.end} '
+        '{wildcards.bin} {params.fdr} {input} &> {log}'
 
 
 rule multiHiCcompare:
@@ -1348,7 +1348,7 @@ rule multiHiCcompare:
     conda:
         f'{ENVS}/multiHiCcompare.yaml'
     shell:
-        '{SCRIPTS}/multiHiCcompare.R {params.dir} {params.qcdir} '
+        'Rscript {SCRIPTS}/multiHiCcompare.R {params.dir} {params.qcdir} '
         '{params.chr} {params.start} {params.end} '
         '{wildcards.bin} {params.fdr} '
         '{input.group1} {input.group2} &> {log}'
@@ -1368,7 +1368,7 @@ rule applyMedianFilter:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/smoothHiC.py {input} --size {params.size} '
+        'python {SCRIPTS}/smoothHiC.py {input} --size {params.size} '
         '> {output} 2> {log}'
 
 
@@ -1387,7 +1387,7 @@ rule hicCompareBedgraph:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/hicCompareBedgraph.py --binSize {wildcards.bin} '
+        'python {SCRIPTS}/hicCompareBedgraph.py --binSize {wildcards.bin} '
         '--maxDistance {params.maxDistance} --upOut {output.up} '
         '--downOut {output.down} {input} &> {log}'
 
@@ -1424,7 +1424,7 @@ rule filterHiCcompare:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/filterHiCcompare.py '
+        'python {SCRIPTS}/filterHiCcompare.py '
         '--up {output.up} --down {output.down} '
         '--p_value {params.p_value} --log_fc {params.log_fc} {input} &> {log}'
 
@@ -1449,7 +1449,7 @@ rule createCompareConfig:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
+        'python {SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
         '--sumLogFC {input.upBed},{input.downBed} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
@@ -2170,7 +2170,7 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/extractBestHapcut2.py {input} > {output} 2> {log}'
+            'python {SCRIPTS}/extractBestHapcut2.py {input} > {output} 2> {log}'
 
 
     rule extractVCF:
@@ -2289,7 +2289,7 @@ rule processHiC:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/processHiC.py {input.digest[0]} {input.reads} '
+        'python {SCRIPTS}/processHiC.py {input.digest[0]} {input.reads} '
         '> {output} 2> {log}'
 
 
@@ -2298,19 +2298,17 @@ rule plotQC:
         expand('dat/mapped/subsampled/{sample}-processed.txt',
             sample=HiC.originalSamples())
     output:
-        expand('qc/filterQC/{fig}',
-               fig=['trans_stats.csv', 'insert_size_frequency.png',
-                    'ditag_length.png'])
-    params:
-        outdir='qc/filterQC'
+        ditagOut = 'qc/filterQC/ditagLength.png',
+        insertOut = 'qc/filterQC/insertSizeFrequency.png'
     group:
         'filterQC' if config['groupJobs'] else 'plotQC'
     log:
-        'logs/plotQC/plot_subsample.log'
+        'logs/plotQC.log'
     conda:
-        f'{ENVS}/ggplot2.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotQC.R {params.outdir} {input} 2> {log}'
+        'python {SCRIPTS}/plotQC.py {input} --insertOut {output.insertOut} '
+        '--ditagOut {output.ditagOut} &> {log}'
 
 
 rule mergeHicupQC:
@@ -2323,7 +2321,8 @@ rule mergeHicupQC:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/mergeHicupSummary.py --truncater {input} > {output} 2> {log}'
+        'python {SCRIPTS}/mergeHicupSummary.py --truncater {input} '
+        '> {output} 2> {log}'
 
 def multiQCconfig():
     if config['multiQCconfig']:
