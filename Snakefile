@@ -2264,17 +2264,16 @@ rule sampleReads:
     group:
         'filterQC'
     params:
-        seed = '42',
-        frac = '20'
+        nReadPairs = 1000000
     threads:
-        2 if THREADS > 2 else THREADS
+        THREADS
     log:
         'logs/sampleReads/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools view -@ {threads} -s {params.seed}.{params.frac} {input} '
-        '> {output} 2> {log}'
+        'samtools view -@ {threads} {input} '
+        '| bash {SCRIPTS}/sampleReads.sh > {output} 2> {log}'
 
 
 rule processHiC:
