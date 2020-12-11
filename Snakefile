@@ -2273,7 +2273,8 @@ rule sampleReads:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools view -@ {threads} {input} '
-        '| bash {SCRIPTS}/sampleReads.sh > {output} 2> {log}'
+        '| bash {SCRIPTS}/sampleReads.sh - {params.nReadPairs} '
+        '> {output} 2> {log}'
 
 
 rule processHiC:
