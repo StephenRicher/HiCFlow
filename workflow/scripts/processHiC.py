@@ -3,21 +3,27 @@
 """ Process named-sorted SAM/BAM alignment files to identify fragment
     mapping, insert size, ditag size and relative orientation of pairs.
 """
+
 import re
 import sys
 import bisect
+import argparse
 import fileinput
-import logging
+from typing import List
+from utilities import setDefaults
 from collections import defaultdict
 
-def process(infile, digest):
+__version__ = '1.0.0'
+
+
+def processHiC(infile: List, digest: str):
 
     print('sample', 'orientation', 'interaction_type', 'ditag_length', 'insert_size', sep='\t')
 
-    digest = process_digest(digest)
+    digest = processDigest(digest)
     refSizes = defaultdict(int)
-    with open(infile) as fh:
 
+    with fileinput.input(infile) as fh:
         for line in fh:
             if line.startswith('@'):
                 if line.starstwith('@SQ'):
@@ -31,7 +37,7 @@ def process(infile, digest):
                     read2 = Sam(next(fh))
                 except StopIteration:
                     return 1
-                # Skipp unmapped
+                # Skip unmapped
                 if (read1.rname not in digest) or (read2.rname not in digest):
                     continue
                 read1, read2 = reorderReadPair(read1, read2)
@@ -171,7 +177,7 @@ class Sam:
         return round((self.right_pos + self.left_pos)/2)
 
 
-def process_digest(digest):
+def processDigest(digest):
     d = defaultdict(list)
     with open(digest) as fh:
         for fragment in fh:
@@ -179,4 +185,20 @@ def process_digest(digest):
             d[ref].append(int(start))
     return(d)
 
-process(sys.argv[2], sys.argv[1])
+
+def parseArgs():
+
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument(
+        'digest', metavar='DIGEST',
+        help='Digest file from HiCExplorer findRestSites')
+    parser.add_argument(
+        'infile', metavar='SAM', nargs='?', help='Input SAM file.')
+
+    return setDefaults(parser, verbose=False, version=__version__)
+
+
+if __name__ == '__main__':
+    args = parseArgs()
+    sys.exit(processHiC(**vars(args)))

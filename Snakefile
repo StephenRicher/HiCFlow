@@ -566,7 +566,7 @@ rule collateBam:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools collate -Ofu {input} {params.tmpPrefix} > {output} 2> {log}'
+        'samtools collate -Ou {input} {params.tmpPrefix} > {output} 2> {log}'
 
 
 rule fixmateBam:
@@ -2264,17 +2264,13 @@ rule sampleReads:
     group:
         'filterQC'
     params:
-        nReadPairs = 1000000
-    threads:
-        THREADS
+        nLines = 1000000 * 2
     log:
         'logs/sampleReads/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools view -@ {threads} {input} '
-        '| bash {SCRIPTS}/sampleReads.sh - {params.nReadPairs} '
-        '> {output} 2> {log}'
+        '(samtools view {input} | head -n {params.nLines} > {output}) 2> {log}'
 
 
 rule processHiC:
