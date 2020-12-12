@@ -49,7 +49,7 @@ def processHiC(infile: List, digest: str):
                 print(getInsertSize(read1, read2), end='\n')
 
 
-def trimPath(path, suffix='.subsample.sam'):
+def trimPath(path, suffix='.subsampled.sam'):
     """ Remove file path and defined suffix """
     base = os.path.basename(path)
     return re.sub(f'{suffix}$', '', base)
