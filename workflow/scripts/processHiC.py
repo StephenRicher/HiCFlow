@@ -4,6 +4,7 @@
     mapping, insert size, ditag size and relative orientation of pairs.
 """
 
+import os
 import re
 import sys
 import bisect
@@ -41,11 +42,17 @@ def processHiC(infile: List, digest: str):
                 if (read1.rname not in digest) or (read2.rname not in digest):
                     continue
                 read1, read2 = reorderReadPair(read1, read2)
-                print(infile, end='\t')
+                print(trimPath(infile), end='\t')
                 print(getOrientation(read1, read2), end='\t')
                 print(interactionType(read1, read2), end='\t')
                 print(getDitagLength(read1, read1, digest, refSizes), end='\t')
                 print(getInsertSize(read1, read2), end='\n')
+
+
+def trimPath(path, suffix='.subsample.sam'):
+    """ Remove file path and defined suffix """
+    base = os.path.basename(path)
+    return re.sub(f'{suffix}$', '', base)
 
 
 def getDitagLength(read1, read2, digest, refSizes):

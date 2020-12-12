@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-""" Aggregate HiCRep results and plot heatmap """
+""" Plot ditag length and insert size quality control plots """
 
-import os
-import re
 import sys
 import argparse
 import pandas as pd
@@ -20,7 +18,6 @@ def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int):
     sns.set_style('whitegrid')
     data = pd.concat([pd.read_csv(file, sep='\t') for file in files])
 
-    data['sample'] = data['sample'].apply(trimPath)
     data['group'] = data['sample'].apply(lambda x: x.split('-')[0])
     data['rep'] = data['sample'].apply(lambda x: x.split('-')[1])
     data['insert_size'] = data['insert_size'].abs()
@@ -49,10 +46,6 @@ def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int):
     ditagDist.savefig(ditagOut, dpi=dpi, bbox_inches='tight')
 
 
-def trimPath(path, suffix='-subsample.sam'):
-    """ Remove file path and defined suffix """
-    base = os.path.basename(path)
-    return re.sub(f'{suffix}$', '', base)
 
 
 def parseArgs():
