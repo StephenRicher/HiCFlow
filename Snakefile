@@ -1377,6 +1377,7 @@ rule hicCompareBedgraph:
     input:
         rules.applyMedianFilter.output
     output:
+        all = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-all.bedgraph',
         up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up.bedgraph',
         down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down.bedgraph'
     params:
@@ -1389,8 +1390,8 @@ rule hicCompareBedgraph:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/hicCompareBedgraph.py --binSize {wildcards.bin} '
-        '--maxDistance {params.maxDistance} --upOut {output.up} '
-        '--downOut {output.down} {input} &> {log}'
+        '--maxDistance {params.maxDistance} --allOut {output.all} '
+        '--upOut {output.up} --downOut {output.down} {input} &> {log}'
 
 
 rule homerToH5:

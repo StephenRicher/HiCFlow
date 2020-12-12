@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-""" Compute sum logFC for up and down interactions """
+""" Compute sum logFC for all, up and down interactions """
 
 import sys
 import argparse
@@ -11,7 +11,8 @@ __version__ = '1.0.0'
 
 
 def hicCompareBedgraph(
-        file: str, upOut: str, downOut: str, binSize: int, maxDistance: float):
+        file: str, allOut: str, upOut: str, downOut: str,
+        binSize: int, maxDistance: float):
 
     positions, mat = readHomer(file, binSize)
     mat['seperation'] = abs(mat['end'] - mat['start'])
@@ -22,11 +23,20 @@ def hicCompareBedgraph(
     mat['score'] = abs(mat['score'])
     mat = mat.groupby(['region', 'upFC']).sum().reset_index('upFC')
 
-    for upFC in [True, False]:
-        out = upOut if upFC else downOut
+    for direction in ['up', 'down', 'all']:
+        if direction == 'up':
+            out = upOut
+            subset = mat.loc[mat['upFC'] == True]
+        elif direction == 'down':
+            out = downOut
+            subset = mat.loc[mat['upFC'] == False]
+        else:
+            out = allOut
+            subset = mat
+
         bed = pd.merge(
-            positions, mat.loc[mat['upFC'] == upFC],
-            how='left', left_index=True, right_index=True)
+            positions, subset, how='left',
+            left_index=True, right_index=True)
         bed['zscore'] = (bed['score'] - bed['score'].mean()) / bed['score'].std(ddof=0)
         bed['zscore'] = bed['zscore'].fillna(0)
         bed.to_csv(
@@ -46,6 +56,9 @@ def parseArgs():
     requiredNamed.add_argument(
         '--binSize', required=True,
         type=int, help='Bin size for matrix.')
+    requiredNamed.add_argument(
+        '--allOut', required=True,
+        help='Output file for bedgraph of sum all interactions.')
     requiredNamed.add_argument(
         '--upOut', required=True,
         help='Output file for bedgraph of sum UP interactions.')

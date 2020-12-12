@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-""" Convert bedgraph intervals to new window size and include 0-scores. """
+""" Convert bedgraph intervals to new window size and write to JSON. """
 
 import sys
+import json
 import argparse
 from utilities import setDefaults
 from collections import defaultdict
@@ -11,10 +12,13 @@ __version__ = '1.0.0'
 
 
 def rescaleBedgraph(bedGraph: str, chromSizes: str, window: int):
-    """ Convert intervals to new window size and include 0-scores. """
+    """ Convert intervals to new window size and write to JSON. """
 
     chromSizes = readChromSizes(chromSizes)
     scores = readBedgraph(bedGraph, window)
+    # Non-zero itnervals stored in dictionary
+    rescaledBedgraph = {'window' : window,
+                        'data'   : defaultdict(dict)}
     for chrom, size in chromSizes.items():
         for start in range(0, size, window):
             end = start + window
@@ -23,8 +27,11 @@ def rescaleBedgraph(bedGraph: str, chromSizes: str, window: int):
             try:
                 score = scores[chrom][start]
             except KeyError:
-                score = 0
-            print(chrom, start, end, score, sep='\t')
+                continue # score = 0
+            #print(chrom, start, end, score, sep='\t')
+            rescaledBedgraph['data'][chrom][start] = score
+    json.dump(rescaledBedgraph, sys.stdout)
+
 
 
 def splitBedgraph(line):
