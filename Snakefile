@@ -2260,7 +2260,7 @@ rule sampleReads:
     input:
         'dat/mapped/{preSample}.fixed.bam'
     output:
-        'dat/mapped/subsampled/{preSample}-subsample.sam'
+        temp('dat/mapped/subsampled/{preSample}.subsampled.sam')
     group:
         'filterQC'
     params:
@@ -2270,7 +2270,7 @@ rule sampleReads:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        '(samtools view {input} | head -n {params.nLines} > {output}) 2> {log}'
+        'head -n {params.nLines} <(samtools view {input}) > {output} 2> {log}'
 
 
 rule processHiC:
