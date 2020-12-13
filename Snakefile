@@ -4,7 +4,6 @@ import os
 import re
 import sys
 import math
-import logging
 import tempfile
 from snake_setup import set_config, load_regions, load_coords, filterRegions, HiCSamples
 
@@ -888,10 +887,10 @@ def getChromSizes(wc):
         cellType = HiC.sample2Cell()[wc.group1]
         cellType2 = HiC.sample2Cell()[wc.group2]
         if cellType != cellType2:
-            logging.warning(
-                'f{wc.group1} and {wc.group2} correspond to different cell '
+            sys.stderr.write(
+                f'{wc.group1} and {wc.group2} correspond to different cell '
                 'type. Ensure the chromosome sizes are equal for valid '
-                'bedgraph rescaling of HiCcompare output.')
+                'bedgraph rescaling of HiCcompare output.\n')
     return f'dat/genome/chrom_sizes/{cellType}.chrom.sizes',
 
 
