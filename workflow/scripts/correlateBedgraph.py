@@ -4,24 +4,36 @@
 
 import sys
 import json
+import logging
 import argparse
 import pandas as pd
 from scipy import stats
 from typing import List
 from utilities import setDefaults
 from collections import defaultdict
+from itertools import combinations
 
 __version__ = '1.0.0'
 
 
-def correlateBedgraph(bedGraphs: List):
+def runCorrelation(bedGraphs: List):
+    print('bedGraph1', 'bedGraph2', 'window', 'r', 'p', sep='\t')
+    for bedGraph1, bedGraph2 in combinations(bedGraphs, 2):
+        correlateBedgraph(bedGraph1, bedGraph2)
+
+
+def correlateBedgraph(bedGraph1: str, bedGraph2: str):
     """ Correlate rescaled bedgraphs """
 
-    merged = pd.concat(
-        [processRescaled(file) for file in bedGraphs], axis=1).dropna()
-    assert merged.index.names != [None, None], f'Window sizes do not match'
-    r, p = stats.pearsonr(merged.iloc[:,0], merged.iloc[:,1])
-    sys.stdout.write(f'r\tp\n{r}\t{p}\n')
+    bed1, window1 = processRescaled(bedGraph1)
+    bed2, window2 = processRescaled(bedGraph2)
+    if window1 != window2:
+        logging.warning(
+            f'Window sizes of {bedGraph1} and {bedGraph2} do not match.')
+    else:
+        merged = pd.concat([bed1, bed2], axis=1).dropna()
+        r, p = stats.pearsonr(merged.iloc[:,0], merged.iloc[:,1])
+        print(bedGraph1, bedGraph2, window1, r, p, sep='\t')
 
 
 def processRescaled(file: str):
@@ -36,7 +48,7 @@ def processRescaled(file: str):
      .set_index(['chromosome', 'index']))
     df.index.names = ['chromosome', f'window-{data["window"]}']
 
-    return df
+    return df, data['window']
 
 
 def parseArgs():
@@ -44,7 +56,7 @@ def parseArgs():
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument(
-        'bedGraphs', nargs=2,
+        'bedGraphs', nargs='*',
         help='Rescaled bedgraph files of equal window size, '
              'output out of rescaledBedgraph.py.')
 
@@ -53,4 +65,4 @@ def parseArgs():
 
 if __name__ == '__main__':
     args = parseArgs()
-    sys.exit(correlateBedgraph(**vars(args)))
+    sys.exit(runCorrelation(**vars(args)))

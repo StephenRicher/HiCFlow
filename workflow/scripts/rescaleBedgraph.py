@@ -11,7 +11,9 @@ from collections import defaultdict
 __version__ = '1.0.0'
 
 
-def rescaleBedgraph(bedGraph: str, chromSizes: str, window: int):
+def rescaleBedgraph(
+        bedGraph: str, chromSizes: str, window: int,
+        distanceTransform: bool):
     """ Convert intervals to new window size and write to JSON. """
 
     chromSizes = readChromSizes(chromSizes)
@@ -19,21 +21,24 @@ def rescaleBedgraph(bedGraph: str, chromSizes: str, window: int):
     # Non-zero itnervals stored in dictionary
     rescaledBedgraph = {'window' : window,
                         'data'   : defaultdict(dict)}
-    prevScore = None
     for chrom, size in chromSizes.items():
         # Reset prevScore for each chromosome
-        del prevScore
+        try:
+            del prevScore
+        except NameError:
+            pass
         for start in range(0, size, window):
             try:
                 score = scores[chrom][start]
             except KeyError:
                 prevScore = 0
                 continue
-            if True:
+            if distanceTransform:
                 try:
                     rescaledBedgraph['data'][chrom][start] = score - prevScore
                 except NameError:
-                    pass # Skip first window
+                    # Skip first window where prevScore undefined
+                    pass
             else:
                 rescaledBedgraph['data'][chrom][start] = score
             prevScore = score
@@ -89,6 +94,9 @@ def parseArgs():
     parser.add_argument(
         '--window', type=int, default=100,
         help='Bedgraph interval window to rescale to (default: %(default)s)')
+    parser.add_argument(
+        '--distanceTransform', action='store_true',
+        help='Perform differencing to remove series dependence.')
 
     return setDefaults(parser, verbose=False, version=__version__)
 

@@ -76,8 +76,21 @@ def filterRegions(regions, binSizes, nbins=100):
                     regionBin[region].append(bin)
                 except KeyError:
                     regionBin[region] = [bin]
-    return regionBin
+    binRegion = invertRegionBin(regionBin)
+    return regionBin, binRegion
 
+
+def invertRegionBin(regionBin):
+    """ Generate dict of bin keys to regions """
+
+    binRegion = {}
+    for region, bins in regionBin.items():
+        for bin in bins:
+            try:
+                binRegion[str(bin)].append(region)
+            except KeyError:
+                binRegion[str(bin)] = [region]
+    return binRegion
 
 class HiCSamples:
 
@@ -160,7 +173,7 @@ class HiCSamples:
         """ Return groups and samples as combined list """
         return self.samples() + list(self.groups())
 
-        
+
     def groupCompares(self):
         """ Return list of pairwise group comparison """
         pairs = itertools.combinations(list(self.groups()), 2)

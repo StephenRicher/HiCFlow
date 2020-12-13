@@ -70,6 +70,7 @@ default_config = {
     'resolution':
         {'base':          5000        ,
          'bins':         [5000, 10000],},
+    'distanceTransform': True,
     'plot_coordinates':  None,
     'fastq_screen':      None,
     'phase':             True,
@@ -93,7 +94,7 @@ HiC = HiCSamples(config['data'], config['restrictionSeqs'], ALLELE_SPECIFIC)
 REGIONS = load_regions(config['regions'])
 
 # Remove region-binSize combinations with too few bins
-regionBin = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
+regionBin, binRegion = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
 
 # Turn of phasing if allele specific mode is running
 config['phase'] = False if ALLELE_SPECIFIC else config['phase']
@@ -145,6 +146,12 @@ HiC_mode = ([
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=regionBin.keys()),
+     expand('bedgraphs/{tool}/{compare}-{bin}-{dir}.json',
+        tool=tools, dir=['up', 'down', 'all'],
+        compare=HiC.groupCompares(), bin=binRegion.keys()),
+     expand('bedgraphs/{method}/{all}-{bin}-{method}.json',
+        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+        bin=binRegion.keys(), method=['PCA', 'TADinsulation']),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 
 rule all:
@@ -872,6 +879,43 @@ rule TadInsulation:
         '--numberOfProcessors {threads} &> {log} || touch {output}'
 
 
+def getChromSizes(wc):
+    """ Retrieve chromSizes file associated with group or sample. """
+    try:
+        cellType = HiC.sample2Cell()[wc.all]
+    except AttributeError:
+        cellType = HiC.sample2Cell()[wc.group1]
+        cellType2 = HiC.sample2Cell()[wc.group2]
+        if cellType != cellType2:
+            logging.warning(
+                'f{wc.group1} and {wc.group2} correspond to different cell '
+                'type. Ensure the chromosome sizes are equal for valid '
+                'bedgraph rescaling of HiCcompare output.')
+    return f'dat/genome/chrom_sizes/{cellType}.chrom.sizes',
+
+
+rule rescaleTADinsulation:
+    input:
+        bedgraphs = lambda wc: expand(
+            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}_score.bedgraph',
+            region=binRegion[wc.bin]),
+        chromSizes = getChromSizes
+    output:
+        'bedgraphs/TADinsulation/{all}-{bin}-TADinsulation.json'
+    params:
+        transform = '--distanceTransform' if config['distanceTransform'] else ''
+    group:
+        'rescaleBedgraphs'
+    log:
+        'logs/rescaleTADinsulations/{all}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
+        '{params.transform} <(cat {input.bedgraphs}) '
+        '{input.chromSizes} > {output} 2> {log}'
+
+
 rule detectLoops:
     input:
         rules.IceMatrix.output.matrix
@@ -941,6 +985,28 @@ rule fixBedgraph:
     shell:
         'python {SCRIPTS}/fixBedgraph.py {input} --pos {params.pos} '
         '> {output} 2> {log}'
+
+
+rule rescalePCA:
+    input:
+        bedgraphs = lambda wc: expand(
+            'dat/matrix/{region}/{{bin}}/PCA/{{all}}-{region}-{{bin}}-fix.bedgraph',
+            region=binRegion[wc.bin]),
+        chromSizes = getChromSizes
+    output:
+        'bedgraphs/PCA/{all}-{bin}-PCA.json'
+    params:
+        transform = '--distanceTransform' if config['distanceTransform'] else ''
+    group:
+        'rescaleBedgraphs'
+    log:
+        'logs/rescalePCA/{all}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
+        '{params.transform} <(cat {input.bedgraphs}) '
+        '{input.chromSizes} > {output} 2> {log}'
 
 
 rule reformatHomer:
@@ -1245,11 +1311,6 @@ rule reformatPre:
         '| awk -f {SCRIPTS}/bam2pre.awk > {output}) 2> {log} '
 
 
-def getChromSizes(wc):
-    """ Retrieve chromSizes file associated with group or sample. """
-    return f'dat/genome/chrom_sizes/{HiC.sample2Cell()[wc.all]}.chrom.sizes',
-
-
 rule juicerPre:
     input:
         tsv = 'dat/matrix/{region}/base/raw/{all}-{region}.pre.tsv',
@@ -1392,6 +1453,28 @@ rule hicCompareBedgraph:
         'python {SCRIPTS}/hicCompareBedgraph.py --binSize {wildcards.bin} '
         '--maxDistance {params.maxDistance} --allOut {output.all} '
         '--upOut {output.up} --downOut {output.down} {input} &> {log}'
+
+
+rule rescaleHiCcompare:
+    input:
+        bedgraphs = lambda wc: expand(
+            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}.bedgraph',
+            region=binRegion[wc.bin]),
+        chromSizes = getChromSizes
+    output:
+        'bedgraphs/{compare}/{group1}-vs-{group2}-{bin}-{dir}.json'
+    params:
+        transform = '--distanceTransform' if config['distanceTransform'] else ''
+    group:
+        'rescaleBedgraphs'
+    log:
+        'logs/rescaleHiCcompare/{compare}/{group1}-vs-{group2}-{bin}-{dir}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
+        '{params.transform} <(cat {input.bedgraphs}) '
+        '{input.chromSizes} > {output} 2> {log}'
 
 
 rule homerToH5:
