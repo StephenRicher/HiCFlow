@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import math
+import logging
 import tempfile
 from snake_setup import set_config, load_regions, load_coords, filterRegions, HiCSamples
 
