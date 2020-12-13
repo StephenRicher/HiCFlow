@@ -19,17 +19,24 @@ def rescaleBedgraph(bedGraph: str, chromSizes: str, window: int):
     # Non-zero itnervals stored in dictionary
     rescaledBedgraph = {'window' : window,
                         'data'   : defaultdict(dict)}
+    prevScore = None
     for chrom, size in chromSizes.items():
+        # Reset prevScore for each chromosome
+        del prevScore
         for start in range(0, size, window):
-            end = start + window
-            if end > size:
-                end = size
             try:
                 score = scores[chrom][start]
             except KeyError:
-                continue # score = 0
-            #print(chrom, start, end, score, sep='\t')
-            rescaledBedgraph['data'][chrom][start] = score
+                prevScore = 0
+                continue
+            if True:
+                try:
+                    rescaledBedgraph['data'][chrom][start] = score - prevScore
+                except NameError:
+                    pass # Skip first window
+            else:
+                rescaledBedgraph['data'][chrom][start] = score
+            prevScore = score
     json.dump(rescaledBedgraph, sys.stdout)
 
 
