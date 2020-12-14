@@ -3,7 +3,6 @@
 import sys
 import itertools
 import pandas as pd
-from collections import OrderedDict
 
 class ConfigurationError(Exception):
     pass
@@ -126,12 +125,12 @@ class HiCSamples:
 
     def cellTypes(self):
         """ Return dict mapping cellType to sample """
-        return self.table.groupby('cell_type')['sample'].apply(list).to_dict(into=OrderedDict)
+        return self.table.groupby('cell_type')['sample'].apply(list).to_dict()
 
 
     def originalGroups(self):
         """ Return unmodified group-rep dictionary """
-        return self.table.groupby('group')['rep'].apply(list).to_dict(into=OrderedDict)
+        return self.table.groupby('group', sort=False)['rep'].apply(list).to_dict()
 
 
     def groups(self):
