@@ -24,7 +24,7 @@ def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int):
     data['ditag_length'] = data['ditag_length'].abs()
 
     data = data.loc[(data['insert_size'] > 0) & (data['ditag_length'] > 0),]
-    grouped = data.groupby(['group', 'rep'])
+    grouped = data.groupby(['group', 'rep', 'orientation'])
     # Retrieve sample size of smallest group
     smallestGroup = grouped['sample'].count().min()
     # Downsample data
