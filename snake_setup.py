@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import sys
-import pandas as pd
 import itertools
-
+import pandas as pd
+from collections import OrderedDict
 
 class ConfigurationError(Exception):
     pass
@@ -126,12 +126,12 @@ class HiCSamples:
 
     def cellTypes(self):
         """ Return dict mapping cellType to sample """
-        return self.table.groupby('cell_type')['sample'].apply(list).to_dict()
+        return self.table.groupby('cell_type')['sample'].apply(list).to_dict(into=OrderedDict)
 
 
     def originalGroups(self):
         """ Return unmodified group-rep dictionary """
-        return self.table.groupby('group')['rep'].apply(list).to_dict()
+        return self.table.groupby('group')['rep'].apply(list).to_dict(into=OrderedDict)
 
 
     def groups(self):
