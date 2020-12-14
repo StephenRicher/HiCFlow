@@ -151,7 +151,7 @@ HiC_mode = ([
         compare=HiC.groupCompares(), bin=binRegion.keys()),
      expand('bedgraphs/{method}/{all}-{bin}-{method}.json',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
-        bin=binRegion.keys(), method=['PCA', 'TADinsulation']),
+        bin=binRegion.keys(), method=['PCA', 'TADinsulation', 'TADboundaries']),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 
 rule all:
@@ -914,6 +914,28 @@ rule rescaleTADinsulation:
         'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
         '{params.transform} <(cat {input.bedgraphs}) '
         '{input.chromSizes} > {output} 2> {log}'
+
+
+rule rescaleTADboundaries:
+    input:
+        bedgraphs = lambda wc: expand(
+            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}_boundaries.bed',
+            region=binRegion[wc.bin]),
+        chromSizes = getChromSizes
+    output:
+        'bedgraphs/TADboundaries/{all}-{bin}-TADboundaries.json'
+    params:
+        regions = config['regions']
+    group:
+        'rescaleBedgraphs'
+    log:
+        'logs/rescaleTADinsulations/{all}-{bin}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
+        '--includeZero --binary --bed --regions {params.regions} '
+        '<(cat {input.bedgraphs}) {input.chromSizes} > {output} 2> {log}'
 
 
 rule detectLoops:
