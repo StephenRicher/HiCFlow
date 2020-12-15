@@ -25,55 +25,68 @@ def runCorrelation(bedGraphs: List):
 def correlateBedgraph(bedGraph1: str, bedGraph2: str):
     """ Correlate rescaled bedgraphs """
 
-    merged, window = mergeRescaled(bedGraph1, bedGraph2)
+    merged = mergeRescaled(bedGraph1, bedGraph2)
     if not merged.empty:
-        r, p = stats.pearsonr(merged.iloc[:,0], merged.iloc[:,1])
-        print(bedGraph1, bedGraph2, window, r, p, sep='\t')
+        testStat, p = stats.pearsonr(merged.iloc[:,0], merged.iloc[:,1])
+        print(bedGraph1, bedGraph2, merged['window'], testStat, p, sep='\t')
 
 
 def runCompare(booleanBedGraph: str, bedGraphs: List, test: str):
-    print('booleanBedGraph', 'bedGraph', 'window', 'test', 'r', 'p',
-          'medianTrue', 'medianFalse',
-          'meanTrue', 'meanFalse',
-          'countTrue', 'countFalse', sep='\t')
+    print('booleanBedGraph', 'bedGraph', 'window', 'test', 'testStatistic',
+          'p', 'medianTrue', 'medianFalse', 'meanTrue', 'meanFalse',
+          'countTrue', 'countFalse', 'sumTrue', 'sumFalse', sep='\t')
     for bedGraph in bedGraphs:
         compareBedGraph(booleanBedGraph, bedGraph, test)
 
 
 def compareBedGraph(booleanBedGraph: str, bedGraph: str, test: str):
-    merged, window = mergeRescaled(booleanBedGraph, bedGraph)
-    if not merged.empty:
-        merged = merged.pivot(columns=booleanBedGraph)
-    if len(merged.columns) != 2:
-        logging.error(f'{booleanBedGraph} is not a boolean JSON bedGraph.')
-        sys.exit(1)
+
+    merged, meta = mergeRescaled(booleanBedGraph, bedGraph)
+    if not meta['binary1']:
+        raise FormatError(
+            f'{booleanBedGraph} is not a boolean JSON bedGraph.')
+
+    merged = merged.pivot(columns=booleanBedGraph)
     falseValues = merged[(bedGraph, False)].dropna()
     trueValues = merged[(bedGraph, True)].dropna()
-    if test == 'mannwhitneyu':
-        r, p = stats.mannwhitneyu(trueValues, falseValues)
+    # Perform chi-square if other bedGraph is binary
+    if meta['binary2']:
+        testStat, p, dof, ex = stats.chi2_contingency(
+            merged.apply(pd.Series.value_counts))
+        test = 'chisquare'
     else:
-        r, p = stats.ttest_ind(trueValues, falseValues, equal_var=True)
-    print(booleanBedGraph, bedGraph, window, test, r, p,
+        if test == 'mannwhitneyu':
+            testStat, p = stats.mannwhitneyu(
+                trueValues, falseValues)
+        else:
+            testStat, p = stats.ttest_ind(
+                trueValues, falseValues, equal_var=True)
+    print(booleanBedGraph, bedGraph, meta['window'], test, testStat, p,
           trueValues.median(), falseValues.median(),
           trueValues.mean(), falseValues.mean(),
-          trueValues.count(), falseValues.count(), sep='\t')
+          trueValues.count(), falseValues.count(),
+          trueValues.sum(), falseValues.sum(), sep='\t')
 
 
 def mergeRescaled(bedGraph1: str, bedGraph2: str):
     """ Return bedgraph pair as merged pandas """
-    bed1, window1 = processRescaled(bedGraph1)
-    bed2, window2 = processRescaled(bedGraph2)
-    if window1 != window2:
-        logging.warning(
+    bed1, meta1 = processRescaled(bedGraph1)
+    bed2, meta2 = processRescaled(bedGraph2)
+    if meta1['window'] != meta2['window']:
+        raise FormatError(
             f'Window sizes of {bedGraph1} and {bedGraph2} do not match.')
-        return pd.DataFrame(), None
     else:
-        return pd.concat([bed1, bed2], axis=1).dropna(), window1
+        meta = {}
+        merged = pd.concat([bed1, bed2], axis=1).dropna()
+        meta['window'] = meta1['window']
+        meta['binary1'] = meta1['binary']
+        meta['binary2'] = meta2['binary']
+        return merged, meta
 
 
 def processRescaled(file: str):
     """ Process JSON format output of rescale bedgraph """
-
+    meta = {}
     with open(file) as fh:
         data = json.load(fh)
     df = (pd.DataFrame.from_dict(data['data'])
@@ -82,8 +95,14 @@ def processRescaled(file: str):
            var_name='chromosome', value_name=file)
      .set_index(['chromosome', 'index']))
     df.index.names = ['chromosome', f'window-{data["window"]}']
+    meta['window'] = data['window']
+    meta['binary'] = data['binary']
 
-    return df, data['window']
+    return df, meta
+
+
+class FormatError(Exception):
+    pass
 
 
 def parseArgs():
