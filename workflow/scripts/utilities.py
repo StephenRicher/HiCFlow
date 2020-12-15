@@ -1,28 +1,42 @@
 #!/usr/bin/env python3
 
+import sys
+import logging
 import argparse
 import pandas as pd
 
 
-def setDefaults(parser, verbose=True, version=None):
-    """ Add version and verbose arguments to parser """
+def setDefaults(parser):
+    """ Set logging config and return args with associated function """
 
-    if version:
-        parser.add_argument('--version', action='version',
-            version=f'%(prog)s {version}')
-    if verbose:
-        parser.add_argument(
-            '--verbose', action='store_const', const=logging.DEBUG,
-            default=logging.INFO, help='verbose logging for debugging')
-
-        args = parser.parse_args()
-        logFormat='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    args = parser.parse_args()
+    logFormat='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    try:
         logging.basicConfig(level=args.verbose, format=logFormat)
         del args.verbose
-    else:
-        args = parser.parse_args()
+    except AttributeError:
+        pass
+    try:
+        function = args.function
+        del args.function
+    except AttributeError:
+        parser.print_help()
+        sys.exit()
 
-    return args
+    return args, function
+
+
+def createMainParent(verbose=True, version=None):
+    """ Create parser of verbose/version to be added to parser/subparsers. """
+    parent = argparse.ArgumentParser(add_help=False)
+    if version:
+        parent.add_argument('--version', action='version',
+            version=f'%(prog)s {version}')
+    if verbose:
+        parent.add_argument(
+            '--verbose', action='store_const', const=logging.DEBUG,
+            default=logging.INFO, help='verbose logging for debugging')
+    return parent
 
 
 def readHomer(matrix, binSize):

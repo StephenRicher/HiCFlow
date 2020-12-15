@@ -11,8 +11,9 @@ import bisect
 import argparse
 import fileinput
 from typing import List
-from utilities import setDefaults
 from collections import defaultdict
+from utilities import setDefaults, createMainParent
+
 
 __version__ = '1.0.0'
 
@@ -196,16 +197,19 @@ def processDigest(digest):
 def parseArgs():
 
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=processHiC)
     parser.add_argument(
         'digest', metavar='DIGEST',
         help='Digest file from HiCExplorer findRestSites')
     parser.add_argument(
         'infile', metavar='SAM', nargs='?', help='Input SAM file.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(processHiC(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

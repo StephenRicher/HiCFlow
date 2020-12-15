@@ -9,12 +9,12 @@ import argparse
 import pandas as pd
 from scipy import stats
 from typing import List
-from utilities import setDefaults
 from collections import defaultdict
 from itertools import combinations
+from utilities import setDefaults, createMainParent
+
 
 __version__ = '1.0.0'
-
 
 def runCorrelation(bedGraphs: List):
     print('bedGraph1', 'bedGraph2', 'window', 'r', 'p', sep='\t')
@@ -29,6 +29,34 @@ def correlateBedgraph(bedGraph1: str, bedGraph2: str):
     if not merged.empty:
         r, p = stats.pearsonr(merged.iloc[:,0], merged.iloc[:,1])
         print(bedGraph1, bedGraph2, window, r, p, sep='\t')
+
+
+def runCompare(booleanBedGraph: str, bedGraphs: List, test: str):
+    print('booleanBedGraph', 'bedGraph', 'window', 'test', 'r', 'p',
+          'medianTrue', 'medianFalse',
+          'meanTrue', 'meanFalse',
+          'countTrue', 'countFalse', sep='\t')
+    for bedGraph in bedGraphs:
+        compareBedGraph(booleanBedGraph, bedGraph, test)
+
+
+def compareBedGraph(booleanBedGraph: str, bedGraph: str, test: str):
+    merged, window = mergeRescaled(booleanBedGraph, bedGraph)
+    if not merged.empty:
+        merged = merged.pivot(columns=booleanBedGraph)
+    if len(merged.columns) != 2:
+        logging.error(f'{booleanBedGraph} is not a boolean JSON bedGraph.')
+        sys.exit(1)
+    falseValues = merged[(bedGraph, False)].dropna()
+    trueValues = merged[(bedGraph, True)].dropna()
+    if test == 'mannwhitneyu':
+        r, p = stats.mannwhitneyu(trueValues, falseValues)
+    else:
+        r, p = stats.ttest_ind(trueValues, falseValues, equal_var=True)
+    print(booleanBedGraph, bedGraph, window, test, r, p,
+          trueValues.median(), falseValues.median(),
+          trueValues.mean(), falseValues.mean(),
+          trueValues.count(), falseValues.count(), sep='\t')
 
 
 def mergeRescaled(bedGraph1: str, bedGraph2: str):
@@ -61,15 +89,40 @@ def processRescaled(file: str):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
-    parser.add_argument(
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    subparser = parser.add_subparsers(
+        title='required commands', description='',
+        metavar='Commands', help='Description:')
+    correlate = subparser.add_parser(
+        'correlate',
+        description=correlateBedgraph.__doc__,
+        help='Pairise correlation of bedgraphs.',
+        epilog=parser.epilog, parents=[mainParent])
+    correlate.add_argument(
         'bedGraphs', nargs='*',
         help='Rescaled bedgraph files of equal window size, '
              'output out of rescaledBedgraph.py.')
+    correlate.set_defaults(function=runCorrelation)
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    compare = subparser.add_parser(
+        'compare',
+        description=runCompare.__doc__,
+        help='Perform t-test or Mann Whitney-U on rescaled JSON bedgraph.',
+        epilog=parser.epilog, parents=[mainParent])
+    compare.add_argument(
+        'booleanBedGraph', help='Rescaled boolean bedGraph to define groups.')
+    compare.add_argument(
+        'bedGraphs', nargs='*', help='Rescaled bedGraph.')
+    compare.add_argument(
+        '--test', default='mannwhitneyu', choices=['ttest', 'mannwhitneyu'],
+        help='Statistical test to apply.')
+    compare.set_defaults(function=runCompare)
+
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(runCorrelation(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

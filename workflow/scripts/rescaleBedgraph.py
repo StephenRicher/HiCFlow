@@ -5,8 +5,9 @@
 import sys
 import json
 import argparse
-from utilities import setDefaults
 from collections import defaultdict
+from utilities import setDefaults, createMainParent
+
 
 __version__ = '1.0.0'
 
@@ -28,27 +29,27 @@ def rescaleBedgraph(
     # transformation as required.
     for chrom, size in chromSizes.items():
         # Reset prevScore for each chromosome
-        try:
-            del prevScore
-        except NameError:
-            pass
+        prevScore = None
         for start in range(0, size, window):
+            # Skip windows where start not in regions
+            if not validRegion(regions, chrom, start):
+                prevScore = None
+                continue
             try:
                 score = scores[chrom][start]
             except KeyError:
                 prevScore = 0
-                if includeZero:
+                if binary or includeZero:
                     score = 0
                 else:
                     continue
-            if not validRegion(regions, chrom, start, start + window):
-                continue
-            if distanceTransform:
+            if binary:
+                rescaledBedgraph['data'][chrom][start] = score > 0.5
+            elif distanceTransform:
                 try:
                     rescaledBedgraph['data'][chrom][start] = score - prevScore
-                except NameError:
-                    # Skip first window where prevScore undefined
-                    pass
+                except TypeError:
+                    pass # Skip windows where prevScore set to None
             else:
                 rescaledBedgraph['data'][chrom][start] = score
             prevScore = score
@@ -57,25 +58,22 @@ def rescaleBedgraph(
 
 def readRegions(bed):
     """ Read BED file and return dict of chromosomes and allowed intervals """
-    if bed is None:
-        return None
     regions = defaultdict(list)
-    with open(bed) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            chrom, start, end, score = splitBed(line)
-            regions[chrom].append(range(start,end))
+    if bed is not None:
+        with open(bed) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                chrom, start, end, score = splitBed(line)
+                regions[chrom].append(range(start, end))
     return regions
 
 
-def validRegion(regions, chrom, start, end):
+def validRegion(regions, chrom, start):
     """ Return True if interval present in regions dict """
-    if regions is None:
-        return True
     for interval in regions[chrom]:
-        if (start in interval) and (end in interval):
+        if start in interval:
             return True
     return False
 
@@ -139,7 +137,10 @@ def readChromSizes(file):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=rescaleBedgraph)
     parser.add_argument(
         'bedGraph',
         help='BedGraph interval file to rescale. '
@@ -151,7 +152,8 @@ def parseArgs():
         help='Bedgraph interval window to rescale to (default: %(default)s)')
     parser.add_argument(
         '--distanceTransform', action='store_true',
-        help='Perform differencing to remove series dependence.')
+        help='Perform differencing to remove series dependence. '
+             'Ignored if --binary is set (default: %(default)s)')
     parser.add_argument(
         '--regions', help='BED file indicating regions to process.')
     parser.add_argument(
@@ -159,15 +161,15 @@ def parseArgs():
         help='Treat input as BED format (default: %(default)s)')
     parser.add_argument(
         '--binary', action='store_true',
-        help='Set all scores 1. Useful for files that indicate boolean '
-             'intervals e.g. presence/absence of a gene (default: %(default)s)')
+        help='Set boolean intervals e.g. presence/absence of a gene. If used, '
+             '--includeZero is switched on(default: %(default)s)')
     parser.add_argument(
         '--includeZero', action='store_true',
         help='Include windows with a 0 score (default: %(default)s)')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(rescaleBedgraph(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

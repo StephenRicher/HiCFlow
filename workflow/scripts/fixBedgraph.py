@@ -6,7 +6,7 @@
 import sys
 import argparse
 import fileinput
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
 
@@ -34,7 +34,10 @@ def fixBedgraph(file: str, pos: int):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=fixBedgraph)
     parser.add_argument(
         'file', nargs='?',
         help='Input bedgraph.')
@@ -43,9 +46,9 @@ def parseArgs():
         '--pos', type=int, required=True,
         help='Value to assign to End position of last bedgraph entry.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(fixBedgraph(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

@@ -6,7 +6,8 @@ import re
 import sys
 import argparse
 import fileinput
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
+
 
 __version__ = '1.0.0'
 
@@ -56,7 +57,10 @@ def coordinates(value):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=subsetBED)
     parser.add_argument('infile', nargs='?', default=[],
         help='Input BED file (default: stdin)')
     requiredNamed = parser.add_argument_group('required named arguments')
@@ -64,9 +68,9 @@ def parseArgs():
         '--region', metavar='CHR:START-END', required=True, type=coordinates,
         help='Genomic coordinates to operate on.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(subsetBED(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

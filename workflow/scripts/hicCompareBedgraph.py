@@ -5,7 +5,8 @@
 import sys
 import argparse
 import pandas as pd
-from utilities import setDefaults, readHomer
+from utilities import setDefaults, createMainParent, readHomer
+
 
 __version__ = '1.0.0'
 
@@ -47,7 +48,10 @@ def hicCompareBedgraph(
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=hicCompareBedgraph)
     parser.add_argument('file', help='HiC matrix in homer format.')
     parser.add_argument(
         '--maxDistance', type=float,
@@ -66,9 +70,9 @@ def parseArgs():
         '--downOut', required=True,
         help='Output file for bedgraph of sum down interactions.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(hicCompareBedgraph(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))
