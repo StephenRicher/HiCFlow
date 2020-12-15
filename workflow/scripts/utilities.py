@@ -15,6 +15,7 @@ def setDefaults(parser):
         logging.basicConfig(level=args.verbose, format=logFormat)
         del args.verbose
     except AttributeError:
+        logging.basicConfig(format=logFormat)
         pass
     try:
         function = args.function
