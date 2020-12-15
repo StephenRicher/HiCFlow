@@ -22,11 +22,6 @@ def rescaleBedgraph(
     scores = readBedgraph(bedGraph, window, bed, binary)
     regions = readRegions(regions)
 
-    if bed and noBedScore(bedGraph):
-        logging.warning(
-            f'{bedGraph} has no score column, activating "--binary" mode.')
-        binary = True
-
     # Non-zero interval scores stored in dictionary
     rescaledBedgraph = {'window' : window,
                         'binary' : binary,
@@ -110,8 +105,14 @@ def readBedgraph(file, window, bed=False, binary=False):
     """ Read per-base scores into new window  """
     scores = defaultdict(dict)
     with open(file) as fh:
-        for line in fh:
+        for i, line in enumerate(fh):
             if bed: # Input is BED format
+                # Check 1st line if score column included
+                if (i == 0 and noBedScore(line)) and not binary:
+                    logging.error(
+                        f'{file} has no score column, '
+                         'Must activate "--binary" mode.')
+                    sys.exit(1)
                 chrom, start, end, score = splitBed(line)
             else: # Input is bedgraph format
                 chrom, start, end, score = splitBedgraph(line)
@@ -141,14 +142,9 @@ def readChromSizes(file):
     return chromSizes
 
 
-def noBedScore(bed):
+def noBedScore(line):
     """ Return True if BED file contains no score column. """
-    with open(bed) as fh:
-        try:
-            chrom, start, end, name, score = fh.readline().split()[:5]
-            return False
-        except ValueError:
-            return True
+    return len(line.split()) < 5
 
 
 def parseArgs():
