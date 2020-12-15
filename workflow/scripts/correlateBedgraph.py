@@ -25,15 +25,22 @@ def runCorrelation(bedGraphs: List):
 def correlateBedgraph(bedGraph1: str, bedGraph2: str):
     """ Correlate rescaled bedgraphs """
 
+    merged, window = mergeRescaled(bedGraph1, bedGraph2)
+    if not merged.empty:
+        r, p = stats.pearsonr(merged.iloc[:,0], merged.iloc[:,1])
+        print(bedGraph1, bedGraph2, window, r, p, sep='\t')
+
+
+def mergeRescaled(bedGraph1: str, bedGraph2: str):
+    """ Return bedgraph pair as merged pandas """
     bed1, window1 = processRescaled(bedGraph1)
     bed2, window2 = processRescaled(bedGraph2)
     if window1 != window2:
         logging.warning(
             f'Window sizes of {bedGraph1} and {bedGraph2} do not match.')
+        return pd.DataFrame(), None
     else:
-        merged = pd.concat([bed1, bed2], axis=1).dropna()
-        r, p = stats.pearsonr(merged.iloc[:,0], merged.iloc[:,1])
-        print(bedGraph1, bedGraph2, window1, r, p, sep='\t')
+        return pd.concat([bed1, bed2], axis=1).dropna(), window1
 
 
 def processRescaled(file: str):
