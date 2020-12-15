@@ -4,6 +4,7 @@
 
 import sys
 import json
+import logging
 import argparse
 from collections import defaultdict
 from utilities import setDefaults, createMainParent
@@ -21,8 +22,14 @@ def rescaleBedgraph(
     scores = readBedgraph(bedGraph, window, bed, binary)
     regions = readRegions(regions)
 
+    if bed and noBedScore(bedGraph):
+        logging.warning(
+            f'{bedGraph} has no score column, activating "--binary" mode.')
+        binary = True
+
     # Non-zero interval scores stored in dictionary
     rescaledBedgraph = {'window' : window,
+                        'binary' : binary,
                         'data'   : defaultdict(dict)}
 
     # Loop through windows (in order) per chromosome and perform distance
@@ -32,7 +39,7 @@ def rescaleBedgraph(
         prevScore = None
         for start in range(0, size, window):
             # Skip windows where start not in regions
-            if not validRegion(regions, chrom, start):
+            if regions and not validRegion(regions, chrom, start):
                 prevScore = None
                 continue
             try:
@@ -88,9 +95,9 @@ def splitBed(line):
     """ Split BED columns and set type """
     try:
         chrom, start, end, name, score = line.split()[:5]
-    except ValueError: # Set score to 0 for BED3 format
+    except ValueError:
         chrom, start, end = line.split()[:3]
-        score = 0
+        score = 1
     return chrom, int(start), int(end), float(score)
 
 
@@ -132,6 +139,16 @@ def readChromSizes(file):
             chrom, size = line.split()
             chromSizes[chrom] = int(size)
     return chromSizes
+
+
+def noBedScore(bed):
+    """ Return True if BED file contains no score column. """
+    with open(bed) as fh:
+        try:
+            chrom, start, end, name, score = fh.readline().split()[:5]
+            return False
+        except ValueError:
+            return True
 
 
 def parseArgs():
