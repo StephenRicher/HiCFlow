@@ -31,14 +31,6 @@ def correlateBedgraph(bedGraph1: str, bedGraph2: str):
         print(bedGraph1, bedGraph2, merged['window'], testStat, p, sep='\t')
 
 
-def runCompare(booleanBedGraph: str, bedGraphs: List, test: str):
-    print('booleanBedGraph', 'bedGraph', 'window', 'test', 'testStatistic',
-          'p', 'medianTrue', 'medianFalse', 'meanTrue', 'meanFalse',
-          'countTrue', 'countFalse', 'sumTrue', 'sumFalse', sep='\t')
-    for bedGraph in bedGraphs:
-        compareBedGraph(booleanBedGraph, bedGraph, test)
-
-
 def compareBedGraph(booleanBedGraph: str, bedGraph: str, test: str):
 
     merged, meta = mergeRescaled(booleanBedGraph, bedGraph)
@@ -51,8 +43,12 @@ def compareBedGraph(booleanBedGraph: str, bedGraph: str, test: str):
     trueValues = merged[(bedGraph, True)].dropna()
     # Perform chi-square if other bedGraph is binary
     if meta['binary2']:
-        testStat, p, dof, ex = stats.chi2_contingency(
-            merged.apply(pd.Series.value_counts))
+        obs = merged.apply(pd.Series.value_counts)
+        testStat, p, dof, ex = stats.chi2_contingency(obs)
+        if (ex.min().min()) < 5 or (obs.min().min() < 5):
+            logging.error(
+                'Atleast 1 of observed or expected values less than 5. '
+                'Test result may be invalid.')
         test = 'chisquare'
     else:
         if test == 'mannwhitneyu':
@@ -61,11 +57,21 @@ def compareBedGraph(booleanBedGraph: str, bedGraph: str, test: str):
         else:
             testStat, p = stats.ttest_ind(
                 trueValues, falseValues, equal_var=True)
-    print(booleanBedGraph, bedGraph, meta['window'], test, testStat, p,
-          trueValues.median(), falseValues.median(),
-          trueValues.mean(), falseValues.mean(),
-          trueValues.count(), falseValues.count(),
-          trueValues.sum(), falseValues.sum(), sep='\t')
+
+
+    # Write summary stats to stderr
+    print(merged.describe(), file=sys.stderr)
+
+    testResult = {
+        'groupData':     booleanBedGraph,
+        'valueData':     bedGraph,
+        'window':        meta['window'],
+        'test':          test,
+        'testStatistic': testStat,
+        'p':             p}
+    json.dump(testResult, sys.stdout, indent=4)
+
+
 
 
 def mergeRescaled(bedGraph1: str, bedGraph2: str):
@@ -127,17 +133,17 @@ def parseArgs():
 
     compare = subparser.add_parser(
         'compare',
-        description=runCompare.__doc__,
+        description=compareBedGraph.__doc__,
         help='Perform t-test or Mann Whitney-U on rescaled JSON bedgraph.',
         epilog=parser.epilog, parents=[mainParent])
     compare.add_argument(
         'booleanBedGraph', help='Rescaled boolean bedGraph to define groups.')
     compare.add_argument(
-        'bedGraphs', nargs='*', help='Rescaled bedGraph.')
+        'bedGraph', help='Rescaled bedGraph.')
     compare.add_argument(
         '--test', default='mannwhitneyu', choices=['ttest', 'mannwhitneyu'],
         help='Statistical test to apply.')
-    compare.set_defaults(function=runCompare)
+    compare.set_defaults(function=compareBedGraph)
 
     return setDefaults(parser)
 
