@@ -186,7 +186,7 @@ def parseArgs():
         help='Set boolean intervals e.g. presence/absence of a gene. If used, '
              '--includeZero is switched on (default: %(default)s)')
     parser.add_argument(
-        '--threshold', type=int,
+        '--threshold', type=float,
         help='Score threshold for determining binary intervals. '
              'Only appicable if --binary is set (default: %(default)s)')
     parser.add_argument(
