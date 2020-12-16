@@ -146,8 +146,8 @@ HiC_mode = ([
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=regionBin.keys()),
-     expand('bedgraphs/{tool}/{compare}-{bin}-{dir}.json',
-        tool=tools, dir=['up', 'down', 'all'],
+     expand('bedgraphs/{tool}{mode}/{compare}-{bin}-{dir}.json',
+        tool=tools, dir=['up', 'down', 'all'], mode=['', '-binary'],
         compare=HiC.groupCompares(), bin=binRegion.keys()),
      expand('bedgraphs/{method}/{all}-{bin}-{method}.json',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
@@ -1496,6 +1496,28 @@ rule rescaleHiCcompare:
     shell:
         'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
         '{params.transform} <(cat {input.bedgraphs}) '
+        '{input.chromSizes} > {output} 2> {log}'
+
+
+rule rescaleHiCcompareBinary:
+    input:
+        bedgraphs = lambda wc: expand(
+            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}.bedgraph',
+            region=binRegion[wc.bin]),
+        chromSizes = getChromSizes
+    output:
+        'bedgraphs/{compare}-binary/{group1}-vs-{group2}-{bin}-{dir}.json'
+    params:
+        threshold = 1.96
+    group:
+        'rescaleBedgraphs'
+    log:
+        'logs/rescaleHiCcompareBinary/{compare}/{group1}-vs-{group2}-{bin}-{dir}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
+        '--threshold {params.threshold} --binary <(cat {input.bedgraphs}) '
         '{input.chromSizes} > {output} 2> {log}'
 
 

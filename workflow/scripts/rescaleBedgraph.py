@@ -15,17 +15,18 @@ __version__ = '1.0.0'
 
 def rescaleBedgraph(
         bedGraph: str, chromSizes: str, window: int, regions: str, bed: bool,
-        distanceTransform: bool, binary: bool, includeZero: bool):
+        distanceTransform: bool, binary: bool, threshold: int, includeZero: bool):
     """ Convert intervals to new window size and write to JSON. """
 
     chromSizes = readChromSizes(chromSizes)
-    scores = readBedgraph(bedGraph, window, bed, binary)
+    scores = readBedgraph(bedGraph, window, bed, binary, threshold)
     regions = readRegions(regions)
 
     # Non-zero interval scores stored in dictionary
-    rescaledBedgraph = {'window' : window,
-                        'binary' : binary,
-                        'data'   : defaultdict(dict)}
+    rescaledBedgraph = {'window' :   window,
+                        'binary' :   binary,
+                        'threshold': threshold,
+                        'data'   :   defaultdict(dict)}
 
     # Loop through windows (in order) per chromosome and perform distance
     # transformation as required.
@@ -101,24 +102,32 @@ def getWindow(pos, window):
     return (pos // window) * window
 
 
-def readBedgraph(file, window, bed=False, binary=False):
+def readBedgraph(file, window, bed=False, binary=False, threshold=None):
     """ Read per-base scores into new window  """
     scores = defaultdict(dict)
     with open(file) as fh:
         for i, line in enumerate(fh):
             if bed: # Input is BED format
                 # Check 1st line if score column included
-                if (i == 0 and noBedScore(line)) and not binary:
-                    logging.error(
-                        f'{file} has no score column, '
-                         'Must activate "--binary" mode.')
-                    sys.exit(1)
+                if i == 0 and noBedScore(line):
+                    if not binary:
+                        logging.error(
+                            f'{file} has no score column, '
+                             'Must activate "--binary" mode.')
+                        sys.exit(1)
+                    if threshold is not None:
+                        logging.warning(
+                            f'{file} has no score column, '
+                             '--threshold may not be meaningul.')
                 chrom, start, end, score = splitBed(line)
             else: # Input is bedgraph format
                 chrom, start, end, score = splitBedgraph(line)
             # Set score to 1 if binary is set
             if binary:
-                score = 1
+                if threshold is not None:
+                    score = score > threshold
+                else:
+                    score = True
             regionLength = end - start
             for base in range(start, end):
                 pos = getWindow(base, window)
@@ -175,7 +184,11 @@ def parseArgs():
     parser.add_argument(
         '--binary', action='store_true',
         help='Set boolean intervals e.g. presence/absence of a gene. If used, '
-             '--includeZero is switched on(default: %(default)s)')
+             '--includeZero is switched on (default: %(default)s)')
+    parser.add_argument(
+        '--threshold', type=int,
+        help='Score threshold for determining binary intervals. '
+             'Only appicable if --binary is set (default: %(default)s)')
     parser.add_argument(
         '--includeZero', action='store_true',
         help='Include windows with a 0 score (default: %(default)s)')
