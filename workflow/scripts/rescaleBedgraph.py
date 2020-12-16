@@ -44,7 +44,7 @@ def makeRescaled(scores, template):
     for chrom, size in template['chromSizes'].items():
         for start in range(0, size, template['window']):
             # Skip windows where start not in regions
-            if validRegion(template['regions'], chrom, start):
+            if not validRegion(template['regions'], chrom, start):
                 continue
             try:
                 score = scores[chrom][start]
@@ -66,7 +66,7 @@ def makeRescaledSum(scores, template):
         prevScore = None
         for start in range(0, size, template['window']):
             # Skip windows where start not in regions
-            if validRegion(regions, chrom, start):
+            if not validRegion(regions, chrom, start):
                 prevScore = None
                 continue
             try:
@@ -143,7 +143,7 @@ def splitPos(line):
 
 def readRegions(bed):
     """ Read BED file and return dict of chromosomes and allowed intervals """
-    if regions is None:
+    if bed is None:
         return None
     regions = defaultdict(list)
     with open(bed) as fh:
