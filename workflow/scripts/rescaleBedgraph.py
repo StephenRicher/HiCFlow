@@ -6,51 +6,77 @@ import sys
 import json
 import logging
 import argparse
+import pandas as pd
 from collections import defaultdict
 from utilities import setDefaults, createMainParent
-
 
 __version__ = '1.0.0'
 
 
-def rescaleBinCount(bedGraph: str, chromSizes: str, window: int,
-                    regions: str, threshold: float = None):
+def rescaleBinCount(bedGraph: str, chromSizes: str, out: str, window: int,
+                    name: str, regions: str, format: str = None,
+                    threshold: float = None):
 
-    scores = readBedgraph(bedGraph, window, threshold)
-    mode = 'binary' if threshold is not None else 'count'
+    if threshold is not None:
+        mode = 'binary'
+        if (threshold is not False) and (format is None):
+            logging.error(
+                'If --threshold is set then --format must also be specified')
+            return 1
+    else:
+        mode = 'count'
+
+    scores = readBedgraph(bedGraph, window, format, threshold)
+    name = bedGraph if name is None else name
     template = makeTemplate(
-        window, mode, regions, chromSizes,
+        name, window, mode, regions, chromSizes,
         distanceTransform=False, includeZero=True, threshold=threshold)
+    df = convert2pandas(makeRescaledSum(scores, template))
+    df.to_pickle(out)
 
-    json.dump(makeRescaled(scores, template), sys.stdout)
 
-
-def rescaleSum(bedGraph: str, chromSizes: str, window: int,
-               regions: str, distanceTransform: bool, includeZero: bool):
+def rescaleSum(bedGraph: str, chromSizes: str, out: str, window: int, name: str,
+               regions: str, format: str, distanceTransform: bool,
+               includeZero: bool):
     """ Rescale intervals to a set window size and sum interval scores
         within a window. Optionally performing distancing correction. """
 
-    scores = readBedgraphSum(bedGraph, window)
+    scores = readBedgraphSum(bedGraph, window, format)
+    name = bedGraph if name is None else name
+    mode = 'sum'
     template = makeTemplate(
-        window, mode, regions, chromSizes,
+        name, window, mode, regions, chromSizes,
         distanceTransform, includeZero, threshold=None)
+    df = convert2pandas(makeRescaledSum(scores, template))
+    df.to_pickle(out)
 
-    json.dump(makeRescaledSum(scores, template), sys.stdout)
+
+def convert2pandas(template):
+    """ Write dictionary template to pandas DF with metadata """
+    columnIndex = pd.MultiIndex.from_tuples(
+        [(template['meta']['mode'], template['meta']['name'])],
+        names=('mode', 'name'))
+    df = pd.DataFrame.from_dict(
+        template['data'], orient='index').stack().to_frame()
+    df.columns = columnIndex
+    df = df.reindex(df.index.set_names(['chromosome', 'start']))
+    df.attrs['meta'] = template['meta']
+    return df
 
 
 def makeRescaled(scores, template):
     """ Generate rescaled dictionary for binary and count mode. """
 
-    for chrom, size in template['chromSizes'].items():
-        for start in range(0, size, template['window']):
+    for chrom, size in template['meta']['chromSizes'].items():
+        for start in range(0, size, template['meta']['window']):
             # Skip windows where start not in regions
-            if not validRegion(template['regions'], chrom, start):
+            if not validRegion(template['meta']['regions'], chrom, start):
                 continue
             try:
                 score = scores[chrom][start]
             except KeyError:
                 score = 0
-            if template['mode'] == 'binary':
+            if template['meta']['mode'] == 'binary':
                 score = score > 0.5
             else:
                 score = round(score)
@@ -61,23 +87,23 @@ def makeRescaled(scores, template):
 def makeRescaledSum(scores, template):
     """ Generate rescaled dictionary for binary and count mode. """
 
-    for chrom, size in template['chromSizes'].items():
+    for chrom, size in template['meta']['chromSizes'].items():
         # Reset prevScore for each chromosome
         prevScore = None
-        for start in range(0, size, template['window']):
+        for start in range(0, size, template['meta']['window']):
             # Skip windows where start not in regions
-            if not validRegion(regions, chrom, start):
+            if not validRegion(template['meta']['regions'], chrom, start):
                 prevScore = None
                 continue
             try:
                 score = scores[chrom][start]
             except KeyError:
                 prevScore = 0
-                if template['includeZero']:
+                if template['meta']['includeZero']:
                     score = 0
                 else:
                     continue
-            if template['distanceTransform']:
+            if template['meta']['distanceTransform']:
                 try:
                     template['data'][chrom][start] = score - prevScore
                 except TypeError:
@@ -88,27 +114,35 @@ def makeRescaledSum(scores, template):
     return template
 
 
-def makeTemplate(window, mode, regions, chromSizes,
+def makeTemplate(name, window, mode, regions, chromSizes,
                  distanceTransform, includeZero, threshold):
     """ Return template rescaled JSON with metadata """
-    template = {'window':            window,
-                'mode':              mode,
-                'threshold':         threshold,
-                'regions':           readRegions(regions),
-                'chromSizes':        readChromSizes(chromSizes),
-                'distanceTransform': distanceTransform,
-                'includeZero':       includeZero,
-                'data':              defaultdict(dict)}
+    template = {'data':              defaultdict(dict),
+                'meta':
+                    {'name':              name                      ,
+                     'window':            window                    ,
+                     'mode':              mode                      ,
+                     'threshold':         threshold                 ,
+                     'regions':           readRegions(regions)      ,
+                     'chromSizes':        readChromSizes(chromSizes),
+                     'distanceTransform': distanceTransform         ,
+                     'includeZero':       includeZero               ,}
+                }
     return template
 
 
-def readBedgraph(bedGraph, window, threshold=None):
+def readBedgraph(bedGraph, window, format=None, threshold=None):
     scores = defaultdict(dict)
     with open(bedGraph) as fh:
         for line in fh:
-            chrom, start, end = splitPos(line)
+            # Score column must be retrieved if threshold set
+            if isinstance(threshold, float):
+                chrom, start, end, score = splitScore(line, format)
+                score > threshold
+            else:
+                chrom, start, end = splitPos(line)
+                score = 1
             regionLength = end - start
-            score = score > threshold if threshold is not None else 1
             for base in range(start, end):
                 pos = getWindow(base, window)
                 try:
@@ -118,14 +152,11 @@ def readBedgraph(bedGraph, window, threshold=None):
     return scores
 
 
-def readBedgraphSum(bedGraph, window):
+def readBedgraphSum(bedGraph, window, format):
     scores = defaultdict(dict)
     with open(bedGraph) as fh:
         for i, line in enumerate(fh):
-            if bed:
-                chrom, start, end, score = splitBed(line)
-            else:  # Input is bedgraph format
-                chrom, start, end, score = splitBedgraph(line)
+            chrom, start, end, score = splitScore(line, format)
             regionLength = end - start
             for base in range(start, end):
                 pos = getWindow(base, window)
@@ -141,6 +172,20 @@ def splitPos(line):
     return chrom, int(start), int(end)
 
 
+def splitScore(line, format):
+    """ Split positions and score from BED/bedgraph record """
+
+    assert format in ['bed', 'bedgraph']
+    if format == 'bedgraph':
+        chrom, start, end, score = line.split()
+    else:
+        try:
+            chrom, start, end, name, score = line.split()[:5]
+        except ValueError as e:
+            logging.exception('Input BED file does not contain score column.')
+    return chrom, int(start), int(end), float(score)
+
+
 def readRegions(bed):
     """ Read BED file and return dict of chromosomes and allowed intervals """
     if bed is None:
@@ -151,7 +196,7 @@ def readRegions(bed):
             line = line.strip()
             if not line:
                 continue
-            chrom, start, end, score = splitBed(line)
+            chrom, start, end = splitPos(line)
             regions[chrom].append(range(start, end))
     return regions
 
@@ -165,21 +210,6 @@ def validRegion(regions, chrom, start):
         if start in interval:
             return True
     return False
-
-
-def splitBedgraph(line):
-    """ Split bedgraph columns and set type """
-    chrom, start, end, score = line.split()
-    return chrom, int(start), int(end), float(score)
-
-
-def splitBed(line):
-    """ Split BED columns and set type """
-    try:
-        chrom, start, end, name, score = line.split()[:5]
-    except ValueError as e:
-        logging.exception('Input BED file does not contain score column.')
-    return chrom, int(start), int(end), float(score)
 
 
 def getWindow(pos, window):
@@ -213,8 +243,13 @@ def parseArgs():
     baseParser = argparse.ArgumentParser(add_help=False)
     requiredNamed = baseParser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
+        '--out', required=True,
+        help='Path to save pickled dataframe.')
+    requiredNamed.add_argument(
         '--window', type=int, required=True,
         help='Rescaled interval window size.')
+    baseParser.add_argument(
+        '--name', help='Name to store in metadata. Defaults to infile path.')
     baseParser.add_argument(
         '--regions', help='BED file indicating regions to process.')
     chromSizeParser = argparse.ArgumentParser(add_help=False)
@@ -250,8 +285,12 @@ def parseArgs():
         parents=[mainParent, infileParser, chromSizeParser, baseParser])
     binary.add_argument(
         '--threshold', type=float, default=False,
-        help='Score threshold for determining binary '
-             'intervals (default: None')
+        help='Minimum score threshold for determining binary '
+             'intervals (default: None)')
+    binary.add_argument(
+        '--format',  choices=['bed', 'bedgraph'],
+        help='Input format to correctly retrieve score column. '
+             'Only required if --threshold used (default: %(default)s)')
     binary.set_defaults(function=rescaleBinCount)
 
     sum = subparser.add_parser(
@@ -267,9 +306,11 @@ def parseArgs():
         '--distanceTransform', action='store_true',
         help='Perform differencing to remove series '
              'dependence. (default: %(default)s)')
-    sum.add_argument(
-        '--bed', action='store_true',
-        help='Treat input as BED format (default: %(default)s)')
+    requiredSum = sum.add_argument_group('required named arguments')
+    requiredSum.add_argument(
+        '--format',  required=True, choices=['bed', 'bedgraph'],
+        help='Input format to correctly retrive score column.')
+    sum.set_defaults(function=rescaleSum)
 
     return setDefaults(parser)
 
