@@ -146,10 +146,10 @@ HiC_mode = ([
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=regionBin.keys()),
-     expand('bedgraphs/{tool}{mode}/{compare}-{bin}-{dir}.json',
+     expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}.pkl',
         tool=tools, dir=['up', 'down', 'all'], mode=['', '-binary'],
         compare=HiC.groupCompares(), bin=binRegion.keys()),
-     expand('bedgraphs/{method}/{all}-{bin}-{method}.json',
+     expand('intervals/{all}-{bin}-{method}.pkl',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         bin=binRegion.keys(), method=['PCA', 'TADinsulation', 'TADboundaries']),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
@@ -901,8 +901,10 @@ rule rescaleTADinsulation:
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'bedgraphs/TADinsulation/{all}-{bin}-TADinsulation.json'
+        'intervals/{all}-{bin}-TADinsulation.pkl'
     params:
+        regions = config['regions'],
+        name = lambda wc: f'{wc.all}-{wc.bin}',
         transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'
@@ -911,9 +913,10 @@ rule rescaleTADinsulation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
-        '{params.transform} <(cat {input.bedgraphs}) '
-        '{input.chromSizes} > {output} 2> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '--regions {params.regions} --name {params.name} '
+        '{params.transform} --format bedgraph &> {log}'
 
 
 rule rescaleTADboundaries:
@@ -923,19 +926,20 @@ rule rescaleTADboundaries:
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'bedgraphs/TADboundaries/{all}-{bin}-TADboundaries.json'
+        'intervals/{all}-{bin}-TADboundaries.pkl'
     params:
+        name = lambda wc: f'{wc.all}-{wc.bin}',
         regions = config['regions']
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleTADinsulations/{all}-{bin}.log'
+        'logs/rescaleTADboundaries/{all}-{bin}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
-        '--includeZero --binary --bed --regions {params.regions} '
-        '<(cat {input.bedgraphs}) {input.chromSizes} > {output} 2> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py binary <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '--regions {params.regions} --name {params.name} &> {log}'
 
 
 rule detectLoops:
@@ -1016,8 +1020,10 @@ rule rescalePCA:
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'bedgraphs/PCA/{all}-{bin}-PCA.json'
+        'intervals/{all}-{bin}-PCA.pkl'
     params:
+        regions = config['regions'],
+        name = lambda wc: f'{wc.all}-{wc.bin}',
         transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'
@@ -1026,9 +1032,10 @@ rule rescalePCA:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
-        '{params.transform} <(cat {input.bedgraphs}) '
-        '{input.chromSizes} > {output} 2> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '--regions {params.regions} --name {params.name} '
+        '{params.transform} --format bedgraph &> {log}'
 
 
 rule reformatHomer:
@@ -1484,19 +1491,22 @@ rule rescaleHiCcompare:
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'bedgraphs/{compare}/{group1}-vs-{group2}-{bin}-{dir}.json'
+        'intervals/{group1}-vs-{group2}-{dir}-{compare}-{bin}.pkl'
     params:
+        regions = config['regions'],
+        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}',
         transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleHiCcompare/{compare}/{group1}-vs-{group2}-{bin}-{dir}.log'
+        'logs/rescaleHiCcompare/{group1}-vs-{group2}-{dir}-{compare}-{bin}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
-        '{params.transform} <(cat {input.bedgraphs}) '
-        '{input.chromSizes} > {output} 2> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '--regions {params.regions} --name {params.name} '
+        '{params.transform} --format bedgraph &> {log}'
 
 
 rule rescaleHiCcompareBinary:
@@ -1506,19 +1516,22 @@ rule rescaleHiCcompareBinary:
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'bedgraphs/{compare}-binary/{group1}-vs-{group2}-{bin}-{dir}.json'
+        'intervals/{group1}-vs-{group2}-{dir}-{compare}-binary-{bin}.pkl'
     params:
-        threshold = 1.96
+        threshold = 1.96,
+        regions = config['regions'],
+        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}',
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleHiCcompareBinary/{compare}/{group1}-vs-{group2}-{bin}-{dir}.log'
+        'logs/rescaleHiCcompareBinary/{group1}-vs-{group2}-{dir}-{compare}-{bin}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py --window {wildcards.bin} '
-        '--threshold {params.threshold} --binary <(cat {input.bedgraphs}) '
-        '{input.chromSizes} > {output} 2> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py binary <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '--regions {params.regions} --name {params.name} '
+        '--threshold {params.threshold} --format bedgraph &> {log}'
 
 
 rule homerToH5:
