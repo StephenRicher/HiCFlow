@@ -12,7 +12,7 @@ from bedgraphUtils import splitScore, readRegions
 __version__ = '1.0.0'
 
 
-def scoreIntervals(bedGraph: str, bed: str, name: str, out: str, format: str):
+def scoreIntervals(bedGraph: str, bed: str, name: str, format: str):
     regions = readRegions(bed)
     scoredRegions = defaultdict(float)
     with open(bedGraph) as fh:
@@ -23,9 +23,11 @@ def scoreIntervals(bedGraph: str, bed: str, name: str, out: str, format: str):
                 overlap = range(max(start, min(interval)), min(end, max(interval))+1)
                 if overlap:
                     regionLength = end - start
-                    key = f'{chrom}-{min(interval)}-{max(interval)+1}'
+                    key = f'{chrom} {min(interval)} {max(interval)+1}'
                     scoredRegions[key] += (score / regionLength) * len(overlap)
-    print(scoredRegions)
+    for region, score in scoredRegions.items():
+        chrom, start, end = region.split()
+        print(chrom, start, end, '.', score, sep='\t')
 
 
 def parseArgs():
@@ -42,9 +44,6 @@ def parseArgs():
     parser.add_argument(
         '--name', help='Name to store in metadata. Defaults to infile path.')
     requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument(
-        '--out', required=True,
-        help='Path to save pickled dataframe.')
     requiredNamed.add_argument(
         '--format',  required=True, choices=['bed', 'bedgraph'],
         help='Input format to correctly retrive score column.')
