@@ -4,6 +4,7 @@ import sys
 import logging
 import argparse
 import pandas as pd
+from collections import defaultdict
 
 
 def setDefaults(parser):

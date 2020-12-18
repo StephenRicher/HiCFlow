@@ -9,6 +9,8 @@ import argparse
 import pandas as pd
 from collections import defaultdict
 from utilities import setDefaults, createMainParent
+from bedgraphUtils import splitScore, readRegions, splitPos
+
 
 __version__ = '1.0.0'
 
@@ -167,40 +169,6 @@ def readBedgraphSum(bedGraph, window, format):
     return scores
 
 
-def splitPos(line):
-    chrom, start, end = line.split()[:3]
-    return chrom, int(start), int(end)
-
-
-def splitScore(line, format):
-    """ Split positions and score from BED/bedgraph record """
-
-    assert format in ['bed', 'bedgraph']
-    if format == 'bedgraph':
-        chrom, start, end, score = line.split()
-    else:
-        try:
-            chrom, start, end, name, score = line.split()[:5]
-        except ValueError as e:
-            logging.exception('Input BED file does not contain score column.')
-    return chrom, int(start), int(end), float(score)
-
-
-def readRegions(bed):
-    """ Read BED file and return dict of chromosomes and allowed intervals """
-    if bed is None:
-        return None
-    regions = defaultdict(list)
-    with open(bed) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            chrom, start, end = splitPos(line)
-            regions[chrom].append(range(start, end))
-    return regions
-
-
 def validRegion(regions, chrom, start):
     """ Return True if interval present in regions dict """
     # All regions assumed valid if no regions dict provided
@@ -245,24 +213,34 @@ def parseArgs():
     requiredNamed.add_argument(
         '--out', required=True,
         help='Path to save pickled dataframe.')
-    requiredNamed.add_argument(
-        '--window', type=int, required=True,
-        help='Rescaled interval window size.')
     baseParser.add_argument(
         '--name', help='Name to store in metadata. Defaults to infile path.')
-    baseParser.add_argument(
-        '--regions', help='BED file indicating regions to process.')
+
+    regionsParser = argparse.ArgumentParser(add_help=False)
+    regionsRequired = regionsParser.add_argument_group('required named arguments')
+    regionsRequired.add_argument(
+        '--regions', required=True,
+        help='BED file indicating regions to process.')
+
+    formatParser = argparse.ArgumentParser(add_help=False)
+    formatRequired = formatParser.add_argument_group('required named arguments')
+    formatRequired.add_argument(
+        '--format',  required=True, choices=['bed', 'bedgraph'],
+        help='Input format to correctly retrive score column.')
+
     chromSizeParser = argparse.ArgumentParser(add_help=False)
     chromSizeParser.add_argument(
         'chromSizes', help='Chromosome sizes file.')
+
     infileParser = argparse.ArgumentParser(add_help=False)
     infileParser.add_argument(
         'bedGraph', help='BedGraph/BED interval file to rescale.')
-    infileParser2 = argparse.ArgumentParser(add_help=False)
-    infileParser2.add_argument(
-        'bedGraph',
-        help='BedGraph/BED interval file to rescale. '
-             'If BED must also set "--bed".')
+
+    windowParser = argparse.ArgumentParser(add_help=False)
+    windowRequired = windowParser.add_argument_group('required named arguments')
+    windowRequired.add_argument(
+        '--window', type=int, required=True,
+        help='Rescaled interval window size.')
 
     count = subparser.add_parser(
         'count',
@@ -271,7 +249,8 @@ def parseArgs():
                     'window. Interval scores ignored.',
         help='Count number of intervals within each window.',
         epilog=parser.epilog,
-        parents=[mainParent, infileParser, chromSizeParser, baseParser])
+        parents=[mainParent, infileParser, chromSizeParser,
+                 baseParser, regionsParser, windowParser])
     count.set_defaults(function=rescaleBinCount)
 
     binary = subparser.add_parser(
@@ -282,7 +261,8 @@ def parseArgs():
                     'scores ignored.',
         help='Set True/False if window contains atleast 1 interval.',
         epilog=parser.epilog,
-        parents=[mainParent, infileParser, chromSizeParser, baseParser])
+        parents=[mainParent, infileParser, chromSizeParser,
+                 baseParser, regionsParser, windowParser])
     binary.add_argument(
         '--threshold', type=float, default=False,
         help='Minimum score threshold for determining binary '
@@ -298,7 +278,8 @@ def parseArgs():
         description=rescaleSum.__doc__,
         help='Sum scores across intervals in a window.',
         epilog=parser.epilog,
-        parents=[mainParent, infileParser2, chromSizeParser, baseParser])
+        parents=[mainParent, infileParser, chromSizeParser,
+                 baseParser, regionsParser, windowParser, formatParser])
     sum.add_argument(
         '--includeZero', action='store_true',
         help='Include windows with a 0 score (default: %(default)s)')
@@ -306,10 +287,6 @@ def parseArgs():
         '--distanceTransform', action='store_true',
         help='Perform differencing to remove series '
              'dependence. (default: %(default)s)')
-    requiredSum = sum.add_argument_group('required named arguments')
-    requiredSum.add_argument(
-        '--format',  required=True, choices=['bed', 'bedgraph'],
-        help='Input format to correctly retrive score column.')
     sum.set_defaults(function=rescaleSum)
 
     return setDefaults(parser)
