@@ -50,3 +50,8 @@ def hasOverlap(regions):
 def splitPos(line):
     chrom, start, end = line.split()[:3]
     return chrom, int(start), int(end)
+
+
+def splitName(line):
+    chrom, start, end, name = line.split()[:4]
+    return chrom, int(start), int(end), name

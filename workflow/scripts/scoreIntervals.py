@@ -6,28 +6,45 @@ import sys
 import argparse
 from collections import defaultdict
 from utilities import setDefaults, createMainParent
-from bedgraphUtils import splitScore, readRegions
+from bedgraphUtils import splitScore, splitPos, splitName
 
 
 __version__ = '1.0.0'
 
 
 def scoreIntervals(bedGraph: str, bed: str, name: str, format: str):
-    regions = readRegions(bed)
+    regions = readBed(bed)
     scoredRegions = defaultdict(float)
     with open(bedGraph) as fh:
-        for i, line in enumerate(fh):
+        for line in fh:
             chrom, start, end, score = splitScore(line, format)
-            for interval in regions[chrom]:
+            for name, interval in regions[chrom]:
                 # Detect base overlap between bedgraph interval and each region
                 overlap = range(max(start, min(interval)), min(end, max(interval))+1)
                 if overlap:
                     regionLength = end - start
-                    key = f'{chrom} {min(interval)} {max(interval)+1}'
+                    key = f'{chrom} {min(interval)} {max(interval)+1} {name}'
                     scoredRegions[key] += (score / regionLength) * len(overlap)
     for region, score in scoredRegions.items():
-        chrom, start, end = region.split()
-        print(chrom, start, end, '.', score, sep='\t')
+        chrom, start, end, name = region.split()
+        print(chrom, start, end, name, score, sep='\t')
+
+
+def readBed(bed):
+    """ Read bed file into dictionary structure """
+    regions = defaultdict(list)
+    with open(bed) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                chrom, start, end, name = splitName(line)
+            except ValueError:
+                chrom, start, end = splitPos(line)
+                name = '.'
+            regions[chrom].append((name, range(int(start), int(end))))
+    return regions
 
 
 def parseArgs():
