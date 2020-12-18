@@ -33,9 +33,6 @@ def readRegions(bed):
                 continue
             chrom, start, end = splitPos(line)
             regions[chrom].append(range(start, end))
-    if hasOverlap(regions):
-        logging.error(f'Overlap detected in {bed} intervals.')
-        sys.exit(1)
     return regions
 
 
