@@ -12,9 +12,9 @@ from bedgraphUtils import splitScore, splitPos, splitName
 __version__ = '1.0.0'
 
 
-def scoreIntervals(bedGraph: str, bed: str):
+def scoreIntervals(bedGraph: str, bed: str, buffer: int):
     bedgraph = readBedgraph(bedGraph)
-    regions = readBed(bed)
+    regions = readBed(bed, buffer)
     scoredRegions = defaultdict(float)
     for chrom, intervals in regions.items():
         for name, interval in intervals:
@@ -64,7 +64,7 @@ def readBedgraph(file):
     return bedgraph
 
 
-def readBed(bed):
+def readBed(bed, buffer=0):
     """ Read bed file into dictionary structure """
     regions = defaultdict(list)
     with open(bed) as fh:
@@ -77,7 +77,10 @@ def readBed(bed):
             except ValueError:
                 chrom, start, end = splitPos(line)
                 name = '.'
-            regions[chrom].append((name, range(int(start), int(end))))
+            start -= buffer
+            start = max(0, start)
+            end += buffer
+            regions[chrom].append((name, range(start, end)))
     return regions
 
 
@@ -92,6 +95,9 @@ def parseArgs():
         'bedGraph', help='BedGraph/BED interval file to rescale.')
     parser.add_argument(
         'bed', metavar='BED', help='BED file indicating regions to process.')
+    parser.add_argument(
+        '--buffer', type=int, default=0,
+        help='Extend BED regions by +/- this value (default: %(default)s)')
     parser.set_defaults(function=scoreIntervals)
 
     return setDefaults(parser)
