@@ -14,24 +14,21 @@ __version__ = '1.0.0'
 
 def scoreIntervals(bedGraph: str, bed: str):
     bedgraph = readBedgraph(bedGraph)
-    bedgraph = sortBedgraph(bedgraph)
-    print(bedgraph)
     regions = readBed(bed)
     scoredRegions = defaultdict(float)
     for chrom, intervals in regions.items():
         for name, interval in intervals:
-            print(chrom, interval, list(bedgraph[chrom].keys()))
+            key = f'{chrom} {min(interval)} {max(interval)+1} {name}'
             validRanges = getValidRanges(interval, list(bedgraph[chrom].keys()))
-            print(validRanges)
+            if not validRanges:
+                continue
             for validRange in validRanges:
                 # Detect base overlap between bedgraph interval and each region
                 overlap = getOverlap(validRange, interval)
-                key = f'{chrom} {min(interval)} {max(interval)+1} {name}'
                 score = bedgraph[chrom][validRange] * len(overlap)
                 scoredRegions[key] += score
-    for region, score in scoredRegions.items():
-        chrom, start, end, name = region.split()
-        print(chrom, start, end, name, score, sep='\t')
+            print(chrom, min(interval), max(interval)+1,
+                  name, scoredRegions[key], sep='\t')
 
 
 def getOverlap(range1, range2):
@@ -43,10 +40,12 @@ def getValidRanges(interval, rangeList):
         Must provided sorted list of ranges. """
 
     ranges = []
+    minInterval = min(interval)
+    maxInterval = max(interval)
     for i, rangeObj in enumerate(rangeList):
-        if interval.start in rangeObj or interval.stop in rangeObj:
+        if minInterval in rangeObj or maxInterval in rangeObj:
             ranges.append(rangeObj)
-        if rangeObj.start > interval.stop:
+        if min(rangeObj) > maxInterval:
             break
     return ranges
 
@@ -56,20 +55,12 @@ def readBedgraph(file):
     bedgraph = defaultdict(dict)
     with open(file) as fh:
         for line in fh:
-            chrom, start, end, score = line.split()
+            chrom, start, end, score = splitScore(line, filetype='bedgraph')
             regionLength = int(end) - int(start)
             bedgraph[chrom][range(int(start),int(end))] = float(score) / regionLength
-    return bedgraph
-
-
-def sortBedgraph(bedgraph):
-    """ Sort ranges in bedgraph dictionary per chromosome """
-    sortedRegions = defaultdict(dict)
     for chrom, intervals in bedgraph.items():
-        sortedIntervals = sorted(list(intervals), key=lambda r: r.start)
-        for interval in sortedIntervals:
-            sortedRegions[chrom][interval] = bedgraph[chrom][interval]
-    return sortedRegions
+        bedgraph[chrom] = dict(sorted(intervals.items(), key=lambda r: r[0].start))
+    return bedgraph
 
 
 def readBed(bed):
@@ -87,16 +78,6 @@ def readBed(bed):
                 name = '.'
             regions[chrom].append((name, range(int(start), int(end))))
     return regions
-
-
-def splitPos(line):
-    chrom, start, end = line.split()[:3]
-    return chrom, int(start), int(end)
-
-
-def splitName(line):
-    chrom, start, end, name = line.split()[:4]
-    return chrom, int(start), int(end), name
 
 
 def parseArgs():
