@@ -16,19 +16,19 @@ __version__ = '1.0.0'
 
 
 def rescaleBinCount(bedGraph: str, chromSizes: str, out: str, window: int,
-                    name: str, regions: str, format: str = None,
+                    name: str, regions: str, filetype: str = None,
                     threshold: float = None):
 
     if threshold is not None:
         mode = 'binary'
-        if (threshold is not False) and (format is None):
+        if (threshold is not False) and (filetype is None):
             logging.error(
-                'If --threshold is set then --format must also be specified')
+                'If --threshold is set then --filetype must also be specified')
             return 1
     else:
         mode = 'count'
 
-    scores = readBedgraph(bedGraph, window, format, threshold)
+    scores = readBedgraph(bedGraph, window, filetype, threshold)
     name = bedGraph if name is None else name
     template = makeTemplate(
         name, window, mode, regions, chromSizes,
@@ -38,12 +38,12 @@ def rescaleBinCount(bedGraph: str, chromSizes: str, out: str, window: int,
 
 
 def rescaleSum(bedGraph: str, chromSizes: str, out: str, window: int, name: str,
-               regions: str, format: str, distanceTransform: bool,
+               regions: str, filetype: str, distanceTransform: bool,
                includeZero: bool):
     """ Rescale intervals to a set window size and sum interval scores
         within a window. Optionally performing distancing correction. """
 
-    scores = readBedgraphSum(bedGraph, window, format)
+    scores = readBedgraphSum(bedGraph, window, filetype)
     name = bedGraph if name is None else name
     mode = 'sum'
     template = makeTemplate(
@@ -133,13 +133,13 @@ def makeTemplate(name, window, mode, regions, chromSizes,
     return template
 
 
-def readBedgraph(bedGraph, window, format=None, threshold=None):
+def readBedgraph(bedGraph, window, filetype=None, threshold=None):
     scores = defaultdict(dict)
     with open(bedGraph) as fh:
         for line in fh:
             # Score column must be retrieved if threshold set
             if isinstance(threshold, float):
-                chrom, start, end, score = splitScore(line, format)
+                chrom, start, end, score = splitScore(line, filetype)
                 score > threshold
             else:
                 chrom, start, end = splitPos(line)
@@ -154,11 +154,11 @@ def readBedgraph(bedGraph, window, format=None, threshold=None):
     return scores
 
 
-def readBedgraphSum(bedGraph, window, format):
+def readBedgraphSum(bedGraph, window, filetype):
     scores = defaultdict(dict)
     with open(bedGraph) as fh:
         for i, line in enumerate(fh):
-            chrom, start, end, score = splitScore(line, format)
+            chrom, start, end, score = splitScore(line, filetype)
             regionLength = end - start
             for base in range(start, end):
                 pos = getWindow(base, window)
@@ -225,8 +225,8 @@ def parseArgs():
     formatParser = argparse.ArgumentParser(add_help=False)
     formatRequired = formatParser.add_argument_group('required named arguments')
     formatRequired.add_argument(
-        '--format',  required=True, choices=['bed', 'bedgraph'],
-        help='Input format to correctly retrive score column.')
+        '--filetype',  required=True, choices=['bed', 'bedgraph'],
+        help='Input filetype to correctly retrive score column.')
 
     chromSizeParser = argparse.ArgumentParser(add_help=False)
     chromSizeParser.add_argument(
@@ -268,7 +268,7 @@ def parseArgs():
         help='Minimum score threshold for determining binary '
              'intervals (default: None)')
     binary.add_argument(
-        '--format',  choices=['bed', 'bedgraph'],
+        '--filetype',  choices=['bed', 'bedgraph'],
         help='Input format to correctly retrieve score column. '
              'Only required if --threshold used (default: %(default)s)')
     binary.set_defaults(function=rescaleBinCount)
