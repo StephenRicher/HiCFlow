@@ -14,7 +14,8 @@ from bedgraphUtils import splitPos, readRegions
 __version__ = '1.0.0'
 
 
-def sampleIntervals(referenceBed: str, sampleBed: str, nRepeats: int):
+def sampleIntervals(referenceBed: str, sampleBed: str, nRepeats: int, seed: float):
+    random.seed(seed)
     regions = readRegions(referenceBed)
     intervalLengths = readLengths(sampleBed)
     for i, lengths in enumerate(repeat(intervalLengths, nRepeats)):
@@ -84,6 +85,9 @@ def parseArgs():
     parser.add_argument(
         '--nRepeats', default=1, type=int,
         help='Number of repeat samples (default: %(default)s).')
+    parser.add_argument(
+        '--seed', default=None, type=float,
+        help='Seed for random number generation (default: %(default)s)')
     parser.set_defaults(function=sampleIntervals)
 
     return setDefaults(parser)
