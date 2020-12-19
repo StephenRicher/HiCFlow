@@ -6,8 +6,7 @@
 import sys
 import random
 import argparse
-from typing import List
-from collections import defaultdict
+from itertools import repeat
 from utilities import setDefaults, createMainParent
 from bedgraphUtils import splitPos, readRegions
 
@@ -15,29 +14,13 @@ from bedgraphUtils import splitPos, readRegions
 __version__ = '1.0.0'
 
 
-def sampleIntervals(referenceBed: str, sampleBed: str, nSamples: int):
+def sampleIntervals(referenceBed: str, sampleBed: str, nRepeats: int):
     regions = readRegions(referenceBed)
-    lengths = readLengths(sampleBed)
-    lengths = randomiseLengths(lengths, nSamples)
-    for length in lengths:
-        chrom, start, end = getRandomPos(regions, length)
-        print(chrom, start, end, sep='\t')
-
-
-def randomiseLengths(lengths: List, n: int = None):
-    """ Return random sample of 'n' lengths. Each length
-        sampled equally such that if n = len(lengths) all
-        values of length will be returned. """
-    if n is None:
-        n = len(lengths)
-    lengthsCopy = []
-    randomisedLengths = []
-    for rep in range(n):
-        if not randomisedLengths:
-            lengthsCopy = lengths.copy()
-            random.shuffle(lengthsCopy)
-        randomisedLengths.append(lengthsCopy.pop())
-    return randomisedLengths
+    intervalLengths = readLengths(sampleBed)
+    for i, lengths in enumerate(repeat(intervalLengths, nRepeats)):
+        for length in lengths:
+            chrom, start, end = getRandomPos(regions, length)
+            print(chrom, start, end, i, sep='\t')
 
 
 def readLengths(bed):
@@ -54,7 +37,7 @@ def readLengths(bed):
 
 
 def getRandomPos(regions, length=1, maxAttempts=100, _attempts=0):
-    """ Extract random genomic start, end coordinates that fully
+    """ Extract random genomic start/end coordinates that fully
         overlap an interval. Repeat up to maxAttempts. """
     # Get total bases in intervals
     totalLength = 0
@@ -99,8 +82,8 @@ def parseArgs():
         'sampleBed',
         help='BED file to extract interval lengths of sample.')
     parser.add_argument(
-        '--nSamples', type=int,
-        help='Number of intervals to sample (default: same as sampleBED).')
+        '--nRepeats', default=1, type=int,
+        help='Number of repeat samples (default: %(default)s).')
     parser.set_defaults(function=sampleIntervals)
 
     return setDefaults(parser)
