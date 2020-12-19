@@ -7,11 +7,11 @@ import pandas as pd
 from collections import defaultdict
 
 
-def splitScore(line, format):
+def splitScore(line, filetype):
     """ Split positions and score from BED/bedgraph record """
 
-    assert format in ['bed', 'bedgraph']
-    if format == 'bedgraph':
+    assert filetype in ['bed', 'bedgraph']
+    if filetype == 'bedgraph':
         chrom, start, end, score = line.split()
     else:
         try:
