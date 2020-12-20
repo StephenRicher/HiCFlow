@@ -19,7 +19,9 @@ def scoreIntervals(bedGraph: str, bed: str, buffer: int):
     for chrom, intervals in regions.items():
         for name, interval in intervals:
             key = f'{chrom} {min(interval)} {max(interval)+1} {name}'
-            validRanges = getValidRanges(interval, list(bedgraph[chrom].keys()))
+            validRanges, toRemove = getValidRanges(interval, list(bedgraph[chrom].keys()))
+            for removed in toRemove:
+                del bedgraph[chrom][removed]
             if not validRanges:
                 continue
             for validRange in validRanges:
@@ -28,7 +30,7 @@ def scoreIntervals(bedGraph: str, bed: str, buffer: int):
                 score = bedgraph[chrom][validRange] * len(overlap)
                 scoredRegions[key] += score
             print(chrom, min(interval), max(interval)+1,
-                  name, scoredRegions[key], sep='\t')
+                  name, scoredRegions[key], sep='\t', flush=True)
 
 
 def getOverlap(range1, range2):
@@ -42,12 +44,15 @@ def getValidRanges(interval, rangeList):
     ranges = []
     minInterval = min(interval)
     maxInterval = max(interval)
-    for i, rangeObj in enumerate(rangeList):
-        if minInterval in rangeObj or maxInterval in rangeObj:
+    toRemove = []
+    for rangeObj in rangeList:
+        if minInterval > max(rangeObj):
+            toRemove.append(rangeObj)
+        elif minInterval in rangeObj or maxInterval in rangeObj:
             ranges.append(rangeObj)
-        if min(rangeObj) > maxInterval:
+        elif min(rangeObj) > maxInterval:
             break
-    return ranges
+    return ranges, toRemove
 
 
 def readBedgraph(file):
@@ -81,6 +86,8 @@ def readBed(bed, buffer=0):
             start = max(0, start)
             end += buffer
             regions[chrom].append((name, range(start, end)))
+    for chrom, intervals in regions.items():
+        regions[chrom] = sorted(intervals, key=lambda r: r[1].start)
     return regions
 
 
