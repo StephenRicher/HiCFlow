@@ -916,7 +916,7 @@ rule rescaleTADinsulation:
         'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --window {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
-        '{params.transform} --format bedgraph &> {log}'
+        '{params.transform} --filetype bedgraph &> {log}'
 
 
 rule rescaleTADboundaries:
@@ -1035,7 +1035,7 @@ rule rescalePCA:
         'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --window {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
-        '{params.transform} --format bedgraph &> {log}'
+        '{params.transform} --filetype bedgraph &> {log}'
 
 
 rule reformatHomer:
@@ -1506,7 +1506,7 @@ rule rescaleHiCcompare:
         'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --window {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
-        '{params.transform} --format bedgraph &> {log}'
+        '{params.transform} --filetype bedgraph &> {log}'
 
 
 rule rescaleHiCcompareBinary:
@@ -1531,7 +1531,7 @@ rule rescaleHiCcompareBinary:
         'python {SCRIPTS}/rescaleBedgraph.py binary <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --window {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
-        '--threshold {params.threshold} --format bedgraph &> {log}'
+        '--threshold {params.threshold} --filetype bedgraph &> {log}'
 
 
 rule homerToH5:
