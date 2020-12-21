@@ -5,8 +5,8 @@
 import sys
 import argparse
 from collections import defaultdict
-from utilities import setDefaults, createMainParent
 from bedgraphUtils import Bed, Bedgraph
+from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
@@ -37,8 +37,7 @@ def getOverlap(range1, range2):
 
 
 def getValidRanges(record, recordList):
-    """ Return range objects that overlap the interval.
-        Must provided sorted list of ranges. """
+    """ Return BED objects that overlap sorted list of BED objects """
 
     ranges = []
     minInterval = record.start
