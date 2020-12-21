@@ -38,8 +38,8 @@ def hicCompareBedgraph(
 
         bed = pd.merge(
             positions, subset, how='left',
-            left_index=True, right_index=True)
-        bed['zscore'] = zscore(meanScore['score'])
+            left_index=True, right_index=True).fillna(0)
+        bed['zscore'] = zscore(bed['score'])
         bed.to_csv(
             out,  columns=[0, 1, 2, 'zscore'],
             sep='\t', index=False, header=False)
