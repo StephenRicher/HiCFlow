@@ -5,6 +5,7 @@
 import sys
 import argparse
 import pandas as pd
+from scipy.stats import zscore
 from utilities import setDefaults, createMainParent, readHomer
 
 
@@ -22,24 +23,23 @@ def hicCompareBedgraph(
         mat = mat.loc[mat['seperation'] < maxDistance]
     mat['upFC'] = mat['score'] > 0
     mat['score'] = abs(mat['score'])
-    mat = mat.groupby(['region', 'upFC']).sum().reset_index('upFC')
+    mat = mat.set_index('region').loc[:,['score', 'upFC']]
 
     for direction in ['up', 'down', 'all']:
         if direction == 'up':
             out = upOut
-            subset = mat.loc[mat['upFC'] == True]
+            subset = mat.loc[mat['upFC'] == True, 'score'].groupby('region').sum()
         elif direction == 'down':
             out = downOut
-            subset = mat.loc[mat['upFC'] == False]
+            subset = mat.loc[mat['upFC'] == False, 'score'].groupby('region').sum()
         else:
             out = allOut
-            subset = mat
+            subset = mat.loc[:, 'score'].groupby('region').sum()
 
         bed = pd.merge(
             positions, subset, how='left',
             left_index=True, right_index=True)
-        bed['zscore'] = (bed['score'] - bed['score'].mean()) / bed['score'].std(ddof=0)
-        bed['zscore'] = bed['zscore'].fillna(0)
+        bed['zscore'] = zscore(meanScore['score'])
         bed.to_csv(
             out,  columns=[0, 1, 2, 'zscore'],
             sep='\t', index=False, header=False)
