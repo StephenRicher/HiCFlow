@@ -6,89 +6,72 @@ import sys
 import argparse
 from collections import defaultdict
 from utilities import setDefaults, createMainParent
-from bedgraphUtils import splitScore, splitPos, splitName
+from bedgraphUtils import Bed, Bedgraph
 
 
 __version__ = '1.0.0'
 
 
 def scoreIntervals(bedGraph: str, bed: str, buffer: int):
-    bedgraph = readBedgraph(bedGraph)
-    regions = readBed(bed, buffer)
+    bedgraph = readBed(bedGraph, filetpye='bedgraph')
+    records = readBed(bed, buffer)
     scoredRegions = defaultdict(float)
-    for chrom, intervals in regions.items():
-        for name, interval in intervals:
-            key = f'{chrom} {min(interval)} {max(interval)+1} {name}'
-            validRanges, toRemove = getValidRanges(interval, list(bedgraph[chrom].keys()))
-            for removed in toRemove:
-                del bedgraph[chrom][removed]
+    for chrom, beds in records.items():
+        for bed in beds:
+            score = 0
+            validRanges, remove = getValidRanges(bed, bedgraph[chrom])
+            if remove is not None:
+                del bedgraph[chrom][:remove+1]
             if not validRanges:
                 continue
             for validRange in validRanges:
                 # Detect base overlap between bedgraph interval and each region
-                overlap = getOverlap(validRange, interval)
-                score = bedgraph[chrom][validRange] * len(overlap)
-                scoredRegions[key] += score
-            print(chrom, min(interval), max(interval)+1,
-                  name, scoredRegions[key], sep='\t', flush=True)
+                overlap = getOverlap(validRange.interval, bed.interval)
+                score += validRange.normScore * len(overlap)
+            print(bed.chrom, bed.start, bed.end,
+                  bed.name, score, sep='\t', flush=True)
 
 
 def getOverlap(range1, range2):
     return range(max(min(range1), min(range2)), min(max(range1), max(range2))+1)
 
 
-def getValidRanges(interval, rangeList):
+def getValidRanges(record, recordList):
     """ Return range objects that overlap the interval.
         Must provided sorted list of ranges. """
 
     ranges = []
-    minInterval = min(interval)
-    maxInterval = max(interval)
-    toRemove = []
-    for rangeObj in rangeList:
-        if minInterval > max(rangeObj):
-            toRemove.append(rangeObj)
-        elif minInterval in rangeObj or maxInterval in rangeObj:
-            ranges.append(rangeObj)
-        elif min(rangeObj) > maxInterval:
+    minInterval = record.start
+    maxInterval = record.end
+    remove = None
+    for i, bed in enumerate(recordList):
+        if minInterval > bed.end:
+            remove = i
+        elif minInterval in bed.interval or maxInterval in bed.interval:
+            ranges.append(bed)
+        elif bed.start > maxInterval:
             break
-    return ranges, toRemove
+    return ranges, remove
 
 
-def readBedgraph(file):
-    """ Construct bedgraph dictionary per chromosome with interval ranges """
-    bedgraph = defaultdict(dict)
+def readBed(file, buffer=0, filetype='bed'):
+    """ Construct sorted dictionary of Bed/Bedgraph objects """
+    assert filetype in ['bed', 'bedgraph']
+    records = defaultdict(list)
     with open(file) as fh:
-        for line in fh:
-            chrom, start, end, score = splitScore(line, filetype='bedgraph')
-            regionLength = end - start
-            bedgraph[chrom][range(start, end)] = score / regionLength
-    # Sort per-chromosome ranges by start
-    for chrom, intervals in bedgraph.items():
-        bedgraph[chrom] = dict(sorted(intervals.items(), key=lambda r: r[0].start))
-    return bedgraph
-
-
-def readBed(bed, buffer=0):
-    """ Read bed file into dictionary structure """
-    regions = defaultdict(list)
-    with open(bed) as fh:
         for line in fh:
             line = line.strip()
             if not line:
                 continue
-            try:
-                chrom, start, end, name = splitName(line)
-            except ValueError:
-                chrom, start, end = splitPos(line)
-                name = '.'
-            start -= buffer
-            start = max(0, start)
-            end += buffer
-            regions[chrom].append((name, range(start, end)))
-    for chrom, intervals in regions.items():
-        regions[chrom] = sorted(intervals, key=lambda r: r[1].start)
-    return regions
+            if filetype == 'bed':
+                bed = Bed(line, buffer)
+            else:
+                bed = Bedgraph(line)
+            records[bed.chrom].append(bed)
+    # Sort per-chromosome ranges by start
+    for chrom, bed in records.items():
+        records[chrom] = sorted(bed, key=lambda r: r.start)
+    return records
 
 
 def parseArgs():
