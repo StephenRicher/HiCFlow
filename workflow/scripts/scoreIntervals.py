@@ -13,7 +13,7 @@ __version__ = '1.0.0'
 
 
 def scoreIntervals(bedGraph: str, bed: str, buffer: int):
-    bedgraph = readBed(bedGraph, filetpye='bedgraph')
+    bedgraph = readBed(bedGraph, filetype='bedgraph')
     records = readBed(bed, buffer)
     scoredRegions = defaultdict(float)
     for chrom, beds in records.items():
