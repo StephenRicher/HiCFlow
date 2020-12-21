@@ -55,3 +55,80 @@ def splitPos(line):
 def splitName(line):
     chrom, start, end, name = line.split()[:4]
     return chrom, int(start), int(end), name
+
+
+class Bed:
+    def __init__(self, line, buffer):
+        self.record = line.strip('\n').split()
+        self.buffer = int(buffer)
+        assert len(self.record) >= 3
+
+    @property
+    def chrom(self):
+        return self.record[0]
+
+    @property
+    def start(self):
+        return int(self.record[1]) - self.buffer
+
+    @property
+    def end(self):
+        return int(self.record[2]) + self.buffer
+
+    @property
+    def interval(self):
+        return range(self.start, self.end)
+
+    @property
+    def name(self):
+        try:
+            return self.record[3]
+        except IndexError:
+            return None
+
+    @property
+    def score(self):
+        try:
+            return float(self.record[4])
+        except IndexError:
+            return None
+
+    @property
+    def strand(self):
+        try:
+            return self.record[5]
+        except IndexError:
+            return None
+
+class Bedgraph:
+    def __init__(self, line):
+        self.record = line.strip('\n').split()
+        assert len(self.record) >= 3
+
+    @property
+    def chrom(self):
+        return self.record[0]
+
+    @property
+    def start(self):
+        return int(self.record[1])
+
+    @property
+    def end(self):
+        return int(self.record[2])
+
+    @property
+    def score(self):
+        return float(self.record[3])
+
+    @property
+    def regionLength(self):
+        return self.end - self.start
+
+    @property
+    def normScore(self):
+        return self.score / self.regionLength
+
+    @property
+    def interval(self):
+        return range(self.start, self.end)
