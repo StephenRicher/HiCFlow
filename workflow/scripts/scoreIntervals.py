@@ -20,16 +20,17 @@ def scoreIntervals(bedGraph: str, bed: str, buffer: int):
         for bed in beds:
             score = 0
             validRanges, remove = getValidRanges(bed, bedgraph[chrom])
-            if remove is not None:
-                del bedgraph[chrom][:remove+1]
+            try:
+                del bedgraph[chrom][:remove + 1]
+            except TypeError:
+                pass
             if not validRanges:
                 continue
             for validRange in validRanges:
                 # Detect base overlap between bedgraph interval and each region
                 overlap = getOverlap(validRange.interval, bed.interval)
                 score += validRange.normScore * len(overlap)
-            print(bed.chrom, bed.start, bed.end,
-                  bed.name, score, sep='\t', flush=True)
+            print(bed.chrom, bed.start, bed.end, bed.name, score, sep='\t')
 
 
 def getOverlap(range1, range2):
@@ -37,7 +38,9 @@ def getOverlap(range1, range2):
 
 
 def getValidRanges(record, recordList):
-    """ Return BED objects that overlap sorted list of BED objects """
+    """ Return BED objects that overlap sorted list of BED objects.
+        Also return upper index that no longer needs to be checked
+        in next runs. """
 
     ranges = []
     minInterval = record.start
@@ -46,10 +49,11 @@ def getValidRanges(record, recordList):
     for i, bed in enumerate(recordList):
         if minInterval > bed.end:
             remove = i
-        elif minInterval in bed.interval or maxInterval in bed.interval:
-            ranges.append(bed)
-        elif bed.start > maxInterval:
+        elif maxInterval < bed.start:
             break
+        else:
+            ranges.append(bed)
+
     return ranges, remove
 
 
