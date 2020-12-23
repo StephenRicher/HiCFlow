@@ -5,6 +5,7 @@
 
 import sys
 import random
+import logging
 import argparse
 from itertools import repeat
 from utilities import setDefaults, createMainParent
@@ -21,7 +22,14 @@ def sampleIntervals(referenceBed: str, sampleBed: str, nRepeats: int, seed: floa
     for i, lengths in enumerate(repeat(intervalLengths, nRepeats)):
         for length in lengths:
             chrom, start, end = getRandomPos(regions, length)
-            print(chrom, start, end, i, sep='\t')
+            if chrom is not None:
+                if end - start != length:
+                    logging.warning(
+                        f'Region length reduced from {length} to {end-start}')
+                print(chrom, start, end, i, sep='\t')
+            else:
+                logging.error(
+                    f'Region of length {length} could not be determined.')
 
 
 def readLengths(bed):
@@ -37,7 +45,7 @@ def readLengths(bed):
     return lengths
 
 
-def getRandomPos(regions, length=1, maxAttempts=100, _attempts=0):
+def getRandomPos(regions, length=1, maxAttempts=1000, _attempts=0):
     """ Extract random genomic start/end coordinates that fully
         overlap an interval. Repeat up to maxAttempts. """
     # Get total bases in intervals
@@ -56,9 +64,9 @@ def getRandomPos(regions, length=1, maxAttempts=100, _attempts=0):
                 # If start + length not in same interval then repeat selection
                 if pos + length >= currentTotal + len(interval):
                     if _attempts > maxAttempts:
-                        # Reduce accepted sequence length and try again
-                        length = int(length * 0.9)
-                        _attempts=0
+                        return (None, None, None)
+                    # Reduce accepted sequence length and try again
+                    length = int(length * 0.95)
                     _attempts += 1
                     coords = getRandomPos(
                         regions, length, maxAttempts, _attempts)
