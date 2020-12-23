@@ -7,7 +7,7 @@ import sys
 import random
 import logging
 import argparse
-from bedgraphUtils import readBed
+from bedgraphUtils import Bed
 from utilities import setDefaults, createMainParent
 
 
@@ -16,46 +16,26 @@ __version__ = '1.0.0'
 
 def sampleIntervals(bed: str, nRepeats: int, length: int, seed: float):
     random.seed(seed)
-    regions = readBed(bed, filetype='bed')
-    totalLength = getTotalLength(regions)
-    for repeat in range(nRepeats):
-        chrom, start, end = getRandomPos(regions, totalLength, length)
-        print(chrom, start, end, repeat, sep='\t')
+    allEntries = readBed(bed)
+    # Select BEDS, weight by length, with replacement
+    selections = random.choices(
+        list(allEntries.keys()),
+        weights=list(allEntries.values()), k=nRepeats)
+    for selection in selections:
+        pos = random.choice(selection.interval)
+        print(selection.chrom, pos, pos + length, sep='\t')
 
 
-def getRandomPos(regions, totalLength, length=1):
-    """ Extract random genomic start/end coordinates
-        from set of BED intervals. """
-
-    # Generate random start index
-    pos = random.randint(0, totalLength - 1)
-    # Extract start position using index
-    currentTotal = 0
-    for chrom, intervals, in regions.items():
-        for interval in intervals:
-            if pos < currentTotal + interval.regionLength:
-                mid = interval.interval[(pos - currentTotal)]
-                a, b = splitNum(length)
-                return chrom, mid - a, mid + b
-            currentTotal += interval.regionLength
-    return None
-
-
-def getTotalLength(regions):
-    totalLength = 0
-    for chrom, intervals in regions.items():
-        for interval in intervals:
-            totalLength += interval.regionLength
-    return totalLength
-
-
-def splitNum(num):
-    """ Split integer into 2 integers """
-    if num % 2 == 0:
-        splitNum = (int(num / 2), int(num / 2))
-    else:
-        splitNum = int(num // 2), int((num // 2) + 1)
-    return splitNum
+def readBed(file):
+    allEntries = {}
+    with open(file) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            entry = Bed(line)
+            allEntries[entry] = entry.regionLength
+    return allEntries
 
 
 def parseArgs():
