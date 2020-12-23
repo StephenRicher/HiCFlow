@@ -58,7 +58,7 @@ def splitName(line):
 
 
 class Bed:
-    def __init__(self, line, buffer):
+    def __init__(self, line, buffer=0):
         self.record = line.strip('\n').split()
         self.buffer = int(buffer)
         assert len(self.record) >= 3
