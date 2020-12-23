@@ -56,12 +56,14 @@ def getRandomPos(regions, length=1, maxAttempts=100, _attempts=0):
                 # If start + length not in same interval then repeat selection
                 if pos + length >= currentTotal + len(interval):
                     if _attempts > maxAttempts:
-                        return None
+                        # Reduce accepted sequence length and try again
+                        length = int(length * 0.9)
+                        _attempts=0
                     _attempts += 1
                     coords = getRandomPos(
                         regions, length, maxAttempts, _attempts)
-                    if coords is None:
-                        return None
+                    if coords == (None, None, None):
+                        return (None, None, None)
                 else:
                     coords = (chrom, start, start + length)
                 return coords
