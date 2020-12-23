@@ -5,7 +5,7 @@
 import sys
 import argparse
 from collections import defaultdict
-from bedgraphUtils import Bed, Bedgraph
+from bedgraphUtils import readBed
 from utilities import setDefaults, createMainParent
 
 
@@ -55,26 +55,6 @@ def getValidRanges(record, recordList):
             ranges.append(bed)
 
     return ranges, remove
-
-
-def readBed(file, buffer=0, filetype='bed'):
-    """ Construct sorted dictionary of Bed/Bedgraph objects """
-    assert filetype in ['bed', 'bedgraph']
-    records = defaultdict(list)
-    with open(file) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            if filetype == 'bed':
-                bed = Bed(line, buffer)
-            else:
-                bed = Bedgraph(line)
-            records[bed.chrom].append(bed)
-    # Sort per-chromosome ranges by start
-    for chrom, bed in records.items():
-        records[chrom] = sorted(bed, key=lambda r: r.start)
-    return records
 
 
 def parseArgs():
