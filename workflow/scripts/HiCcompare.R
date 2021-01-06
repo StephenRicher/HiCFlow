@@ -78,6 +78,8 @@ compare_plot = paste(qcdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep 
 out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
 out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
 out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
+outIF1 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1.homer', sep = '')
+outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2.homer', sep = '')
 
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
 
@@ -101,6 +103,12 @@ hic.table = as.data.frame(hic.table)
 
 # Write matrix of logFC values
 writeMatrix(hic.table, out_matrix, chr, start, end, binsize, 'adj.M')
+
+# Write adjusted IF1 values
+writeMatrix(hic.table, outIF1, chr, start, end, binsize, 'adj.IF1')
+
+# Write adjusted IF2 values
+writeMatrix(hic.table, outIF2, chr, start, end, binsize, 'adj.IF2')
 
 # Write matrix of of significant FDR values
 writeMatrix(hic.table[hic.table$p.adj <= fdr,], out_sig, chr, start, end, binsize, 'adj.M')

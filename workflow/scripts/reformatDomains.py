@@ -12,7 +12,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def reformatDomains(bed: str, scale: int, **kwargs):
+def reformatDomains(bed: str, scale: int, trimChr: bool, **kwargs):
 
     with fileinput.input(bed) as fh:
         for line in fh:
@@ -21,10 +21,12 @@ def reformatDomains(bed: str, scale: int, **kwargs):
                 continue
             columns = line.split()
             chrom = columns[0]
+            if chrom.startswith('chr') and trimChr:
+                chrom = chrom[3:]
             start = str(int(columns[1]) + scale)
             end = str(int(columns[2]) + scale)
 
-            print(chrom, start, end, '.', '.', '.', start, end, '.', sep='\t')
+            print(chrom, start, end, '.', '0', '.', start, end, '.', sep='\t')
 
 
 def parseArgs():
@@ -41,6 +43,9 @@ def parseArgs():
         '--scale', type=int, default=0,
         help='0-based genomic coordinate of start position '
              'to rescale (default: %(default)s)')
+    parser.add_argument(
+        '--trimChr', action='store_true',
+        help='Trim chr prefix from chrom name (default: %(default)s)')
     parser.set_defaults(function=reformatDomains)
 
     return setDefaults(parser)

@@ -118,7 +118,7 @@ wildcard_constraints:
     read = r'R[12]',
     bin = r'\d+',
     mode = r'SNP|INDEL',
-    set = r'logFC|sig|fdr',
+    set = r'logFC|sig|fdr|adjIF1|adjIF2',
     compare = r'HiCcompare|multiHiCcompare',
     group = rf'{"|".join(HiC.groups())}',
     group1 = rf'{"|".join(HiC.groups())}',
@@ -811,7 +811,7 @@ rule mergeBins:
     input:
         f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}.h5'
     output:
-        temp('dat/matrix/{region}/{bin}/tmp/{all}-{region}-{bin}.h5')
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
     params:
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     log:
@@ -821,34 +821,6 @@ rule mergeBins:
     shell:
         'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
         '--outFileName {output} &> {log} || touch {output}'
-
-
-# Correct for read count between groups (used for differential TAD tool)
-rule correctBins:
-    input:
-        expand('dat/matrix/{{region}}/{{bin}}/tmp/{group}-{{region}}-{{bin}}.h5',
-            group=HiC.groups())
-    output:
-        expand('dat/matrix/{{region}}/{{bin}}/raw/{group}-{{region}}-{{bin}}.h5',
-            group=HiC.groups())
-    log:
-        'logs/correctBins/{region}-{bin}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicNormalize --matrices {input} --normalize smallest '
-        '--outFileName {output} &> {log} || touch {output}'
-
-
-rule moveUncorrected:
-    input:
-        'dat/matrix/{region}/{bin}/tmp/{sample}-{region}-{bin}.h5'
-    output:
-        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.h5'
-    log:
-        'logs/moveUncorrected/{sample}-{region}-{bin}.log'
-    shell:
-        'cp {input} {output} &> {log}'
 
 
 rule IceMatrix:
@@ -1136,13 +1108,22 @@ rule OnTAD:
         '{params.length} {wildcards.bin} &> {log} || touch {output}'
 
 
+def setTrim(wc):
+    if REGIONS['chr'][wc.region].startswith('chr'):
+        trim = ''
+    else:
+        trim = '--trimChr'
+    return trim
+
+
 rule reformatDomains:
     input:
         rules.OnTAD.output.bed
     output:
         'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad_domains.bed'
     params:
-        scale = lambda wc: REGIONS['start'][wc.region]
+        scale = lambda wc: REGIONS['start'][wc.region],
+        trimChr = setTrim
     group:
         'processHiC'
     log:
@@ -1151,7 +1132,7 @@ rule reformatDomains:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/reformatDomains.py {input} --scale {params.scale} '
-        '> {output} 2> {log}'
+        '{params.trimChr} > {output} 2> {log}'
 
 
 def getTracks(wc):
@@ -1419,6 +1400,8 @@ rule HiCcompare:
         all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
         sig = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
         links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links',
+        adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1.homer',
+        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2.homer'
     params:
         dir = lambda wc: f'dat/HiCcompare/{wc.region}/{wc.bin}',
         qcdir = lambda wc: f'qc/HiCcompare/{wc.region}/{wc.bin}',
@@ -1599,9 +1582,9 @@ rule filterHiCcompare:
 
 rule differentialTAD:
     input:
-        target = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}.h5',
-        control = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}.h5',
-        tadDomains = 'dat/matrix/{region}/{bin}/tads/{group1}-{region}-{bin}_domains.bed'
+        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1.h5',
+        control = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2.h5',
+        tadDomains = 'dat/matrix/{region}/{bin}/tads/{group1}-{region}-{bin}-ontad_domains.bed'
     output:
         accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}_accepted.diff_tad',
         rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}_rejected.diff_tad'
