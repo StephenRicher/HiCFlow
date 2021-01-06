@@ -1621,7 +1621,7 @@ rule differentialTAD:
         '--controlMatrix {input.control} --tadDomains {input.tadDomains} '
         '--pValue {params.pValue} --mode {params.mode} '
         '--modeReject {params.modeReject} ''--outFileNamePrefix {params.prefix} '
-        ' &> {log} '
+        ' &> {log} || touch {output} '
 
 
 rule reformatDifferentialTAD:
