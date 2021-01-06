@@ -209,12 +209,25 @@ def write_tads(tads, i,
 
     print(f'[Tads]',
           f'file = {tads}',
+          f'file_type = domains',
           f'links_type = triangles',
           f'line_style = {style}',
-          f'color = {colour}',
+          f'border_color = {colour}',
+          f'color = none',
           f'overlay_previous = share-y',
           f'line_width = 1.5', sep = '\n')
 
+def write_tads(tads, i, colours = ['#FF000080', '#0000FF80']):
+    colour = colours[i]
+
+    print(f'[Tads]',
+          f'file = {tads}',
+          f'file_type = domains',
+          f'links_type = triangles',
+          f'border_color = {colour}',
+          f'color = none',
+          f'overlay_previous = share-y',
+          f'line_width = 1.5', sep = '\n')
 
 def write_insulation(insulation, i,
         colours = ['#d95f0280', '#1b9e7780', '#d902d980', '#00000080']):

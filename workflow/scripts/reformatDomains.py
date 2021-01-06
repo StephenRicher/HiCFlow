@@ -6,62 +6,46 @@ import sys
 import logging
 import argparse
 import fileinput
+from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
 
 
-def main(start, bin, file, **kwargs):
+def reformatDomains(bed: str, scale: int, **kwargs):
 
-    with fileinput.input(file) as fh:
-        for i, line in enumerate(fh):
+    with fileinput.input(bed) as fh:
+        for line in fh:
             # Skip header line
-            if i == 0:
+            if line.startswith(('#', 'track')):
                 continue
             columns = line.split()
-            chr = columns[0]
-            # Lower bound of interaction
-            lower = int(columns[1]) + start
-            # Upper bound of interaction
-            upper = int(columns[2]) + start
+            chrom = columns[0]
+            start = str(int(columns[1]) + scale)
+            end = str(int(columns[2]) + scale)
 
-            print(chr, lower, lower+bin, chr, upper-bin, upper, 0, sep='\t')
+            print(chrom, start, end, '.', '.', '.', start, end, '.', sep='\t')
 
 
-def parse_arguments():
+def parseArgs():
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument(
-        'start', type=int,
-        help='Genomic coordinates of start position (0 based).')
-    custom.add_argument(
-        'bin', type=int,
-        help='Bin size of HiC matrix.')
-    custom.add_argument(
-        'file', nargs='?', default=[],
-        help='OnTAD output in BED format (default: stdin)')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    mainParent = createMainParent(verbose=False, version=__version__)
     parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
+        epilog=epilog, description=__doc__, parents=[mainParent])
 
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
+    parser.add_argument(
+        'bed', nargs='?', default=[],
+        help='BED format TAD files for conversion (default: stdin)')
+    parser.add_argument(
+        '--scale', type=int, default=0,
+        help='0-based genomic coordinate of start position '
+             'to rescale (default: %(default)s)')
+    parser.set_defaults(function=reformatDomains)
 
-    return args
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))
