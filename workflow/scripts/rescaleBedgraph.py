@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-""" Convert bedgraph intervals to new window size and write to JSON. """
+""" Convert bedgraph intervals to new window size and write to PANDAS. """
 
 import sys
 import json
