@@ -1109,7 +1109,7 @@ rule OnTAD:
 
 
 def setTrim(wc):
-    if REGIONS['chr'][wc.region].startswith('chr'):
+    if str(REGIONS['chr'][wc.region]).startswith('chr'):
         trim = ''
     else:
         trim = '--trimChr'
