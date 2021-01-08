@@ -128,7 +128,9 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 else:
                     overlay = 'share-y'
                     colour = '#0000FF80'
-                write_bigwig(file=file, title=title, type='bedgraph', alpha=0.5, colour=colour, overlay=overlay)
+                write_bigwig(file=file, title=title, type='bedgraph',
+                             alpha=0.5, colour=colour, overlay=overlay)
+        print('[spacer]')
 
 
     if insulations is not None:
