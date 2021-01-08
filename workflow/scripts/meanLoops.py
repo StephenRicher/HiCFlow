@@ -22,7 +22,9 @@ def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool):
             if mat.attrs['chrom'] != chr1:
                 continue
             overlap = getOverlapping(mat, start1, end1, start2, end2)
-            if absolute:
+            if overlap.empty:
+                score = 0
+            elif absolute:
                 score = overlap['score'].abs().mean()
             else:
                 score = overlap['score'].mean()
