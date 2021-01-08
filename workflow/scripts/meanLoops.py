@@ -33,13 +33,15 @@ def getOverlapping(mat, start1, end1, start2, end2):
     """ Return matrix interactions overlapping the interval pairs """
 
     # Loop1 overlaps if start or end is between matrix start/end interval
-    start1LoopOverlap = (mat['start'] <= int(start1)) & (int(start1) <= mat['end'])
-    end1LoopOverlap = (mat['start'] <= int(end1)) & (int(end1) <= mat['end'])
+    endMat = mat['start'] + mat.attrs['binSize']
+    start1LoopOverlap = (mat['start'] <= int(start1)) & (int(start1) <= endMat)
+    end1LoopOverlap = (mat['start'] <= int(end1)) & (int(end1) <= endMat)
     loop1Overlap = start1LoopOverlap | end1LoopOverlap
 
     # Same for loop2
-    start2LoopOverlap = (mat['start2'] <= int(start2)) & (int(start2) <= mat['end2'])
-    end2LoopOverlap = (mat['start2'] <= int(end2)) & (int(end2) <= mat['end2'])
+    endMat2 = mat['start2'] + mat.attrs['binSize']
+    start2LoopOverlap = (mat['start2'] <= int(start2)) & (int(start2) <= endMat2)
+    end2LoopOverlap = (mat['start2'] <= int(end2)) & (int(end2) <= endMat2)
     loop2Overlap = start2LoopOverlap | end2LoopOverlap
 
     return mat.loc[loop1Overlap & loop2Overlap]
