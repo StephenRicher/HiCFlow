@@ -40,15 +40,15 @@ def hicCompareBedgraph(
             subset = mat.loc[:, 'score'].groupby('start').sum()
 
         # Perform Z-score normalisation
-        subset.update(pd.Series(stats.zscore(subset)))
-
+        zscore = pd.Series(
+            stats.zscore(subset), index=subset.index, name='zscore')
         bed = pd.merge(
-            allStart, subset, how='left', left_on='start', right_index=True).fillna(0)
+            allStart, zscore, how='left', left_on='start', right_index=True).fillna(0)
         bed['chrom'] = mat.attrs['chrom']
         bed['end'] = bed['start'] + mat.attrs['binSize']
 
         bed.to_csv(
-            out,  columns=['chrom', 'start', 'end', 'score'],
+            out,  columns=['chrom', 'start', 'end', 'zscore'],
             sep='\t', index=False, header=False)
 
 
