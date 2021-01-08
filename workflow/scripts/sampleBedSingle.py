@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-""" Randomly create BED intervals from referenceBED based on
-    length in sampleBED  """
+""" Randomly create BED intervals sampled from BED input file """
 
 import sys
 import random
@@ -29,6 +28,7 @@ def sampleIntervals(bed: str, name: str, nRepeats: int, nIntervals: int, length:
 
 
 def readBed(file):
+    """ Read BED as dictory of BED (keys) and BED length (values) """
     allEntries = {}
     with open(file) as fh:
         for line in fh:
@@ -58,7 +58,7 @@ def parseArgs():
         help='The length of the intervals to generate.')
     parser.add_argument(
         '--nIntervals', default=10_000, type=int,
-        help='Number number of intervals per repeat (default: %(default)s).')
+        help='Number of intervals per repeat (default: %(default)s).')
     parser.add_argument(
         '--nRepeats', default=1000, type=int,
         help='Number of repeats (default: %(default)s).')
