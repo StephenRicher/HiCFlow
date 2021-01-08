@@ -5,7 +5,7 @@
 import sys
 import argparse
 import pandas as pd
-from scipy.stats import zscore
+from scipy import stats
 from utilities import setDefaults, createMainParent, readHomer
 
 
@@ -16,32 +16,39 @@ def hicCompareBedgraph(
         file: str, allOut: str, upOut: str, downOut: str,
         binSize: int, maxDistance: float):
 
-    positions, mat = readHomer(file, binSize)
-    mat['seperation'] = abs(mat['end'] - mat['start'])
+    mat = readHomer(file, binSize, sparse=True)
+    # Retrieve all matrix start positions
+    allStart = pd.Series(mat['start'].unique(), name='start')
     # Remove paired interactions above max distance
     if maxDistance:
-        mat = mat.loc[mat['seperation'] < maxDistance]
+        inRange = abs(mat['start2'] - mat['start']) < maxDistance
+        mat = mat.loc[inRange]
     mat['upFC'] = mat['score'] > 0
     mat['score'] = abs(mat['score'])
-    mat = mat.set_index('region').loc[:,['score', 'upFC']]
+
+    mat = mat.set_index('start').loc[:,['score', 'upFC']]
 
     for direction in ['up', 'down', 'all']:
         if direction == 'up':
             out = upOut
-            subset = mat.loc[mat['upFC'] == True, 'score'].groupby('region').sum()
+            subset = mat.loc[mat['upFC'] == True, 'score'].groupby('start').sum()
         elif direction == 'down':
             out = downOut
-            subset = mat.loc[mat['upFC'] == False, 'score'].groupby('region').sum()
+            subset = mat.loc[mat['upFC'] == False, 'score'].groupby('start').sum()
         else:
             out = allOut
-            subset = mat.loc[:, 'score'].groupby('region').sum()
+            subset = mat.loc[:, 'score'].groupby('start').sum()
+
+        # Perform Z-score normalisation
+        subset.update(pd.Series(stats.zscore(subset)))
 
         bed = pd.merge(
-            positions, subset, how='left',
-            left_index=True, right_index=True).fillna(0)
-        bed['zscore'] = zscore(bed['score'])
+            allStart, subset, how='left', left_on='start', right_index=True).fillna(0)
+        bed['chrom'] = mat.attrs['chrom']
+        bed['end'] = bed['start'] + mat.attrs['binSize']
+
         bed.to_csv(
-            out,  columns=[0, 1, 2, 'zscore'],
+            out,  columns=['chrom', 'start', 'end', 'score'],
             sep='\t', index=False, header=False)
 
 

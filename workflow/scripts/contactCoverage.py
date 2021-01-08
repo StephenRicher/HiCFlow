@@ -24,13 +24,12 @@ def plotCoverage(files: List, out: str, nBins: int, dpi: int, fontSize: float):
 
     for file in files:
         sample, binSize = splitName(file)
-        positions, mat = readHomer(file, binSize)
-        contactsPerBin = mat.groupby('region')['score'].sum() / 2
+        mat = readHomer(file, binSize, sparse=True)
+        contactsPerBin = mat.groupby('start')['score'].sum() / 2
         # plot the cumulative histogram
         n, bins, patches = ax.hist(
             contactsPerBin, nBins, density=True,
             cumulative=-1, histtype='step', label=binSize)
-        print(bins[:-1][n < 0.1])
         # Get appropriate xLim
         try:
             cutOff = min(bins[:-1][n < 0.1])

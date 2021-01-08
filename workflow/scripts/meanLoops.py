@@ -15,7 +15,7 @@ __version__ = '1.0.0'
 
 def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool):
 
-    positions, mat = readHomer(matrix, binSize)
+    mat = readHomer(matrix, binSize, sparse=True)
     with fileinput.input(loops) as fh:
         for line in fh:
             chr1, start1, end1, chr2, start2, end2 = parseLoops(line)

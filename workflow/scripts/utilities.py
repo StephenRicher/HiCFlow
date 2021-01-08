@@ -41,34 +41,28 @@ def createMainParent(verbose=True, version=None):
     return parent
 
 
-def readHomer(matrix, binSize):
+def readHomer(matrix, binSize=None, sparse=False):
     """ Read Homer matrix format and convert to long format """
 
     # Read Homer as pandas
     mat = pd.read_csv(matrix, skiprows=1, header=None, sep='\t').drop(0, axis=1)
-
     # Split chromosome and start into 2 column DF
-    positions = mat[1].str.split('-', expand=True)
-    positions[1] = positions[1].astype(int)
-    # Add end positions
-    positions[2] = positions[1] + binSize
-    # Add full region position and set as index
-    positions['pos'] = mat[1]
-    positions =  positions.set_index('pos')
-
+    regions = mat[1].str.split('-', expand=True)
+    startPos = regions[1].astype(int)
     # Drop region column
     mat = mat.drop(1, axis=1)
-    # Set index and columns as start positions
-    mat.columns = list(positions[1])
+    # Set columns as bin start positions
+    mat.columns = list(startPos)
+    # Set rownames (index) as bin start positions
+    mat['start'] = list(startPos)
+    mat = mat.set_index('start')
+    # Convert to long format
+    mat = mat.stack().rename_axis(['start', 'start2']).rename('score').reset_index()
+    # Remove 0 score rows if sparse set
+    if sparse:
+        mat = mat.loc[mat['score'] != 0]
+    # Set chrom from first value since HOMER must be cis-only matrix
+    mat.attrs['chrom'] = regions[0][0]
+    mat.attrs['binSize'] = binSize
 
-    mat['start'] = mat.columns
-    mat = mat.melt(id_vars=['start'], var_name='start2', value_name='score')
-    mat['end'] = mat['start'] + binSize
-    mat['end2'] = mat['start2'] + binSize
-
-    # Extract chrom - assume matrix must be cis
-    chrom = f'{positions[0][0]}'
-    mat.attrs['chrom'] = chrom
-    mat['region'] = f'{chrom}-' + mat['start'].astype(str)
-
-    return positions, mat
+    return mat
