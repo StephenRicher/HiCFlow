@@ -119,6 +119,7 @@ wildcard_constraints:
     bin = r'\d+',
     mode = r'SNP|INDEL',
     set = r'logFC|sig|fdr|adjIF1|adjIF2',
+    adjIF = r'adjIF1|adjIF2',
     compare = r'HiCcompare|multiHiCcompare',
     group = rf'{"|".join(HiC.groups())}',
     group1 = rf'{"|".join(HiC.groups())}',
@@ -1580,23 +1581,41 @@ rule filterHiCcompare:
         '--p_value {params.p_value} --log_fc {params.log_fc} {input} &> {log}'
 
 
+def setControl(wc):
+    """ Set control matrix as the other IF1 relative to the target """
+    if wc.adjIF == 'adjIF1':
+        adj = 'adjIF2'
+    else:
+        adj = 'adjIF1'
+    return f'dat/HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{adj}.h5'
+
+
+def setDomains(wc):
+    """ Set TADdomains as same as target matrix e.g. IF1 = group1 """
+    if wc.adjIF == 'adjIF1':
+        group = wc.group1
+    else:
+        group = wc.group2
+    return f'dat/matrix/{{region}}/{{bin}}/tads/{group}-{{region}}-{{bin}}-ontad_domains.bed'
+
+
 rule differentialTAD:
     input:
-        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1.h5',
-        control = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2.h5',
-        tadDomains = 'dat/matrix/{region}/{bin}/tads/{group1}-{region}-{bin}-ontad_domains.bed'
+        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}.h5',
+        control = setControl,
+        tadDomains = setDomains
     output:
-        accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}_accepted.diff_tad',
-        rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}_rejected.diff_tad'
+        accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_accepted.diff_tad',
+        rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_rejected.diff_tad'
     params:
         pValue = 0.05,
         mode = 'all',
         modeReject = 'one',
-        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}'
+        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}'
     group:
         'HiCcompare'
     log:
-        'logs/differentialTAD/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/differentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1609,13 +1628,13 @@ rule differentialTAD:
 
 rule reformatDifferentialTAD:
     input:
-        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}_{result}.diff_tad'
+        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_{result}.diff_tad'
     output:
-        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}_{result}_domains.bed'
+        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_{result}_domains.bed'
     group:
         'HiCcompare'
     log:
-        'logs/reformatDifferentialTAD/{region}/{bin}/{group1}-vs-{group2}-{result}.log'
+        'logs/reformatDifferentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{result}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1628,8 +1647,8 @@ rule createCompareConfig:
         mat = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5',
         upBed = rules.hicCompareBedgraph.output.up,
         downBed = rules.hicCompareBedgraph.output.down,
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}_rejected_domains.bed',
-        tads2 = 'dat/tads/{region}/{bin}/{group2}-vs-{group1}-{region}-{bin}_rejected_domains.bed'
+        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1_rejected_domains.bed',
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2_rejected_domains.bed'
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}.ini',
     params:
