@@ -67,7 +67,8 @@ def readHomer(matrix, binSize):
     mat['end2'] = mat['start2'] + binSize
 
     # Extract chrom - assume matrix must be cis
-    chrom = f'{positions[0][0]}-'
-    mat['region'] = chrom + mat['start'].astype(str)
+    chrom = f'{positions[0][0]}'
+    mat.attrs['chrom'] = chrom
+    mat['region'] = f'{chrom}-' + mat['start'].astype(str)
 
     return positions, mat
