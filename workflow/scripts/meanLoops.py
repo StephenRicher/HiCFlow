@@ -62,7 +62,7 @@ def parseArgs():
         'matrix', help='Matrix file in HOMER format.')
     parser.add_argument(
         'loops', nargs='*', default=[],
-        help='Loop domains in BEDGRAPH format (default: stdin)')
+        help='Loop domains in LINKS format (default: stdin)')
     parser.add_argument(
         '--absolute', action='store_true',
         help='Convert matrix score to absolute values before '
