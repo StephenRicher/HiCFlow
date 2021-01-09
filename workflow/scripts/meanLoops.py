@@ -38,7 +38,7 @@ def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool):
             # Add loop score
             regions.append(score)
             # Convert to zscore
-            regions = stats.zscore(region)
+            regions = stats.zscore(regions)
             # Retrieve loop zScore
             loopZ = regions[-1]
             print(chr1, start1, end1, chr2, start2, end2, loopZ, sep='\t')
