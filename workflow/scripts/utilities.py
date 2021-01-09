@@ -41,7 +41,7 @@ def createMainParent(verbose=True, version=None):
     return parent
 
 
-def readHomer(matrix, binSize=None, sparse=False):
+def readHomer(matrix, binSize=None, sparse=True):
     """ Read Homer matrix format and convert to long format """
 
     # Read Homer as pandas
@@ -61,6 +61,8 @@ def readHomer(matrix, binSize=None, sparse=False):
     # Remove 0 score rows if sparse set
     if sparse:
         mat = mat.loc[mat['score'] != 0]
+    # Remove symetric interactions
+    mat = mat.loc[mat['start2'] - mat['start'] >= 0]
     # Set chrom from first value since HOMER must be cis-only matrix
     mat.attrs['chrom'] = regions[0][0]
     mat.attrs['binSize'] = binSize

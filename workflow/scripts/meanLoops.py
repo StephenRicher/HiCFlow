@@ -6,6 +6,7 @@ import sys
 import logging
 import argparse
 import fileinput
+from scipy import stats
 from typing import List
 from utilities import setDefaults, createMainParent, readHomer
 
@@ -23,13 +24,28 @@ def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool):
                 continue
             overlap = getOverlapping(mat, start1, end1, start2, end2)
             if overlap.empty:
-                score = 0
+                continue
             elif absolute:
-                score = overlap['score'].abs().mean()
+                score = overlap['score'].abs().median()
             else:
-                score = overlap['score'].mean()
-            print(chr1, start1, end1, chr2, start2, end2, score, sep='\t')
+                score = overlap['score'].median()
+            # Round loopsize to nearest binSize
+            loopSize = roundBin(start2 - start1, mat.attrs['binSize'])
+            if loopSize == 0:
+                continue
+            # Get all scores corresponding to same interaction distance
+            regions = list(mat.loc[mat['start2'] - mat['start'] == loopSize, 'score'])
+            # Add loop score
+            regions.append(score)
+            # Convert to zscore
+            regions = stats.zscore(region)
+            # Retrieve loop zScore
+            loopZ = regions[-1]
+            print(chr1, start1, end1, chr2, start2, end2, loopZ, sep='\t')
 
+
+def roundBin(x, base):
+    return base * round(x/base)
 
 def getOverlapping(mat, start1, end1, start2, end2):
     """ Return matrix interactions overlapping the interval pairs """
