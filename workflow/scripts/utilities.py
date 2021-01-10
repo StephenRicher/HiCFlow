@@ -61,8 +61,6 @@ def readHomer(matrix, binSize=None, sparse=True):
     # Remove 0 score rows if sparse set
     if sparse:
         mat = mat.loc[mat['score'] != 0]
-    # Remove symetric interactions
-    mat = mat.loc[mat['start2'] - mat['start'] >= 0]
     # Set chrom from first value since HOMER must be cis-only matrix
     mat.attrs['chrom'] = regions[0][0]
     mat.attrs['binSize'] = binSize
