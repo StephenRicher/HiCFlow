@@ -14,7 +14,7 @@ __version__ = '1.0.0'
 
 def hicCompareBedgraph(
         file: str, allOut: str, upOut: str, downOut: str,
-        binSize: int, maxDistance: float):
+        binSize: int, minDistance: float, maxDistance: float):
 
     mat = readHomer(file, binSize, sparse=True)
     # Retrieve all matrix start positions
@@ -23,6 +23,9 @@ def hicCompareBedgraph(
     if maxDistance:
         inRange = abs(mat['start2'] - mat['start']) < abs(maxDistance)
         mat = mat.loc[inRange]
+    if minDistance:
+        inRange = abs(mat['start2'] - mat['start']) > abs(minDistance)
+        mat = mat.loc[inRange]
     mat['upFC'] = mat['score'] > 0
     mat['score'] = abs(mat['score'])
 
@@ -30,9 +33,13 @@ def hicCompareBedgraph(
 
     for direction in ['up', 'down', 'all']:
         if direction == 'up':
+            if upOut is None:
+                continue
             out = upOut
             subset = mat.loc[mat['upFC'] == True, 'score'].groupby('start').sum()
         elif direction == 'down':
+            if downOut is None:
+                continue
             out = downOut
             subset = mat.loc[mat['upFC'] == False, 'score'].groupby('start').sum()
         else:
@@ -61,8 +68,17 @@ def parseArgs():
     parser.set_defaults(function=hicCompareBedgraph)
     parser.add_argument('file', help='HiC matrix in homer format.')
     parser.add_argument(
+        '--minDistance', type=float,
+        help='Only consider interactions above this distance (default: %(default)s)')
+    parser.add_argument(
         '--maxDistance', type=float,
-        help='Only consider interactions within this distance.')
+        help='Only consider interactions less this distance.')
+    parser.add_argument(
+        '--upOut',
+        help='Output file for bedgraph of sum UP interactions.')
+    parser.add_argument(
+        '--downOut',
+        help='Output file for bedgraph of sum down interactions.')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--binSize', required=True,
@@ -70,12 +86,7 @@ def parseArgs():
     requiredNamed.add_argument(
         '--allOut', required=True,
         help='Output file for bedgraph of sum all interactions.')
-    requiredNamed.add_argument(
-        '--upOut', required=True,
-        help='Output file for bedgraph of sum UP interactions.')
-    requiredNamed.add_argument(
-        '--downOut', required=True,
-        help='Output file for bedgraph of sum down interactions.')
+
 
     return setDefaults(parser)
 
