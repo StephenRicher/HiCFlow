@@ -21,7 +21,7 @@ def hicCompareBedgraph(
     allStart = pd.Series(mat['start'].unique(), name='start')
     # Remove paired interactions above max distance
     if maxDistance:
-        inRange = abs(mat['start2'] - mat['start']) < maxDistance
+        inRange = abs(mat['start2'] - mat['start']) < abs(maxDistance)
         mat = mat.loc[inRange]
     mat['upFC'] = mat['score'] > 0
     mat['score'] = abs(mat['score'])
