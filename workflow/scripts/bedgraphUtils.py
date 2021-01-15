@@ -156,3 +156,16 @@ def readBed(file, buffer=0, filetype='bed'):
     for chrom, bed in records.items():
         records[chrom] = sorted(bed, key=lambda r: r.start)
     return records
+
+
+def readBedLength(file):
+    """ Read BED as dictory of BED (keys) and BED length (values) """
+    allEntries = {}
+    with open(file) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            entry = Bed(line)
+            allEntries[entry] = entry.regionLength
+    return allEntries

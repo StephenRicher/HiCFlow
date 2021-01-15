@@ -6,7 +6,7 @@ import sys
 import random
 import logging
 import argparse
-from bedgraphUtils import Bed
+from bedgraphUtils import Bed, readBedLength
 from utilities import setDefaults, createMainParent
 
 
@@ -15,7 +15,7 @@ __version__ = '1.0.0'
 
 def sampleIntervals(bed: str, name: str, nRepeats: int, nIntervals: int, length: int, seed: float):
     random.seed(seed)
-    allEntries = readBed(bed)
+    allEntries = readBedLength(bed)
     name = bed if name is None else name
     for repeat in range(nRepeats):
         # Select BEDS, weight by length, with replacement
@@ -25,19 +25,6 @@ def sampleIntervals(bed: str, name: str, nRepeats: int, nIntervals: int, length:
         for selection in selections:
             pos = random.choice(selection.interval)
             print(selection.chrom, pos, pos + length, f'{name}-{repeat}', sep='\t')
-
-
-def readBed(file):
-    """ Read BED as dictory of BED (keys) and BED length (values) """
-    allEntries = {}
-    with open(file) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            entry = Bed(line)
-            allEntries[entry] = entry.regionLength
-    return allEntries
 
 
 def parseArgs():
