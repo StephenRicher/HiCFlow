@@ -13,8 +13,9 @@ __version__ = '1.0.0'
 
 
 def hicCompareBedgraph(
-        file: str, allOut: str, upOut: str, downOut: str,
-        binSize: int, minDistance: float, maxDistance: float):
+        file: str, allOut: str, binSize: int, upOut: str = None,
+        downOut: str = None, minDistance: float = None,
+        maxDistance: float = None):
 
     mat = readHomer(file, binSize, sparse=True)
     # Retrieve all matrix start positions
