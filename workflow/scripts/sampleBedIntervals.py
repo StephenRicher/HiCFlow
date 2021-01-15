@@ -8,74 +8,44 @@ import random
 import logging
 import argparse
 from itertools import repeat
+from bedgraphUtils import readBedLength
 from utilities import setDefaults, createMainParent
-from bedgraphUtils import splitPos, readRegions
 
 
 __version__ = '1.0.0'
 
 
-def sampleIntervals(referenceBed: str, sampleBed: str, nRepeats: int, seed: float):
+def sampleIntervals(referenceBed: str, sampleBed: str, name: str, seed: float):
     random.seed(seed)
-    regions = readRegions(referenceBed)
-    intervalLengths = readLengths(sampleBed)
-    for i, lengths in enumerate(repeat(intervalLengths, nRepeats)):
-        for length in lengths:
-            chrom, start, end = getRandomPos(regions, length)
-            if chrom is not None:
-                if end - start != length:
-                    logging.warning(
-                        f'Region length reduced from {length} to {end-start}')
-                print(chrom, start, end, i, sep='\t')
+    # Set number of attempts to find suitable position
+    maxAttempts = 1000
+    nAttempts = 0
+    regions = readBedLength(referenceBed)
+    intervalLengths = list(readBedLength(sampleBed).values())
+    name = sampleBed if name is None else name
+    while (len(intervalLengths) > 0):
+        if nAttempts > maxAttempts:
+            logging.error(
+                f'Intervals of the following length could not be found within '
+                f'the boundaries of the reference: {intervalLengths}')
+            break
+        nSamples = 0
+        repeatIntervals = []
+        # Select BEDS, weight by length, with replacement
+        selections = random.choices(
+            list(regions.keys()),
+            weights=list(regions.values()), k=len(intervalLengths))
+        for i, selection in enumerate(selections):
+            pos = random.choice(selection.interval)
+            end = pos + intervalLengths[i]
+            # Interval extends beyond boundary - must repeat
+            if end > selection.end:
+                repeatIntervals.append(intervalLengths[i])
             else:
-                logging.error(
-                    f'Region of length {length} could not be determined.')
+                print(selection.chrom, pos, end, name, sep='\t')
+        nAttempts += 1
+        intervalLengths = repeatIntervals
 
-
-def readLengths(bed):
-    """ Return list of region length from BED input """
-    lengths = []
-    with open(bed) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            chrom, start, end = splitPos(line)
-            lengths.append(end - start)
-    return lengths
-
-
-def getRandomPos(regions, length=1, maxAttempts=1000, _attempts=0):
-    """ Extract random genomic start/end coordinates that fully
-        overlap an interval. Repeat up to maxAttempts. """
-    # Get total bases in intervals
-    totalLength = 0
-    for chrom, intervals in regions.items():
-        for interval in intervals:
-            totalLength += len(interval)
-    # Generate random start index
-    pos = random.randint(0, totalLength - 1)
-    # Extract start position using index
-    currentTotal = 0
-    for chrom, intervals, in regions.items():
-        for interval in intervals:
-            if pos < currentTotal + len(interval):
-                start = interval[(pos - currentTotal)]
-                # If start + length not in same interval then repeat selection
-                if pos + length >= currentTotal + len(interval):
-                    if _attempts > maxAttempts:
-                        return (None, None, None)
-                    # Reduce accepted sequence length and try again
-                    length = int(length * 0.95)
-                    _attempts += 1
-                    coords = getRandomPos(
-                        regions, length, maxAttempts, _attempts)
-                    if coords == (None, None, None):
-                        return (None, None, None)
-                else:
-                    coords = (chrom, start, start + length)
-                return coords
-            currentTotal += len(interval)
 
 
 def parseArgs():
@@ -93,8 +63,8 @@ def parseArgs():
         'sampleBed',
         help='BED file to extract interval lengths of sample.')
     parser.add_argument(
-        '--nRepeats', default=1, type=int,
-        help='Number of repeat samples (default: %(default)s).')
+        '--name',
+        help='Name to append to BED entry - default to BED filename')
     parser.add_argument(
         '--seed', default=None, type=float,
         help='Seed for random number generation (default: %(default)s)')
