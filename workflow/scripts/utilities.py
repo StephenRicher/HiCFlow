@@ -41,6 +41,21 @@ def createMainParent(verbose=True, version=None):
     return parent
 
 
+class StoreDict(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        kv={}
+        if not isinstance(values, (list,)):
+            values=(values,)
+        for value in values:
+            if value.count('=') != 1:
+                logging.error(
+                    f'Key value data in {value} cannot contain exactly one "=".')
+                raise ValueError
+            n, v = value.split('=')
+            kv[n]=v
+        setattr(namespace, self.dest, kv)
+        
+
 def readHomer(matrix, binSize=None, sparse=True):
     """ Read Homer matrix format and convert to long format """
 
