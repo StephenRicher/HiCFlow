@@ -26,15 +26,16 @@ def scoreIntervals(bedGraph: str, bed: str, buffer: int):
                 pass
             if not validRanges:
                 continue
+            bedInterval = set(bed.interval)
             for validRange in validRanges:
                 # Detect base overlap between bedgraph interval and each region
-                overlap = getOverlap(validRange.interval, bed.interval)
-                score += validRange.normScore * len(overlap)
+                overlap = getOverlap(bedInterval, validRange.interval)
+                score += validRange.normScore * overlap
             print(bed.chrom, bed.start, bed.end, bed.name, score, sep='\t')
 
 
-def getOverlap(range1, range2):
-    return range(max(min(range1), min(range2)), min(max(range1), max(range2))+1)
+def getOverlap(set1, range1):
+    return len(set1.intersection(range1))
 
 
 def getValidRanges(record, recordList):
