@@ -54,9 +54,9 @@ class StoreDict(argparse.Action):
             n, v = value.split('=')
             kv[n]=v
         setattr(namespace, self.dest, kv)
-        
 
-def readHomer(matrix, binSize=None, sparse=True):
+
+def readHomer(matrix, binSize=None, sparse=True, distanceNorm=False):
     """ Read Homer matrix format and convert to long format """
 
     # Read Homer as pandas
@@ -76,8 +76,14 @@ def readHomer(matrix, binSize=None, sparse=True):
     # Remove 0 score rows if sparse set
     if sparse:
         mat = mat.loc[mat['score'] != 0]
+    if distanceNorm:
+        mat['seperation'] = abs(mat['start2'] - mat['start'])
+        sumDistance = mat.groupby('seperation').score.agg(['sum', 'count'])
+        sumDistance['expected'] = sumDistance['sum'] / sumDistance['count']
+        mat = pd.merge(mat, sumDistance, on="seperation")
+        mat['score'] = mat['score'] / mat['expected']
     # Set chrom from first value since HOMER must be cis-only matrix
     mat.attrs['chrom'] = regions[0][0]
     mat.attrs['binSize'] = binSize
 
-    return mat
+    return mat[['start', 'start2', 'score']]
