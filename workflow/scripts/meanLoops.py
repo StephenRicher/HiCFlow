@@ -14,7 +14,7 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool):
+def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool, Z: bool):
 
     mat = readHomer(matrix, binSize, sparse=True)
     with fileinput.input(loops) as fh:
@@ -26,22 +26,23 @@ def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool):
             if overlap.empty:
                 continue
             elif absolute:
-                score = overlap['score'].abs().median()
+                score = overlap['score'].abs().mean()
             else:
-                score = overlap['score'].median()
-            # Round loopsize to nearest binSize
-            loopSize = roundBin(start2 - start1, mat.attrs['binSize'])
-            if loopSize == 0:
-                continue
-            # Get all scores corresponding to same interaction distance
-            regions = list(mat.loc[mat['start2'] - mat['start'] == loopSize, 'score'])
-            # Add loop score
-            regions.append(score)
-            # Convert to zscore
-            regions = stats.zscore(regions)
-            # Retrieve loop zScore
-            loopZ = regions[-1]
-            print(chr1, start1, end1, chr2, start2, end2, loopZ, sep='\t')
+                score = overlap['score'].mean()
+            if Z:
+                # Round loopsize to nearest binSize
+                loopSize = roundBin(start2 - start1, mat.attrs['binSize'])
+                if loopSize == 0:
+                    continue
+                # Get all scores corresponding to same interaction distance
+                regions = list(mat.loc[mat['start2'] - mat['start'] == loopSize, 'score'])
+                # Add loop score
+                regions.append(score)
+                # Convert to zscore
+                regions = stats.zscore(regions)
+                # Retrieve loop zScore
+                score = regions[-1]
+            print(chr1, start1, end1, chr2, start2, end2, score, sep='\t')
 
 
 def roundBin(x, base):
@@ -88,6 +89,9 @@ def parseArgs():
         help='Convert matrix score to absolute values before '
              'computing mean. May be Appropriate for logFC '
              'comparison matrices. (default: %(default)s)')
+    parser.add_argument(
+        '--Z', action='store_true',
+        help='Convert loop scores to Z scores. (default: %(default)s)')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--binSize', required=True,
