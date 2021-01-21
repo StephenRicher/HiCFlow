@@ -17,6 +17,8 @@ __version__ = '1.0.0'
 def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool, Z: bool):
 
     mat = readHomer(matrix, binSize, sparse=True)
+    if absolute:
+        mat['score'] = mat['score'].abs()
     with fileinput.input(loops) as fh:
         for line in fh:
             chr1, start1, end1, chr2, start2, end2 = parseLoops(line)
@@ -25,23 +27,18 @@ def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool, Z: bool):
             overlap = getOverlapping(mat, start1, end1, start2, end2)
             if overlap.empty:
                 continue
-            elif absolute:
-                score = overlap['score'].abs().mean()
-            else:
-                score = overlap['score'].mean()
+            score = overlap['score'].mean()
             if Z:
                 # Round loopsize to nearest binSize
                 loopSize = roundBin(start2 - start1, mat.attrs['binSize'])
                 if loopSize == 0:
                     continue
                 # Get all scores corresponding to same interaction distance
-                regions = list(mat.loc[mat['start2'] - mat['start'] == loopSize, 'score'])
-                # Add loop score
-                regions.append(score)
-                # Convert to zscore
-                regions = stats.zscore(regions)
-                # Retrieve loop zScore
-                score = regions[-1]
+                regions = mat.loc[mat['start2'] - mat['start'] == loopSize, 'score']
+                std = regions.std(ddof=0)
+                mean = regions.mean()
+                # Compute Z transform
+                score = (score - mean) / std
             print(chr1, start1, end1, chr2, start2, end2, score, sep='\t')
 
 
