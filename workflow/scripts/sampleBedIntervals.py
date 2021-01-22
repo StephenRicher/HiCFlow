@@ -3,6 +3,7 @@
 """ Randomly create BED intervals from referenceBED based on
     length in sampleBED  """
 
+import os
 import sys
 import random
 import logging
@@ -15,36 +16,39 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def sampleIntervals(referenceBed: str, sampleBed: str, name: str, seed: float):
+def sampleIntervals(referenceBed: str, sampleBed: str, nReps: float, seed: float):
     random.seed(seed)
     # Set number of attempts to find suitable position
     maxAttempts = 1000
-    nAttempts = 0
     regions = readBedLength(referenceBed)
-    intervalLengths = list(readBedLength(sampleBed).values())
-    name = sampleBed if name is None else name
-    while (len(intervalLengths) > 0):
-        if nAttempts > maxAttempts:
-            logging.error(
-                f'Intervals of the following length could not be found within '
-                f'the boundaries of the reference: {intervalLengths}')
-            break
-        nSamples = 0
-        repeatIntervals = []
-        # Select BEDS, weight by length, with replacement
-        selections = random.choices(
-            list(regions.keys()),
-            weights=list(regions.values()), k=len(intervalLengths))
-        for i, selection in enumerate(selections):
-            pos = random.choice(selection.interval)
-            end = pos + intervalLengths[i]
-            # Interval extends beyond boundary - must repeat
-            if end > selection.end:
-                repeatIntervals.append(intervalLengths[i])
-            else:
-                print(selection.chrom, pos, end, name, sep='\t')
-        nAttempts += 1
-        intervalLengths = repeatIntervals
+    print(f'# Random intervals sampled from {os.path.basename(referenceBed)} '
+          f'matching interval lengths in {os.path.basename(sampleBed)}. '
+          f'Total repeat interval sets: {nReps}.')
+    for rep in range(nReps):
+        nAttempts = 0
+        intervalLengths = list(readBedLength(sampleBed).values())
+        while (len(intervalLengths) > 0):
+            if nAttempts > maxAttempts:
+                logging.error(
+                    f'Intervals of the following length could not be found '
+                    f'within boundaries of the reference:\n {intervalLengths}')
+                break
+            nSamples = 0
+            repeatIntervals = []
+            # Select BEDS, weight by length, with replacement
+            selections = random.choices(
+                list(regions.keys()),
+                weights=list(regions.values()), k=len(intervalLengths))
+            for i, selection in enumerate(selections):
+                pos = random.choice(selection.interval)
+                end = pos + intervalLengths[i]
+                # Interval extends beyond boundary - must repeat
+                if end > selection.end:
+                    repeatIntervals.append(intervalLengths[i])
+                else:
+                    print(selection.chrom, pos, end, rep, sep='\t')
+            nAttempts += 1
+            intervalLengths = repeatIntervals
 
 
 
@@ -63,8 +67,8 @@ def parseArgs():
         'sampleBed',
         help='BED file to extract interval lengths of sample.')
     parser.add_argument(
-        '--name',
-        help='Name to append to BED entry - default to BED filename')
+        '--nReps', type=int, default=1,
+        help='Number of sets of intervals to generate.')
     parser.add_argument(
         '--seed', default=None, type=float,
         help='Seed for random number generation (default: %(default)s)')
