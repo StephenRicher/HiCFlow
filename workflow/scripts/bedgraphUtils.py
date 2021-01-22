@@ -145,7 +145,7 @@ def readBed(file, buffer=0, filetype='bed'):
     with open(file) as fh:
         for line in fh:
             line = line.strip()
-            if not line:
+            if not line or line.startswith('#'):
                 continue
             if filetype == 'bed':
                 bed = Bed(line, buffer)
