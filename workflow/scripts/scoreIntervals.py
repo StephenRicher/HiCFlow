@@ -32,7 +32,8 @@ def scoreAllIntervals(bedGraph: str, beds: List, summary: str, groupName: bool, 
 
     if not groupName:
         bed['name'] = 'data'
-    bed.groupby('name')['score'].describe().to_csv(summary, sep='\t')
+    bed['normScore'] = bed['score'] / (bed['end'] - bed['start'])
+    bed.groupby('name')['normScore'].describe().to_csv(summary, sep='\t')
 
 
 def scoreInterval(bed, bedGraph, intervalSize):
