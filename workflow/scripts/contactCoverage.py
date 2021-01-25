@@ -24,7 +24,7 @@ def plotCoverage(files: List, out: str, nBins: int, dpi: int, fontSize: float):
 
     for file in files:
         sample, binSize = splitName(file)
-        mat = readHomer(file, binSize, sparse=True)
+        mat = readHomer(file, sparse=True)
         contactsPerBin = mat.groupby('start')['score'].sum()
         # plot the cumulative histogram
         n, bins, patches = ax.hist(
