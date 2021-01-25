@@ -18,17 +18,20 @@ def main():
     parser.set_defaults(function = make_config)
 
     parser.add_argument(
-        '--insulations', nargs = '*', default = None,
+        '--insulations', nargs = '*', default=None,
         help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
     parser.add_argument(
-        '--tads', nargs = '*', default = None,
+        '--tads', nargs='*', default=[],
         help = 'TAD scores in ".links" format.')
     parser.add_argument(
         '--flip',  action='store_true',
         help='Plot a copy of the HiC map inverted.')
     parser.add_argument(
-        '--loops', nargs = '*', default = None,
+        '--loops', nargs='*', default=[],
         help = 'Loop output.')
+    parser.add_argument(
+        '--stripes', nargs=2,
+        help = 'Forward and Reverse stripe score in bedGraph.')
     parser.add_argument(
         '--matrix',
         help = 'HiC matrix.')
@@ -90,7 +93,7 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                bigWig, bed, compare, sumLogFC,
+                bigWig, bed, compare, sumLogFC, stripes,
                 depth, colourmap, vMin, vMax, flip):
 
 
@@ -99,15 +102,13 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         write_matrix(matrix, cmap=colourmap, depth=depth,
             vMin=vMin, vMax=vMax, log=log)
 
-    if loops is not None:
-        for i, loop in enumerate(loops):
-            if not_empty(loop):
-                write_loops(loop, i = i, compare=compare)
+    for i, loop in enumerate(loops):
+        if not_empty(loop):
+            write_loops(loop, i=i, compare=compare)
 
-    if tads is not None:
-        for i, tad in enumerate(tads):
-            if not_empty(tad):
-                write_tads(tad, i = i)
+    for i, tad in enumerate(tads):
+        if not_empty(tad):
+            write_tads(tad, i = i)
 
     if flip:
         inverted_matrix = matrix2 if matrix2 else matrix
@@ -139,6 +140,8 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 write_insulation(insulation = insulation, i = i)
         print('[spacer]')
 
+    if stripes is not None:
+        writeStripes(stripes)
 
     print('# End Sample Specific')
     for title, file in bigWig:
@@ -229,6 +232,23 @@ def write_insulation(insulation, i,
           f'file_type = bedgraph_matrix',
           f'type = lines',
           f'overlay_previous = {overlay}', sep = '\n')
+
+
+def writeStripes(stripes):
+    print(f'[Forward Stripes]',
+          f'file = {stripes[0]}',
+          r'title = Stripe score (+:blue, -:yellow)',
+          f'color = #FFC20A80',
+          f'height = 3',
+          f'file_type = bedgraph',
+          f'overlay_previous = no',
+          f'[Reverse Stripes]',
+          f'file = {stripes[1]}',
+          f'color = #0C7BDC80',
+          f'height = 3',
+          f'file_type = bedgraph',
+          f'overlay_previous = share-y',
+          f'[spacer]', sep='\n')
 
 
 def write_bigwig(file, title, alpha=1, colour='#33a02c', type='bigwig', overlay='no'):
