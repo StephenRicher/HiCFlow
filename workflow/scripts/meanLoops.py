@@ -16,7 +16,7 @@ __version__ = '1.0.0'
 
 def meanLoops(matrix: str, loops: List, absolute: bool, Z: bool):
 
-    mat = readHomer(matrix, sparse=True, distanceNorn=True)
+    mat = readHomer(matrix, sparse=False, distanceNorm=True)
     if absolute:
         mat['score'] = mat['score'].abs()
     with fileinput.input(loops) as fh:
