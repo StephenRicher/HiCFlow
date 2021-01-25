@@ -1137,6 +1137,23 @@ rule reformatDomains:
         '{params.trimChr} > {output} 2> {log}'
 
 
+rule computeStripeScore:
+    input:
+        'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.gz'
+    output:
+        forward = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-forwardStripe.bedgraph',
+        rev = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-reverseStripe.bedgraph'
+    group:
+        'processHiC'
+    conda:
+        f'{ENVS}/python3.yaml'
+    log:
+        'logs/computeStripeScore/{all}-{region}-{bin}.log'
+    shell:
+        'python {SCRIPTS}/computeStripeScore.py {input} '
+        '{output.forward} {output.rev} &> {log} '
+
+
 def getTracks(wc):
     """ Build track command for generate config """
     command = ''
@@ -1153,7 +1170,9 @@ rule createConfig:
         loops = 'dat/matrix/{region}/{bin}/loops/{group}-{region}-{bin}.bedgraph',
         insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
         tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-ontad_domains.bed',
-        pca = 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix.bedgraph'
+        pca = 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix.bedgraph',
+        forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
+        reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
     output:
         'plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{bin}.ini'
     params:
@@ -1170,6 +1189,7 @@ rule createConfig:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
         '--insulations {input.insulations} --log '
         '--loops {input.loops} --colourmap {params.colourmap} '
+        '--stripes {input.forwardStripe} {input.reverseStripe} '
         '--bigWig PCA1,{input.pca} '
         '--tads {input.tads} {params.tracks} '
         '--depth {params.depth} > {output} 2> {log}'
