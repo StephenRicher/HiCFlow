@@ -56,7 +56,7 @@ class StoreDict(argparse.Action):
         setattr(namespace, self.dest, kv)
 
 
-def readHomer(matrix, binSize=None, sparse=True, distanceNorm=False):
+def readHomer(matrix, sparse=True, diagonal=False, distanceNorm=False):
     """ Read Homer matrix format and convert to long format """
 
     # Read Homer as pandas
@@ -64,6 +64,9 @@ def readHomer(matrix, binSize=None, sparse=True, distanceNorm=False):
     # Split chromosome and start into 2 column DF
     regions = mat[1].str.split('-', expand=True)
     startPos = regions[1].astype(int)
+    # Ensure homer is constant binSize matrix
+    binSize = startPos.diff(1).dropna().unique()
+    assert len(binSize) == 1
     # Drop region column
     mat = mat.drop(1, axis=1)
     # Set columns as bin start positions
@@ -84,6 +87,6 @@ def readHomer(matrix, binSize=None, sparse=True, distanceNorm=False):
         mat['score'] = mat['score'] / mat['expected']
     # Set chrom from first value since HOMER must be cis-only matrix
     mat.attrs['chrom'] = regions[0][0]
-    mat.attrs['binSize'] = binSize
+    mat.attrs['binSize'] = int(binSize)
 
     return mat[['start', 'start2', 'score']]

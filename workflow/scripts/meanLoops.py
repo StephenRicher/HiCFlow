@@ -14,9 +14,9 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def meanLoops(matrix: str, loops: List, binSize: int, absolute: bool, Z: bool):
+def meanLoops(matrix: str, loops: List, absolute: bool, Z: bool):
 
-    mat = readHomer(matrix, binSize, sparse=True)
+    mat = readHomer(matrix, sparse=True, distanceNorn=True)
     if absolute:
         mat['score'] = mat['score'].abs()
     with fileinput.input(loops) as fh:
@@ -89,10 +89,6 @@ def parseArgs():
     parser.add_argument(
         '--Z', action='store_true',
         help='Convert loop scores to Z scores. (default: %(default)s)')
-    requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument(
-        '--binSize', required=True,
-        type=int, help='Bin size for matrix.')
     parser.set_defaults(function=meanLoops)
 
     return setDefaults(parser)

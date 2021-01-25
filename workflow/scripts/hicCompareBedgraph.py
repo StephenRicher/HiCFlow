@@ -13,11 +13,11 @@ __version__ = '1.0.0'
 
 
 def hicCompareBedgraph(
-        file: str, allOut: str, binSize: int, upOut: str = None,
+        file: str, allOut: str, upOut: str = None,
         downOut: str = None, minDistance: float = None,
         maxDistance: float = None):
 
-    mat = readHomer(file, binSize, sparse=True)
+    mat = readHomer(file, sparse=True)
     # Retrieve all matrix start positions
     allStart = pd.Series(mat['start'].unique(), name='start')
     # Remove paired interactions above max distance
@@ -81,9 +81,6 @@ def parseArgs():
         '--downOut',
         help='Output file for bedgraph of sum down interactions.')
     requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument(
-        '--binSize', required=True,
-        type=int, help='Bin size for matrix.')
     requiredNamed.add_argument(
         '--allOut', required=True,
         help='Output file for bedgraph of sum all interactions.')
