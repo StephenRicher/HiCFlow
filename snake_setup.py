@@ -274,13 +274,27 @@ class HiCSamples:
         return rSeqs
 
 
-def load_regions(regions_file):
+def adjustCoordinates(start, end, nbases):
+    """ Adjust coordinates to a multiple of nbases """
+    # Round down start to closest multiple of nbases
+    start = start - (start % nbases)
+    # Get amount contract end position
+    adjustContract = (end - start ) % nbases
+    end = end - adjustContract
+
+    return start, end
+
+
+def load_regions(regions_file, adjust=None):
 
     regions = pd.read_table(
         regions_file,
         names=['chr', 'start', 'end', 'region'],
         index_col='region',
         dtype={'start': int, 'end': int})
+    if adjust is not None:
+        regions['start'], regions['end'] = adjustCoordinates(
+            regions['start'], regions['end'], adjust)
     regions['length'] = regions['end'] - regions['start']
 
     # Validate read file input with wildcard definitions
@@ -291,7 +305,7 @@ def load_regions(regions_file):
     return regions
 
 
-def load_coords(files):
+def load_coords(files, adjust=None):
     """ Read plot coordinates from plot coordinate and region BED file. """
     coords = {}
     for file in files:
@@ -300,6 +314,8 @@ def load_coords(files):
         with open(file) as fh:
             for line in fh:
                 chr, start, end, region = line.strip().split()
+                if adjust is not None:
+                    start, end = adjustCoordinates(int(start), int(end), adjust)
                 if region not in coords:
                     coords[region] = []
                 coords[region].append(f'{chr}_{start}_{end}')

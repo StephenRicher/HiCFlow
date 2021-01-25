@@ -91,7 +91,7 @@ BASE_BIN = config['resolution']['base']
 ALLELE_SPECIFIC = True if config['phased_vcf'] else False
 
 HiC = HiCSamples(config['data'], config['restrictionSeqs'], ALLELE_SPECIFIC)
-REGIONS = load_regions(config['regions'])
+REGIONS = load_regions(config['regions'], adjust=BASE_BIN)
 
 # Remove region-binSize combinations with too few bins
 regionBin, binRegion = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
@@ -128,7 +128,8 @@ wildcard_constraints:
     all = rf'{"|".join(HiC.samples() + list(HiC.groups()))}'
 
 # Generate dictionary of plot coordinates, may be multple per region
-COORDS = load_coords([config['plot_coordinates'], config['regions']])
+COORDS = load_coords([config['plot_coordinates'], config['regions']],
+    adjust=BASE_BIN)
 
 tools = (
     ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
@@ -1489,7 +1490,7 @@ rule hicCompareBedgraph:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/hicCompareBedgraph.py --binSize {wildcards.bin} '
+        'python {SCRIPTS}/hicCompareBedgraph.py '
         '--maxDistance {params.maxDistance} --allOut {output.all} '
         '--upOut {output.up} --downOut {output.down} {input} &> {log}'
 
