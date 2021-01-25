@@ -138,6 +138,62 @@ class Bedgraph:
         return range(self.start, self.end)
 
 
+class Links:
+    def __init__(self, line):
+        self.record = line.strip('\n').split()
+        assert len(self.record) == 7
+        assert self.chrom1 == self.chrom2
+
+    @property
+    def chrom1(self):
+        return self.record[0]
+
+    @property
+    def start1(self):
+        return int(self.record[1])
+
+    @property
+    def end1(self):
+        return int(self.record[2])
+
+    @property
+    def bin1Length(self):
+        return abs(self.end1 - self.start1)
+
+    @property
+    def chrom2(self):
+        return self.record[3]
+
+    @property
+    def start2(self):
+        return int(self.record[4])
+
+    @property
+    def end2(self):
+        return int(self.record[5])
+
+    @property
+    def bin2Length(self):
+        return abs(self.end1 - self.start1)
+
+    @property
+    def score(self):
+        return float(self.record[6])
+
+    @property
+    def regionLength(self):
+        return abs(self.end2 - self.start1)
+
+    @property
+    def normScore(self):
+        return self.score / self.regionLength
+
+    @property
+    def interval(self):
+        return range(self.start1, self.end2)
+
+
+
 def readBed(file, buffer=0, filetype='bed'):
     """ Construct sorted dictionary of Bed/Bedgraph objects """
     assert filetype in ['bed', 'bedgraph']
@@ -158,14 +214,16 @@ def readBed(file, buffer=0, filetype='bed'):
     return records
 
 
-def readBedLength(file):
+def readBedLength(file, fileType='bed'):
     """ Read BED as dictory of BED (keys) and BED length (values) """
+    assert fileType.lower() in ['bed', 'links']
+    fileType = Bed if fileType.lower() == 'bed' else Links
     allEntries = {}
     with open(file) as fh:
         for line in fh:
             line = line.strip()
             if not line:
                 continue
-            entry = Bed(line)
+            entry = fileType(line)
             allEntries[entry] = entry.regionLength
     return allEntries
