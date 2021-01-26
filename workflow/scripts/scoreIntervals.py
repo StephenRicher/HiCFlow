@@ -70,7 +70,8 @@ def readBedgraph(file: str):
 
 def readBed(file: str):
     """ Read BED file into Pandas """
-    columns = {0: 'chrom', 1: 'start', 2: 'end', 3: 'name', 4: 'score', 5: 'strand'}
+    columns = {0: 'chrom', 1: 'start', 2: 'end',
+               3: 'name', 4: 'score', 5: 'strand'}
     bed = pd.read_csv(file, sep='\t', comment='#', header=None)
     if len(bed.columns) > 6:
         bed = bed[[0,1,2,3,4,5]]
