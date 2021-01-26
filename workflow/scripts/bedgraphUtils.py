@@ -141,7 +141,7 @@ class Bedgraph:
 class Links:
     def __init__(self, line):
         self.record = line.strip('\n').split()
-        assert len(self.record) == 7
+        assert len(self.record) >= 6
         assert self.chrom1 == self.chrom2
 
     @property
@@ -178,7 +178,10 @@ class Links:
 
     @property
     def score(self):
-        return float(self.record[6])
+        try:
+            return float(self.record[6])
+        except IndexError:
+            return None
 
     @property
     def regionLength(self):
@@ -186,7 +189,10 @@ class Links:
 
     @property
     def normScore(self):
-        return self.score / self.regionLength
+        if self.score is None:
+            return None
+        else:
+            return self.score / self.regionLength
 
     @property
     def interval(self):
