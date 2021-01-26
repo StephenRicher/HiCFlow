@@ -948,12 +948,13 @@ rule detectLoops:
     output:
         'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}.bedgraph'
     params:
-        maxLoop = 2000000,
-        windowSize = 10,
         peakWidth = 6,
-        pValuePre = 0.05,
-        pValue = 0.05,
-        peakInter = 5
+        windowSize = 10,
+        pValuePre = 0.1,
+        peakInteractionsThreshold = 10,
+        obsExpThreshold = 1.5,
+        pValue = 0.1,
+        maxLoopDistance = 2000000
     group:
         'processHiC'
     log:
@@ -964,12 +965,13 @@ rule detectLoops:
         THREADS
     shell:
         'hicDetectLoops --matrix {input} --outFileName {output} '
-        '--maxLoopDistance {params.maxLoop} '
+        '--maxLoopDistance {params.maxLoopDistance} '
         '--windowSize {params.windowSize} '
         '--peakWidth {params.peakWidth} '
         '--pValuePreselection {params.pValuePre} '
+        '--obsExpThreshold {params.obsExpThreshold} '
         '--pValue {params.pValue} '
-        '--peakInteractionsThreshold {params.peakInter} '
+        '--peakInteractionsThreshold {params.peakInteractionsThreshold} '
         '--threads 1 --threadsPerChromosome {threads} '
         '&> {log} || touch {output} && touch {output} '
 
