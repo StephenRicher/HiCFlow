@@ -14,9 +14,9 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def meanLoops(matrix: str, loops: List, absolute: bool, Z: bool):
+def meanLoops(matrix: str, loops: List, absolute: bool, distanceNorm: bool):
 
-    mat = readHomer(matrix, sparse=False, distanceNorm=True)
+    mat = readHomer(matrix, sparse=False, distanceNorm=distanceNorm)
     if absolute:
         mat['score'] = mat['score'].abs()
     with fileinput.input(loops) as fh:
@@ -28,22 +28,8 @@ def meanLoops(matrix: str, loops: List, absolute: bool, Z: bool):
             if overlap.empty:
                 continue
             score = overlap['score'].mean()
-            if Z:
-                # Round loopsize to nearest binSize
-                loopSize = roundBin(start2 - start1, mat.attrs['binSize'])
-                if loopSize == 0:
-                    continue
-                # Get all scores corresponding to same interaction distance
-                regions = mat.loc[mat['start2'] - mat['start'] == loopSize, 'score']
-                std = regions.std(ddof=0)
-                mean = regions.mean()
-                # Compute Z transform
-                score = (score - mean) / std
             print(chr1, start1, end1, chr2, start2, end2, score, sep='\t')
 
-
-def roundBin(x, base):
-    return base * round(x/base)
 
 def getOverlapping(mat, start1, end1, start2, end2):
     """ Return matrix interactions overlapping the interval pairs """
@@ -84,11 +70,12 @@ def parseArgs():
     parser.add_argument(
         '--absolute', action='store_true',
         help='Convert matrix score to absolute values before '
-             'computing mean. May be Appropriate for logFC '
+             'computing mean. May be appropriate for logFC '
              'comparison matrices. (default: %(default)s)')
     parser.add_argument(
-        '--Z', action='store_true',
-        help='Convert loop scores to Z scores. (default: %(default)s)')
+        '--distanceNorm', action='store_true',
+        help='Normalise by interaction distance (obs/exp). Not '
+             'recommended for comparison matrices (default: %(default)s)')
     parser.set_defaults(function=meanLoops)
 
     return setDefaults(parser)
