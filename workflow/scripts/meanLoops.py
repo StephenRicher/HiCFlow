@@ -6,53 +6,68 @@ import sys
 import logging
 import argparse
 import fileinput
+import pandas as pd
 from scipy import stats
 from typing import List
 from utilities import setDefaults, createMainParent, readHomer
-
+try:
+    from pandarallel import pandarallel
+except ModuleNotFoundError:
+    pass
 
 __version__ = '1.0.0'
 
 
-def meanLoops(matrix: str, loops: List, absolute: bool, distanceNorm: bool):
+def meanLoops(matrix: str, loops: List, absolute: bool, distanceNorm: bool, threads: int):
 
     mat = readHomer(matrix, sparse=False, distanceNorm=distanceNorm)
     if absolute:
         mat['score'] = mat['score'].abs()
-    with fileinput.input(loops) as fh:
-        for line in fh:
-            chr1, start1, end1, chr2, start2, end2 = parseLoops(line)
-            if mat.attrs['chrom'] != chr1:
-                continue
-            overlap = getOverlapping(mat, start1, end1, start2, end2)
-            if overlap.empty:
-                continue
-            score = overlap['score'].mean()
-            print(chr1, start1, end1, chr2, start2, end2, score, sep='\t')
+
+    loops = pd.concat(
+        readLoops(loop, chrom=mat.attrs['chrom'], cis=True) for loop in loops)
+    # Remove interactions larger than maximum loop size
+    maxLoopSize = abs(loops['end2'] -  loops['start1']).max()
+    mat = mat.loc[abs(mat['start2'] - mat['start']) <= maxLoopSize]
+    if (threads > 1) and ('pandarallel' in sys.modules):
+        pandarallel.initialize(nb_workers=threads, verbose=0)
+        loops['score'] = loops.parallel_apply(
+            getOverlapping, args=([mat]), axis=1)
+    else:
+        loops['score'] = loops.apply(getOverlapping, args=([mat]), axis=1)
+    loops.to_csv(sys.stdout, sep='\t', index=False, header=False)
 
 
-def getOverlapping(mat, start1, end1, start2, end2):
+def getOverlapping(loop, mat):
     """ Return matrix interactions overlapping the interval pairs """
 
     # Loop1 overlaps if start or end is between matrix start/end interval
     endMat = mat['start'] + mat.attrs['binSize']
-    start1LoopOverlap = (int(start1) >= mat['start']) & (int(start1) < endMat)
-    end1LoopOverlap = (int(end1) >= mat['start']) & (int(end1) < endMat)
+    start1LoopOverlap = (loop['start1'] >= mat['start']) & (loop['start1'] < endMat)
+    end1LoopOverlap = (loop['end1'] >= mat['start']) & (loop['end1'] < endMat)
     loop1Overlap = start1LoopOverlap | end1LoopOverlap
 
     # Same for loop2
     endMat2 = mat['start2'] + mat.attrs['binSize']
-    start2LoopOverlap = (int(start2) >= mat['start2']) & (int(start2) < endMat2)
-    end2LoopOverlap = (int(end2) >= mat['start2']) & (int(end2) < endMat2)
+    start2LoopOverlap = (loop['start2'] >= mat['start2']) & (loop['start2'] < endMat2)
+    end2LoopOverlap = (loop['end2'] >= mat['start2']) & (loop['end2'] < endMat2)
     loop2Overlap = start2LoopOverlap | end2LoopOverlap
+    return mat.loc[loop1Overlap & loop2Overlap, 'score'].mean()
 
-    return mat.loc[loop1Overlap & loop2Overlap]
 
-
-def parseLoops(line):
-    """ Reat bedgraph entry and convert types as appropriate """
-    chr1, start1, end1, chr2, start2, end2 = line.split()[:6]
-    return chr1, int(start1), int(end1), chr2, int(start2), int(end2)
+def readLoops(file: str, chrom=None, cis=True):
+    """ Read BED file into Pandas """
+    columns = {0: 'chrom1', 1: 'start1', 2: 'end1',
+               3: 'chrom2', 4: 'start2', 5: 'end2'}
+    loops = pd.read_csv(file, sep='\t', comment='#', header=None)
+    if len(loops.columns) > 6:
+        loops = loops[[0,1,2,3,4,5]]
+    loops = loops.rename(columns=columns)
+    if cis:
+        loops = loops.loc[loops['chrom1'] == loops['chrom2']]
+    if chrom is not None:
+        loops = loops.loc[loops['chrom1'] == chrom]
+    return loops
 
 
 def parseArgs():
@@ -76,6 +91,9 @@ def parseArgs():
         '--distanceNorm', action='store_true',
         help='Normalise by interaction distance (obs/exp). Not '
              'recommended for comparison matrices (default: %(default)s)')
+    parser.add_argument(
+        '--threads', type=int, default=1,
+        help='Threads for parallel processing (default: %(default)s)')
     parser.set_defaults(function=meanLoops)
 
     return setDefaults(parser)
