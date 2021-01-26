@@ -20,7 +20,7 @@ def computeStripes(file: str, forwardOut: str, reverseOut: str):
     binSize = attributes['binSize']
     mat['seperation'] = mat['start2'] - mat['start']
     mat['direction'] = np.where(mat['start2'] > mat['start'], '+', '-')
-    
+
     stripeCompare = {'start': [], 'direction': [], 'size': [], 'score': []}
     for size in range(10*binSize, (200*binSize)+1, 10*binSize):
         # Get sum of interactions (per bin) up to set interaction distance
@@ -36,15 +36,15 @@ def computeStripes(file: str, forwardOut: str, reverseOut: str):
             else:
                 oppositeStart = start - size
                 oppositeDirection = '+'
-            if oppositeStart in stripeSum['start'].to_list():
-                oppositeDat = (stripeSum.loc[
-                    (stripeSum['start'] == oppositeStart)
-                    & (stripeSum['direction'] == oppositeDirection)])
+            oppositeDat = (stripeSum.loc[
+                (stripeSum['start'] == oppositeStart)
+                & (stripeSum['direction'] == oppositeDirection)])
+            if oppositeDat.empty:
+                scoreDiff = np.nan
+            else:
                 oppositeScore = float(oppositeDat[('score', 'median')])
                 oppositeCount = int(oppositeDat[('score', 'count')])
                 scoreDiff = score / oppositeScore
-            else:
-                scoreDiff = np.nan
             stripeCompare['start'].append(start)
             stripeCompare['direction'].append(direction)
             stripeCompare['size'].append(size)
