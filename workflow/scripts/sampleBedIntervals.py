@@ -32,7 +32,7 @@ def sampleIntervals(referenceBed: str, sampleBed: str, sampleFormat: str,
             if nAttempts > maxAttempts:
                 logging.error(
                     f'Intervals of the following length could not be found '
-                    f'within boundaries of the reference:\n {intervalLengths}')
+                    f'within boundaries of the reference:\n {sampleIntervals}')
                 break
             nSamples = 0
             repeatIntervals = {}
