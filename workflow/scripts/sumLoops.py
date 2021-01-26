@@ -20,10 +20,12 @@ __version__ = '1.0.0'
 
 def meanLoops(matrix: str, loops: List, absolute: bool, distanceNorm: bool, threads: int):
 
-    mat = readHomer(matrix, sparse=False, distanceNorm=distanceNorm)
+    # Read as sparse since we are computing sum
+    mat = readHomer(matrix, sparse=True, distanceNorm=distanceNorm)
     if absolute:
         mat['score'] = mat['score'].abs()
-
+    mat['end'] = mat['start'] + mat.attrs['binSize']
+    mat['end2'] = mat['start2'] + mat.attrs['binSize']
     loops = pd.concat(
         readLoops(loop, chrom=mat.attrs['chrom'], cis=True) for loop in loops)
     # Remove interactions larger than maximum loop size
@@ -42,17 +44,14 @@ def getOverlapping(loop, mat):
     """ Return matrix interactions overlapping the interval pairs """
 
     # Loop1 overlaps if start or end is between matrix start/end interval
-    endMat = mat['start'] + mat.attrs['binSize']
-    start1LoopOverlap = (loop['start1'] >= mat['start']) & (loop['start1'] < endMat)
-    end1LoopOverlap = (loop['end1'] >= mat['start']) & (loop['end1'] < endMat)
+    start1LoopOverlap = (loop['start1'] >= mat['start']) & (loop['start1'] < mat['end'])
+    end1LoopOverlap = (loop['end1'] >= mat['start']) & (loop['end1'] < mat['end'])
     loop1Overlap = start1LoopOverlap | end1LoopOverlap
-
     # Same for loop2
-    endMat2 = mat['start2'] + mat.attrs['binSize']
-    start2LoopOverlap = (loop['start2'] >= mat['start2']) & (loop['start2'] < endMat2)
-    end2LoopOverlap = (loop['end2'] >= mat['start2']) & (loop['end2'] < endMat2)
+    start2LoopOverlap = (loop['start2'] >= mat['start2']) & (loop['start2'] < mat['end2'])
+    end2LoopOverlap = (loop['end2'] >= mat['start2']) & (loop['end2'] < mat['end2'])
     loop2Overlap = start2LoopOverlap | end2LoopOverlap
-    return mat.loc[loop1Overlap & loop2Overlap, 'score'].mean()
+    return mat.loc[loop1Overlap & loop2Overlap, 'score'].sum()
 
 
 def readLoops(file: str, chrom=None, cis=True):
