@@ -144,6 +144,9 @@ class Links:
         assert len(self.record) >= 6
         assert self.chrom1 == self.chrom2
 
+    def __repr__(self):
+        return '\t'.join(self.record)
+
     @property
     def chrom1(self):
         return self.record[0]
