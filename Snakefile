@@ -72,6 +72,7 @@ default_config = {
          'bins':         [5000, 10000],},
     'distanceTransform': True,
     'plot_coordinates':  None,
+    'maxDepth':          2000000
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
@@ -1179,7 +1180,7 @@ rule createConfig:
         'plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{bin}.ini'
     params:
         tracks = getTracks,
-        depth = lambda wc: int(REGIONS['length'][wc.region]),
+        depth = lambda wc: min(int(REGIONS['length'][wc.region]), config['maxDepth']),
         colourmap = config['colourmap']
     group:
         'processHiC'
@@ -1675,7 +1676,7 @@ rule createCompareConfig:
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}.ini',
     params:
-        depth = lambda wc: int(REGIONS['length'][wc.region]),
+        depth = lambda wc: min(int(REGIONS['length'][wc.region]), config['maxDepth']),
         colourmap = 'bwr',
         tracks = getTracks,
         sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp)"',
