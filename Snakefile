@@ -1678,6 +1678,7 @@ rule createCompareConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
         tracks = getTracks,
+        sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp)"',
         vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
         vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
     group:
@@ -1688,7 +1689,9 @@ rule createCompareConfig:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
-        '--sumLogFC {input.upBed},{input.downBed} --tads {input.tads1} {input.tads2} '
+        '--sumLogFC {input.upBed} {input.downBed} '
+        '--sumLogFC_title {params.sumLogFC_title} '
+        '--tads {input.tads1} {input.tads2} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
