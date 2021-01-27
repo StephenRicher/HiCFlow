@@ -72,7 +72,7 @@ default_config = {
          'bins':         [5000, 10000],},
     'distanceTransform': True,
     'plot_coordinates':  None,
-    'maxDepth':          2000000
+    'maxDepth':          2000000,
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
