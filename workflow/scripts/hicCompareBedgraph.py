@@ -17,7 +17,7 @@ def hicCompareBedgraph(
         downOut: str = None, minDistance: float = None,
         maxDistance: float = None):
 
-    mat = readHomer(file, sparse=True)
+    mat = readHomer(file, diagonal=False, sparse=True)
     # Retrieve all matrix start positions
     allStart = pd.Series(mat['start'].unique(), name='start')
     # Remove paired interactions above max distance
