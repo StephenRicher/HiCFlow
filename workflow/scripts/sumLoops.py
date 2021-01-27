@@ -18,12 +18,11 @@ except ModuleNotFoundError:
 __version__ = '1.0.0'
 
 
-def meanLoops(matrix: str, loops: List, absolute: bool, distanceNorm: bool, threads: int):
+def sumLoops(matrix: str, loops: List, absolute: bool, distanceNorm: bool, threads: int):
 
     # Read as sparse since we are computing sum
-    mat = readHomer(matrix, sparse=True, distanceNorm=distanceNorm)
-    if absolute:
-        mat['score'] = mat['score'].abs()
+    mat = readHomer(matrix, upperOnly=True, sparse=True,
+                    distanceNorm=distanceNorm, absolute=absolute)
     mat['end'] = mat['start'] + mat.attrs['binSize']
     mat['end2'] = mat['start2'] + mat.attrs['binSize']
     loops = pd.concat(
@@ -66,6 +65,10 @@ def readLoops(file: str, chrom=None, cis=True):
         loops = loops.loc[loops['chrom1'] == loops['chrom2']]
     if chrom is not None:
         loops = loops.loc[loops['chrom1'] == chrom]
+    # Reorder any entries where start2 < start1 (so they fall in upper matrix)
+    revLoops = loops.loc[loops['start2'] < loops['start1']]
+    revLoops.columns = ['chrom2', 'start2', 'end2', 'chrom1', 'start1', 'end1']
+    loops = loops.loc[loops['start2'] >= loops['start1']].append(revLoops)
     return loops
 
 
@@ -84,7 +87,8 @@ def parseArgs():
     parser.add_argument(
         '--absolute', action='store_true',
         help='Convert matrix score to absolute values before '
-             'computing mean. May be appropriate for logFC '
+             'computing mean. Absolute values calculated prior to '
+             'distance normalisation. May be appropriate for logFC '
              'comparison matrices. (default: %(default)s)')
     parser.add_argument(
         '--distanceNorm', action='store_true',
@@ -93,7 +97,7 @@ def parseArgs():
     parser.add_argument(
         '--threads', type=int, default=1,
         help='Threads for parallel processing (default: %(default)s)')
-    parser.set_defaults(function=meanLoops)
+    parser.set_defaults(function=sumLoops)
 
     return setDefaults(parser)
 
