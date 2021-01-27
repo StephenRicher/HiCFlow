@@ -21,7 +21,7 @@ __version__ = '1.0.0'
 def sumLoops(matrix: str, loops: List, absolute: bool, distanceNorm: bool, threads: int):
 
     # Read as sparse since we are computing sum
-    mat = readHomer(matrix, upperOnly=True, sparse=True,
+    mat = readHomer(matrix, diagonal=False, upperOnly=True, sparse=True,
                     distanceNorm=distanceNorm, absolute=absolute)
     mat['end'] = mat['start'] + mat.attrs['binSize']
     mat['end2'] = mat['start2'] + mat.attrs['binSize']
