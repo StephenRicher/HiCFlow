@@ -89,6 +89,8 @@ def readHomer(matrix, upperOnly=False, sparse=True, diagonal=False, distanceNorm
         mat['score'] = mat['score'] / mat['expected']
     if upperOnly:
         mat = mat.loc[mat['start2'] > mat['start']]
+    if diagonal is False:
+        mat = mat.loc[mat['start2'] != mat['start']]
     # Set chrom from first value since HOMER must be cis-only matrix
     mat.attrs['chrom'] = regions[0][0]
     mat.attrs['binSize'] = int(binSize)
