@@ -54,8 +54,11 @@ def main():
         help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--sumLogFC', metavar='UP,DOWN', type=commaPair,
+        '--sumLogFC', nargs=2,
         help='Pair of bigWig files for sum logFC of UP and DOWN interactions.')
+    parser.add_argument(
+        '--sumLogFC_title', default='sum(logFC)',
+        help='Title for sumLogFC track')
     parser.add_argument(
         '--bed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
@@ -93,7 +96,7 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                bigWig, bed, compare, sumLogFC, stripes,
+                bigWig, bed, compare, sumLogFC, sumLogFC_title, stripes,
                 depth, colourmap, vMin, vMax, flip):
 
 
@@ -120,7 +123,6 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
     print('[spacer]')
 
     if sumLogFC is not None:
-        title = 'sum(logFC)'
         for i, file in enumerate(sumLogFC):
             if not_empty(file):
                 if i == 0:
@@ -129,7 +131,7 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 else:
                     overlay = 'share-y'
                     colour = '#0000FF80'
-                write_bigwig(file=file, title=title, type='bedgraph',
+                write_bigwig(file=file, title=sumLogFC_title, type='bedgraph',
                              alpha=0.5, colour=colour, overlay=overlay)
         print('[spacer]')
 
