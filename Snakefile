@@ -55,7 +55,8 @@ default_config = {
         {'vMin'       : -2.5          ,
          'vMax'       :  2.5          ,
          'size'       :  1            ,
-         'maxDistance':  1000000      ,},
+         'maxDistance':  1000000      ,
+         'tads'       :  None         ,},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -1615,7 +1616,9 @@ def setControl(wc):
 
 def setDomains(wc):
     """ Set TADdomains as same as target matrix e.g. IF1 = group1 """
-    if wc.adjIF == 'adjIF1':
+    if config['compareMatrices'] is not None:
+        return config['compareMatrices']['tads']
+    elif wc.adjIF == 'adjIF1':
         group = wc.group1
     else:
         group = wc.group2
