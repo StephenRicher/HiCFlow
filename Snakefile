@@ -1616,7 +1616,7 @@ def setControl(wc):
 
 def setDomains(wc):
     """ Set TADdomains as same as target matrix e.g. IF1 = group1 """
-    if config['compareMatrices'] is not None:
+    if config['compareMatrices']['tads'] is not None:
         return config['compareMatrices']['tads']
     elif wc.adjIF == 'adjIF1':
         group = wc.group1
@@ -1637,6 +1637,7 @@ rule differentialTAD:
         pValue = 0.05,
         mode = 'all',
         modeReject = 'one',
+        chr = lambda wc: REGIONS['chr'][wc.region],
         prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}'
     group:
         'HiCcompare'
@@ -1646,7 +1647,8 @@ rule differentialTAD:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicDifferentialTAD --targetMatrix {input.target} '
-        '--controlMatrix {input.control} --tadDomains {input.tadDomains} '
+        '--controlMatrix {input.control} '
+        "--tadDomains <(awk '$1==\"{params.chr}\"' {input.tadDomains}) "
         '--pValue {params.pValue} --mode {params.mode} '
         '--modeReject {params.modeReject} ''--outFileNamePrefix {params.prefix} '
         ' &> {log} || touch {output} '
