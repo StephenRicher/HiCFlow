@@ -19,7 +19,7 @@ __version__ = '1.0.0'
 
 def scoreAllIntervals(
         bedGraph: str, beds: List, summary: str,
-        groupName: bool, threads: int):
+        groupName: bool, multiplier: int, threads: int):
     intervalSize, shift, bedGraph = readBedgraph(bedGraph)
     bed = pd.concat(readBed(bed) for bed in beds)
 
@@ -31,7 +31,7 @@ def scoreAllIntervals(
         bed['score'] = bed.apply(
             scoreInterval, args=(bedGraph, intervalSize, shift), axis=1)
     # Normalise score by region length
-    bed['score'] = bed['score'] / (bed['end'] - bed['start'])
+    bed['score'] = (bed['score'] / (bed['end'] - bed['start'])) * multiplier
     bed.to_csv(sys.stdout, sep='\t', index=False, header=False)
     if not groupName:
         bed['name'] = 'data'
@@ -109,6 +109,9 @@ def parseArgs():
     parser.add_argument(
         '--threads', type=int, default=1,
         help='Threads for parallel processing (default: %(default)s)')
+    parser.add_argument(
+        '--multiplier', type=int, default=1,
+        help='Compute score per unit base pair (default: %(default)s)')
     parser.add_argument(
         '--groupName', action='store_true',
         help='Output summary statistics grouped by BED name '
