@@ -17,7 +17,9 @@ except ModuleNotFoundError:
 __version__ = '1.0.0'
 
 
-def scoreAllIntervals(bedGraph: str, beds: List, summary: str, groupName: bool, threads: int):
+def scoreAllIntervals(
+        bedGraph: str, beds: List, summary: str,
+        groupName: bool, threads: int):
     intervalSize, bedGraph = readBedgraph(bedGraph)
     bed = pd.concat(readBed(bed) for bed in beds)
 
@@ -28,12 +30,12 @@ def scoreAllIntervals(bedGraph: str, beds: List, summary: str, groupName: bool, 
     else:
         bed['score'] = bed.apply(
             scoreInterval, args=(bedGraph, intervalSize), axis=1)
+    # Normalise score by region length
+    bed['score'] = bed['score'] / (bed['end'] - bed['start'])
     bed.to_csv(sys.stdout, sep='\t', index=False, header=False)
-
     if not groupName:
         bed['name'] = 'data'
-    bed['normScore'] = bed['score'] / (bed['end'] - bed['start'])
-    bed.groupby('name')['normScore'].describe().to_csv(summary, sep='\t')
+    bed.groupby('name')['score'].describe().to_csv(summary, sep='\t')
 
 
 def scoreInterval(bed, bedGraph, intervalSize):
@@ -45,6 +47,13 @@ def scoreInterval(bed, bedGraph, intervalSize):
         except KeyError:
             pass
     return score
+
+
+def countBins(positions, binSize: int):
+    """ Return dictionary number of positions mapping to each bin """
+    bins = positions - (positions % binSize)
+    unique, counts = np.unique(bins, return_counts=True)
+    return dict(zip(unique, counts))
 
 
 def readBedgraph(file: str):
@@ -79,14 +88,6 @@ def readBed(file: str):
     return bed
 
 
-def countBins(positions, binSize: int):
-    """ Return dictionary number of positions
-        mapping to each bin """
-    bins = positions - (positions % binSize)
-    unique, counts = np.unique(bins, return_counts=True)
-    return dict(zip(unique, counts))
-
-
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
@@ -107,7 +108,8 @@ def parseArgs():
         help='Threads for parallel processing (default: %(default)s)')
     parser.add_argument(
         '--groupName', action='store_true',
-        help='Output summary statistics grouped by BED name.')
+        help='Output summary statistics grouped by BED name '
+             '(default: %(default)s)')
     parser.set_defaults(function=scoreAllIntervals)
 
     return setDefaults(parser)
