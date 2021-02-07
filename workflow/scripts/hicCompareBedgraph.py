@@ -15,7 +15,7 @@ __version__ = '1.0.0'
 def hicCompareBedgraph(
         file: str, allOut: str, upOut: str = None,
         downOut: str = None, minDistance: float = None,
-        maxDistance: float = None):
+        maxDistance: float = None, Z: bool = False):
 
     mat = readHomer(file, diagonal=False, sparse=True)
     # Retrieve all matrix start positions
@@ -47,16 +47,16 @@ def hicCompareBedgraph(
             out = allOut
             subset = mat.loc[:, 'score'].groupby('start').sum()
 
-        # Perform Z-score normalisation
-        zscore = pd.Series(
-            stats.zscore(subset), index=subset.index, name='zscore')
+        if Z:
+            subset = stats.zscore(subset)
+        score = pd.Series(subset, index=subset.index, name='score')
         bed = pd.merge(
             allStart, zscore, how='left', left_on='start', right_index=True).fillna(0)
         bed['chrom'] = mat.attrs['chrom']
         bed['end'] = bed['start'] + mat.attrs['binSize']
 
         bed.to_csv(
-            out,  columns=['chrom', 'start', 'end', 'zscore'],
+            out,  columns=['chrom', 'start', 'end', 'score'],
             sep='\t', index=False, header=False)
 
 
@@ -80,6 +80,9 @@ def parseArgs():
     parser.add_argument(
         '--downOut',
         help='Output file for bedgraph of sum down interactions.')
+    parser.add_argument(
+        '--Z', action='store_true',
+        help='Z score transform scores (default: %(default)s)')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--allOut', required=True,
