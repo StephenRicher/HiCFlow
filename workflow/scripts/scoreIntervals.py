@@ -20,16 +20,16 @@ __version__ = '1.0.0'
 def scoreAllIntervals(
         bedGraph: str, beds: List, summary: str,
         groupName: bool, threads: int):
-    intervalSize, bedGraph = readBedgraph(bedGraph)
+    intervalSize, shift, bedGraph = readBedgraph(bedGraph)
     bed = pd.concat(readBed(bed) for bed in beds)
 
     if (threads > 1) and ('pandarallel' in sys.modules):
         pandarallel.initialize(nb_workers=threads, verbose=0)
         bed['score'] = bed.parallel_apply(
-            scoreInterval, args=(bedGraph, intervalSize), axis=1)
+            scoreInterval, args=(bedGraph, intervalSize, shift), axis=1)
     else:
         bed['score'] = bed.apply(
-            scoreInterval, args=(bedGraph, intervalSize), axis=1)
+            scoreInterval, args=(bedGraph, intervalSize, shift), axis=1)
     # Normalise score by region length
     bed['score'] = bed['score'] / (bed['end'] - bed['start'])
     bed.to_csv(sys.stdout, sep='\t', index=False, header=False)
@@ -38,8 +38,9 @@ def scoreAllIntervals(
     bed.groupby('name')['score'].describe().to_csv(summary, sep='\t')
 
 
-def scoreInterval(bed, bedGraph, intervalSize):
-    binCount = countBins(np.arange(bed['start'], bed['end']), intervalSize)
+def scoreInterval(bed, bedGraph, intervalSize, shift):
+    binCount = countBins(
+        np.arange(bed['start'], bed['end']), intervalSize, shift)
     score = 0
     for pos, count in binCount.items():
         try:
@@ -49,9 +50,9 @@ def scoreInterval(bed, bedGraph, intervalSize):
     return score
 
 
-def countBins(positions, binSize: int):
+def countBins(positions, binSize: int, shift: int):
     """ Return dictionary number of positions mapping to each bin """
-    bins = positions - (positions % binSize)
+    bins = (positions - (positions % binSize)) + shift
     unique, counts = np.unique(bins, return_counts=True)
     return dict(zip(unique, counts))
 
@@ -66,6 +67,8 @@ def readBedgraph(file: str):
             chrom, start, end, score = line.split()
             intervalSize = int(end) - int(start)
             normScore = float(score) / intervalSize
+            # Binsizes don't always align with 0 e.g. 2, 1002, 2002,
+            shift = int(start) % intervalSize
             intervals.add(intervalSize)
             if start in bedGraph[chrom]:
                 logging.error('Bedgraph contains overlapping intervals.')
@@ -74,7 +77,7 @@ def readBedgraph(file: str):
                 logging.error('Bedgraph is not constant interval size.')
                 raise ValueError
             bedGraph[chrom][int(start)] = normScore
-    return intervalSize, bedGraph
+    return intervalSize, shift, bedGraph
 
 
 def readBed(file: str):
