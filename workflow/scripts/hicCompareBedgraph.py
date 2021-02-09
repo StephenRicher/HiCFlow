@@ -51,7 +51,7 @@ def hicCompareBedgraph(
             subset = stats.zscore(subset)
         score = pd.Series(subset, index=subset.index, name='score')
         bed = pd.merge(
-            allStart, zscore, how='left', left_on='start', right_index=True).fillna(0)
+            allStart, score, how='left', left_on='start', right_index=True).fillna(0)
         bed['chrom'] = mat.attrs['chrom']
         bed['end'] = bed['start'] + mat.attrs['binSize']
 
