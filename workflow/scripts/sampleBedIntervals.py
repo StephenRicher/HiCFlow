@@ -44,7 +44,7 @@ def sampleIntervals(referenceBed: str, sampleBed: str, sampleFormat: str,
             for selection, interval in zip(selections, sampleIntervals):
                 pos = random.choice(selection.interval)
                 end = pos + interval.regionLength
-                name = f'{rep}-{selection.id}'
+                name = f'{selection.id}-{rep}'
                 # Interval extends beyond boundary - must repeat
                 if end > selection.end:
                     repeatIntervals[interval] = interval.regionLength
@@ -62,7 +62,7 @@ def writeNotFound(sampleIntervals, rep, sampleFormat):
     """ Write blank entries for any sample intervals
         with no valid random position """
     for selection in sampleIntervals:
-        name = f'{rep}-{selection.id}'
+        name = f'{selection.id}-{rep}'
         if sampleFormat == 'links':
             print("", "", "", "", "", "", name, sep='\t')
         else:
