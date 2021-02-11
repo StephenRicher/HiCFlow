@@ -25,14 +25,15 @@ def sampleIntervals(referenceBed: str, sampleBed: str, sampleFormat: str,
     print(f'# Random intervals sampled from {os.path.basename(referenceBed)} '
           f'matching interval lengths in {os.path.basename(sampleBed)}. '
           f'Total repeat interval sets: {nReps}.')
+    sampleIntervals = readBedLength(sampleBed, fileType=sampleFormat)
     for rep in range(nReps):
         nAttempts = 0
-        sampleIntervals = readBedLength(sampleBed, fileType=sampleFormat)
         while (len(sampleIntervals) > 0):
             if nAttempts > maxAttempts:
                 logging.error(
                     f'Intervals of the following length could not be found '
                     f'within boundaries of the reference:\n {sampleIntervals}')
+                writeNotFound(sampleIntervals, rep, sampleFormat)
                 break
             nSamples = 0
             repeatIntervals = {}
@@ -43,18 +44,29 @@ def sampleIntervals(referenceBed: str, sampleBed: str, sampleFormat: str,
             for selection, interval in zip(selections, sampleIntervals):
                 pos = random.choice(selection.interval)
                 end = pos + interval.regionLength
+                name = f'{rep}-{selection.id}'
                 # Interval extends beyond boundary - must repeat
                 if end > selection.end:
                     repeatIntervals[interval] = interval.regionLength
                 elif sampleFormat == 'links':
                     print(selection.chrom, pos, pos + interval.bin1Length,
-                          selection.chrom, end - interval.bin2Length, end, rep,
+                          selection.chrom, end - interval.bin2Length, end, name,
                           sep='\t')
                 else:
-                    print(selection.chrom, pos, end, rep, sep='\t')
+                    print(selection.chrom, pos, end, name, sep='\t')
             nAttempts += 1
             sampleIntervals = repeatIntervals
 
+
+def writeNotFound(sampleIntervals, rep, sampleFormat):
+    """ Write blank entries for any sample intervals
+        with no valid random position """
+    for selection in sampleIntervals:
+        name = f'{rep}-{selection.id}'
+        if sampleFormat == 'links':
+            print("", "", "", "", "", "", name, sep='\t')
+        else:
+            print("", "", "", name, sep='\t')
 
 
 def parseArgs():

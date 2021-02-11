@@ -58,9 +58,10 @@ def splitName(line):
 
 
 class Bed:
-    def __init__(self, line, buffer=0):
+    def __init__(self, line, buffer=0, id=None):
         self.record = line.strip('\n').split()
         self.buffer = int(buffer)
+        self.id = id
         assert len(self.record) >= 3
 
     @property
@@ -139,8 +140,9 @@ class Bedgraph:
 
 
 class Links:
-    def __init__(self, line):
+    def __init__(self, line, id=None):
         self.record = line.strip('\n').split()
+        self.id = id
         assert len(self.record) >= 6
         assert self.chrom1 == self.chrom2
 
@@ -229,10 +231,11 @@ def readBedLength(file, fileType='bed'):
     fileType = Bed if fileType.lower() == 'bed' else Links
     allEntries = {}
     with open(file) as fh:
-        for line in fh:
+        for i, line in enumerate(fh):
             line = line.strip()
             if not line:
                 continue
-            entry = fileType(line)
+            # Assign unique id to each entry
+            entry = fileType(line, id=i)
             allEntries[entry] = entry.regionLength
     return allEntries
