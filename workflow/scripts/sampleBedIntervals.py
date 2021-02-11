@@ -25,8 +25,9 @@ def sampleIntervals(referenceBed: str, sampleBed: str, sampleFormat: str,
     print(f'# Random intervals sampled from {os.path.basename(referenceBed)} '
           f'matching interval lengths in {os.path.basename(sampleBed)}. '
           f'Total repeat interval sets: {nReps}.')
-    sampleIntervals = readBedLength(sampleBed, fileType=sampleFormat)
     for rep in range(nReps):
+        # Re-read each rep because sampleInterval is modified per attempt
+        sampleIntervals = readBedLength(sampleBed, fileType=sampleFormat)
         nAttempts = 0
         while (len(sampleIntervals) > 0):
             if nAttempts > maxAttempts:
