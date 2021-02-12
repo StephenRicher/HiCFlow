@@ -1605,6 +1605,27 @@ rule filterHiCcompare:
         '--p_value {params.p_value} --log_fc {params.log_fc} {input} &> {log}'
 
 
+rule filterTADs:
+    input:
+        config['compareMatrices']['tads']
+    output:
+        'dat/tads/{region}/{region}-referenceTADs.bed'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region],
+        end = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'HiCcompare'
+    log:
+        'logs/filterTADs/{region}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/filterTADs.py --chrom {params.chr} '
+        '--start {params.start} --end {params.end} '
+        '{input} > {output} 2> {log}'
+
+
 def setControl(wc):
     """ Set control matrix as the other IF1 relative to the target """
     if wc.adjIF == 'adjIF1':
@@ -1617,7 +1638,7 @@ def setControl(wc):
 def setDomains(wc):
     """ Set TADdomains as same as target matrix e.g. IF1 = group1 """
     if config['compareMatrices']['tads'] is not None:
-        return config['compareMatrices']['tads']
+        return f'dat/tads/{wc.region}/{wc.region}-referenceTADs.bed'
     elif wc.adjIF == 'adjIF1':
         group = wc.group1
     else:
@@ -1648,9 +1669,9 @@ rule differentialTAD:
     shell:
         'hicDifferentialTAD --targetMatrix {input.target} '
         '--controlMatrix {input.control} '
-        "--tadDomains <(awk '$1==\"{params.chr}\"' {input.tadDomains}) "
+        '--tadDomains {input.tadDomains} '
         '--pValue {params.pValue} --mode {params.mode} '
-        '--modeReject {params.modeReject} ''--outFileNamePrefix {params.prefix} '
+        '--modeReject {params.modeReject} --outFileNamePrefix {params.prefix} '
         ' &> {log} || touch {output} '
 
 
