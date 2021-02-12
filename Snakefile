@@ -1605,25 +1605,26 @@ rule filterHiCcompare:
         '--p_value {params.p_value} --log_fc {params.log_fc} {input} &> {log}'
 
 
-rule filterTADs:
-    input:
-        config['compareMatrices']['tads']
-    output:
-        'dat/tads/{region}/{region}-referenceTADs.bed'
-    params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region],
-        end = lambda wc: REGIONS['end'][wc.region]
-    group:
-        'HiCcompare'
-    log:
-        'logs/filterTADs/{region}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/filterTADs.py --chrom {params.chr} '
-        '--start {params.start} --end {params.end} '
-        '{input} > {output} 2> {log}'
+if config['compareMatrices']['tads'] is not None:
+    rule filterTADs:
+        input:
+            config['compareMatrices']['tads']
+        output:
+            'dat/tads/{region}/{region}-referenceTADs.bed'
+        params:
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region],
+            end = lambda wc: REGIONS['end'][wc.region]
+        group:
+            'HiCcompare'
+        log:
+            'logs/filterTADs/{region}.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            'python {SCRIPTS}/filterTADs.py --chrom {params.chr} '
+            '--start {params.start} --end {params.end} '
+            '{input} > {output} 2> {log}'
 
 
 def setControl(wc):
