@@ -45,7 +45,7 @@ def sampleIntervals(referenceBed: str, sampleBed: str, sampleFormat: str,
             for selection, interval in zip(selections, sampleIntervals):
                 pos = random.choice(selection.interval)
                 end = pos + interval.regionLength
-                name = f'{selection.id}-{rep}'
+                name = f'{interval.id}-{rep}'
                 # Interval extends beyond boundary - must repeat
                 if end > selection.end:
                     repeatIntervals[interval] = interval.regionLength
