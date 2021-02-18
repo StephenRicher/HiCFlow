@@ -113,6 +113,7 @@ wildcard_constraints:
     cellType = rf'{"|".join(HiC.cellTypes())}',
     preGroup = rf'{"|".join(HiC.originalGroups())}',
     preSample = rf'{"|".join(HiC.originalSamples())}',
+    chr = rf'{"|".join(list(REGIONS["chr"].unique()))}',
     region = rf'{"|".join(REGIONS.index)}',
     allele = r'[12]',
     rep = r'\d+',
@@ -126,7 +127,8 @@ wildcard_constraints:
     group1 = rf'{"|".join(HiC.groups())}',
     group2 = rf'{"|".join(HiC.groups())}',
     sample = rf'{"|".join(HiC.samples())}',
-    all = rf'{"|".join(HiC.samples() + list(HiC.groups()))}'
+    all = rf'{"|".join(HiC.samples() + list(HiC.groups()))}',
+    combo = r'alt_alt|alt_both-ref|both-ref_both-ref|ref_alt|ref_both-ref|ref_ref'
 
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords([config['plot_coordinates'], config['regions']],
@@ -157,6 +159,25 @@ HiC_mode = ([
         bin=binRegion.keys(), method=['PCA', 'TADinsulation', 'TADboundaries']),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 
+
+def getChromSizes(wc):
+    """ Retrieve chromSizes file associated with group or sample. """
+    try:
+        cellType = HiC.sample2Cell()[wc.all]
+    except AttributeError:
+        try:
+            cellType = HiC.sample2Cell()[wc.preGroup]
+        except AttributeError:
+            cellType = HiC.sample2Cell()[wc.group1]
+            cellType2 = HiC.sample2Cell()[wc.group2]
+            if cellType != cellType2:
+                sys.stderr.write(
+                    f'{wc.group1} and {wc.group2} correspond to different cell '
+                    'type. Ensure the chromosome sizes are equal for valid '
+                    'bedgraph rescaling of HiCcompare output.\n')
+    return f'dat/genome/chrom_sizes/{cellType}.chrom.sizes',
+
+
 rule all:
     input:
         HiC_mode,
@@ -170,8 +191,14 @@ rule all:
             bin=regionBin[region]) for region in regionBin]
          if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
-         if (config['createValidBam'] and regionBin) else [])
-
+         if (config['createValidBam'] and regionBin) else []),
+        (expand('dat/ashic/readPairs/{group}_{chr}_{combo}',
+            group=HiC.originalGroups(), chr=list(REGIONS['chr'].unique()),
+            combo=['alt_alt', 'alt_both-ref', 'both-ref_both-ref',
+                   'ref_alt', 'ref_both-ref', 'ref_ref'])
+         if ALLELE_SPECIFIC else []),
+         [expand('dat/ashic/binned/{group}-{region}-{bin}-binned',
+            group=HiC.originalGroups(), region=region, bin=regionBin[region]) for region in regionBin]
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -625,12 +652,12 @@ rule SNPsplit:
         bam = rules.removeUnmapped.output,
         snps = SNPsplitInput
     output:
-        temp(expand('dat/snpsplit/{{preSample}}.hic.{ext}',
+        expand('dat/snpsplit/{{preSample}}.hic.{ext}',
+            ext = ['SNPsplit_report.txt', 'SNPsplit_sort.txt']),
+        bam = temp(expand('dat/snpsplit/{{preSample}}.hic.{ext}',
             ext = ['G1_G1.bam', 'G1_UA.bam',
                    'G2_G2.bam', 'G2_UA.bam',
-                   'G1_G2.bam', 'UA_UA.bam'])),
-        expand('dat/snpsplit/{{preSample}}.hic.{ext}',
-            ext = ['SNPsplit_report.txt', 'SNPsplit_sort.txt'])
+                   'G1_G2.bam', 'UA_UA.bam']))
     params:
         outdir = 'dat/snpsplit/'
     group:
@@ -642,6 +669,71 @@ rule SNPsplit:
     shell:
         'SNPsplit {input.bam} --snp_file {input.snps} '
         '--hic --output_dir {params.outdir} &> {log}'
+
+
+rule reformatAshic:
+    input:
+        expand('dat/snpsplit/{{preSample}}.hic.{ext}.bam',
+            ext=['G1_G1', 'G1_UA', 'G2_G2', 'G2_UA', 'G1_G2', 'UA_UA'])
+    output:
+        expand('dat/ashic/readPairs/{{preSample}}/{chr}_{combo}',
+            chr=list(REGIONS['chr'].unique()),
+            combo=['alt_alt', 'alt_both-ref', 'both-ref_both-ref',
+                   'ref_alt', 'ref_both-ref', 'ref_ref']),
+        dir = directory('dat/ashic/readPairs/{preSample}/')
+    params:
+        prefix = lambda wc: f'dat/ashic/readPairs/{wc.preSample}/'
+    group:
+        'SNPsplit'
+    log:
+        'logs/reformatAshic/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        '(awk -f {SCRIPTS}/processSNPsplit.awk -v prefix={params.prefix} '
+        '<(samtools cat {input} | samtools view)) 2> {log}'
+
+
+rule mergeAshic:
+    input:
+        lambda wc: expand(
+            'dat/ashic/readPairs/{preGroup}-{rep}/{chr}_{combo}',
+            preGroup=wc.preGroup, rep=HiC.originalGroups()[wc.preGroup],
+            chr=wc.chr, combo=wc.combo)
+    output:
+        'dat/ashic/readPairs/{preGroup}_{chr}_{combo}'
+    log:
+        'logs/mergeAshic/{preGroup}-{chr}-{combo}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'cat {input} > {output} 2> {log}'
+
+
+rule ASHICBin:
+    input:
+        lambda wc: expand(
+            'dat/ashic/readPairs/{{preGroup}}_{chr}_{combo}',
+            chr=REGIONS['chr'][wc.region],
+            combo=['alt_alt', 'alt_both-ref', 'both-ref_both-ref',
+                   'ref_alt', 'ref_both-ref', 'ref_ref']),
+        chromSizes = getChromSizes
+    output:
+        directory('dat/ashic/binned/{preGroup}-{region}-{bin}-binned/')
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region]
+    log:
+        'logs/ASHICBin/{preGroup}-{region}-{bin}.log'
+    conda:
+        f'{ENVS}/ashic.yaml'
+    shell:
+        'ashic-data binning --res {wildcards.bin} --chrom {params.chr} '
+        '--c1 1 --p1 2 --a1 3 --c2 4 --p2 5 --a2 6 '
+        '--genome {input.chromSizes} '
+        '--start {params.start} --end {params.end} '
+        '{wildcards.preGroup} {output} &> {log}'
 
 
 rule mergeSNPsplit:
@@ -878,21 +970,6 @@ rule TadInsulation:
         '--step {wildcards.bin} --outPrefix {params.prefix} '
         '--correctForMultipleTesting {params.method} '
         '--numberOfProcessors {threads} &> {log} || touch {output}'
-
-
-def getChromSizes(wc):
-    """ Retrieve chromSizes file associated with group or sample. """
-    try:
-        cellType = HiC.sample2Cell()[wc.all]
-    except AttributeError:
-        cellType = HiC.sample2Cell()[wc.group1]
-        cellType2 = HiC.sample2Cell()[wc.group2]
-        if cellType != cellType2:
-            sys.stderr.write(
-                f'{wc.group1} and {wc.group2} correspond to different cell '
-                'type. Ensure the chromosome sizes are equal for valid '
-                'bedgraph rescaling of HiCcompare output.\n')
-    return f'dat/genome/chrom_sizes/{cellType}.chrom.sizes',
 
 
 rule rescaleTADinsulation:
