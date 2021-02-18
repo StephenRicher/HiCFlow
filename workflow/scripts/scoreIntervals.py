@@ -25,10 +25,10 @@ def scoreAllIntervals(
 
     if (threads > 1) and ('pandarallel' in sys.modules):
         pandarallel.initialize(nb_workers=threads, verbose=0)
-        bed['score'] = bed.parallel_apply(
+        bed[['score', 'std']] = bed.parallel_apply(
             scoreInterval, args=(bedGraph, intervalSize, shift), axis=1)
     else:
-        bed['score'] = bed.apply(
+        bed[['score', 'std']] = bed.apply(
             scoreInterval, args=(bedGraph, intervalSize, shift), axis=1)
     # Normalise score by region length
     bed['score'] = (bed['score'] / (bed['end'] - bed['start'])) * multiplier
@@ -41,13 +41,14 @@ def scoreAllIntervals(
 def scoreInterval(bed, bedGraph, intervalSize, shift):
     binCount = countBins(
         np.arange(bed['start'], bed['end']), intervalSize, shift)
-    score = 0
+    score = []
     for pos, count in binCount.items():
         try:
-            score += (bedGraph[bed['chrom']][pos] * count)
+            score.extend([bedGraph[bed['chrom']][pos]] * count)
         except KeyError:
             pass
-    return score
+    score = np.array(score)
+    return pd.Series([score.sum(), score.std()])
 
 
 def countBins(positions, binSize: int, shift: int):
