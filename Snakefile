@@ -682,7 +682,7 @@ rule reformatASHIC:
     params:
         prefix = lambda wc: f'dat/ashic/readPairs/{wc.preSample}/'
     group:
-        'ASHIC'
+        'prepareASHIC'
     log:
         'logs/reformatASHIC/{preSample}.log'
     conda:
@@ -702,7 +702,7 @@ rule mergeASHIC:
     output:
         'dat/ashic/readPairs/{preGroup}_{chr}_{combo}'
     group:
-        'ASHIC'
+        'prepareASHIC'
     log:
         'logs/mergeAshic/{preGroup}-{chr}-{combo}.log'
     conda:
