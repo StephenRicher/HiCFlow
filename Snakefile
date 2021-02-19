@@ -625,7 +625,7 @@ rule removeUnmapped:
     input:
         rules.fixmateBam.output
     output:
-        temp('dat/mapped/{preSample}.hic.bam')
+        'dat/mapped/{preSample}.hic.bam')
     group:
         'prepareBAM'
     log:
@@ -651,10 +651,10 @@ rule SNPsplit:
     output:
         expand('dat/snpsplit/{{preSample}}.hic.{ext}',
             ext = ['SNPsplit_report.txt', 'SNPsplit_sort.txt']),
-        bam = temp(expand('dat/snpsplit/{{preSample}}.hic.{ext}',
+        bam = expand('dat/snpsplit/{{preSample}}.hic.{ext}',
             ext = ['G1_G1.bam', 'G1_UA.bam',
                    'G2_G2.bam', 'G2_UA.bam',
-                   'G1_G2.bam', 'UA_UA.bam']))
+                   'G1_G2.bam', 'UA_UA.bam'])
     params:
         outdir = 'dat/snpsplit/'
     group:
@@ -668,7 +668,7 @@ rule SNPsplit:
         '--hic --output_dir {params.outdir} &> {log}'
 
 
-rule reformatAshic:
+rule reformatASHIC:
     input:
         expand('dat/snpsplit/{{preSample}}.hic.{ext}.bam',
             ext=['G1_G1', 'G1_UA', 'G2_G2', 'G2_UA', 'G1_G2', 'UA_UA'])
@@ -681,9 +681,9 @@ rule reformatAshic:
     params:
         prefix = lambda wc: f'dat/ashic/readPairs/{wc.preSample}/'
     group:
-        'SNPsplit'
+        'ASHIC'
     log:
-        'logs/reformatAshic/{preSample}.log'
+        'logs/reformatASHIC/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -691,7 +691,7 @@ rule reformatAshic:
         '<(samtools cat {input} | samtools view)) 2> {log}'
 
 
-rule mergeAshic:
+rule mergeASHIC:
     input:
         lambda wc: expand(
             'dat/ashic/readPairs/{preGroup}-{rep}/{chr}_{combo}',
@@ -699,6 +699,8 @@ rule mergeAshic:
             chr=wc.chr, combo=wc.combo)
     output:
         'dat/ashic/readPairs/{preGroup}_{chr}_{combo}'
+    group:
+        'ASHIC'
     log:
         'logs/mergeAshic/{preGroup}-{chr}-{combo}.log'
     conda:
@@ -722,6 +724,8 @@ rule ASHICbin:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region],
         end = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'ASHIC'
     log:
         'logs/ASHICbin/{preGroup}-{region}.log'
     conda:
@@ -739,6 +743,8 @@ rule ASHICpack:
         rules.ASHICbin.output
     output:
         directory(f'dat/ashic/packed/{{preGroup}}-{{region}}-{BASE_BIN}-packed/')
+    group:
+        'ASHIC'
     log:
         'logs/ASHICpack/{preGroup}-{region}.log'
     conda:
@@ -757,6 +763,8 @@ rule ASHIC:
         diag = 0,
         maxIter = 100,
         seed = 0
+    group:
+        'ASHIC'
     log:
         'logs/ASHIC/{preGroup}-{region}.log'
     conda:
@@ -777,6 +785,8 @@ rule ASHIC2homer:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region],
         mat = lambda wc: 't_mm.txt' if wc.allele == '1' else 't_pp.txt'
+    group:
+        'ASHIC'
     log:
         'logs/ASHIC/{preGroup}-a{allele}-{region}.log'
     conda:
@@ -792,6 +802,8 @@ rule ASHIChomerToH5:
         rules.ASHIC2homer.output
     output:
         f'dat/matrix/{{region}}/base/raw/{{preGroup}}_a{{allele}}-{{region}}-ASHIC.{BASE_BIN}.h5'
+    group:
+        'ASHIC'
     log:
         'logs/ASHIChomerToH5/{preGroup}-a{allele}-{region}.log'
     conda:
@@ -1324,8 +1336,8 @@ rule createConfig:
         insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
         tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-ontad_domains.bed',
         pca = 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix.bedgraph',
-        forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
-        reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
+        #forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
+        #reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
     output:
         'plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{bin}.ini'
     params:
@@ -1344,7 +1356,7 @@ rule createConfig:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
         '--insulations {input.insulations} --log '
         '--loops {input.loops} --colourmap {params.colourmap} '
-        '--stripes {input.forwardStripe} {input.reverseStripe} '
+        #'--stripes {input.forwardStripe} {input.reverseStripe} '
         '--bigWig PCA1,{input.pca} {params.scale} '
         '--tads {input.tads} {params.tracks} '
         '--depth {params.depth} > {output} 2> {log}'
