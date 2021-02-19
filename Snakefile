@@ -674,7 +674,7 @@ rule reformatASHIC:
         expand('dat/snpsplit/{{preSample}}.hic.{ext}.bam',
             ext=['G1_G1', 'G1_UA', 'G2_G2', 'G2_UA', 'G1_G2', 'UA_UA'])
     output:
-        expand('dat/ashic/readPairs/{{preSample}}/{chr}_{combo}',
+        readPairs = expand('dat/ashic/readPairs/{{preSample}}/{chr}_{combo}',
             chr=list(REGIONS['chr'].unique()),
             combo=['alt_alt', 'alt_both-ref', 'both-ref_both-ref',
                    'ref_alt', 'ref_both-ref', 'ref_ref']),
@@ -688,8 +688,9 @@ rule reformatASHIC:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        '(awk -f {SCRIPTS}/processSNPsplit.awk -v prefix={params.prefix} '
-        '<(samtools cat {input} | samtools view)) 2> {log}'
+        '(touch {output.readPairs} && awk -f {SCRIPTS}/processSNPsplit.awk '
+        '-v prefix={params.prefix} <(samtools cat {input} | samtools view)) '
+        '&> {log}'
 
 
 rule mergeASHIC:
