@@ -73,6 +73,7 @@ default_config = {
          'bins':         [5000, 10000],},
     'distanceTransform': True,
     'plot_coordinates':  None,
+    'distanceNorm':      True,
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
@@ -1331,9 +1332,17 @@ def getTracks(wc):
     return command
 
 
+def getMatrix(wc):
+    """ Return either normal or obs_exp matrix """
+    if config['distanceNorm']:
+        return 'dat/matrix/{region}/{bin}/ice/obs_exp/{group}-{region}-{bin}.h5'
+    else:
+        return 'dat/matrix/{region}/{bin}/ice/{group}-{region}-{bin}.h5'
+
+
 rule createConfig:
     input:
-        matrix = 'dat/matrix/{region}/{bin}/ice/{group}-{region}-{bin}.h5',
+        matrix = getMatrix,
         loops = 'dat/matrix/{region}/{bin}/loops/{group}-{region}-{bin}.bedgraph',
         insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
         tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-ontad_domains.bed',
@@ -1346,6 +1355,9 @@ rule createConfig:
         tracks = getTracks,
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = config['colourmap'],
+        vMin = '--vMin 0' if config['distanceNorm'] else '',
+        vMax = '--vMax 2' if config['distanceNorm'] else '',
+        log = '' if config['distanceNorm'] else '--log'
     group:
         'processHiC'
     conda:
@@ -1354,9 +1366,10 @@ rule createConfig:
         'logs/createConfig/{region}/{bin}/{group}.log'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
-        '--insulations {input.insulations} --log '
+        '--insulations {input.insulations} {params.log} '
         '--loops {input.loops} --colourmap {params.colourmap} '
         #'--stripes {input.forwardStripe} {input.reverseStripe} '
+        '{params.vMin} {params.vMax} '
         '--bigWig PCA1,{input.pca} '
         '--tads {input.tads} {params.tracks} '
         '--depth {params.depth} > {output} 2> {log}'
