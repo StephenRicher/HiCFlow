@@ -743,6 +743,8 @@ rule ASHICpack:
         rules.ASHICbin.output
     output:
         directory(f'dat/ashic/packed/{{preGroup}}-{{region}}-{BASE_BIN}-packed/')
+    params:
+        diag = 0
     group:
         'ASHIC'
     log:
@@ -750,7 +752,7 @@ rule ASHICpack:
     conda:
         f'{ENVS}/ashic.yaml'
     shell:
-        'ashic-data pack {input} {output} &> {log}'
+        'ashic-data pack --diag {params.diag} {input} {output} &> {log}'
 
 
 rule ASHIC:
@@ -1344,8 +1346,6 @@ rule createConfig:
         tracks = getTracks,
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = config['colourmap'],
-        # Set to manually extract vMin, vMax (to fix bug in ASHIC scale)
-        scale = lambda wc: '--manualScale' if ALLELE_SPECIFIC else ''
     group:
         'processHiC'
     conda:
@@ -1357,7 +1357,7 @@ rule createConfig:
         '--insulations {input.insulations} --log '
         '--loops {input.loops} --colourmap {params.colourmap} '
         #'--stripes {input.forwardStripe} {input.reverseStripe} '
-        '--bigWig PCA1,{input.pca} {params.scale} '
+        '--bigWig PCA1,{input.pca} '
         '--tads {input.tads} {params.tracks} '
         '--depth {params.depth} > {output} 2> {log}'
 

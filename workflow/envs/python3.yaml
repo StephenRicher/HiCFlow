@@ -8,4 +8,3 @@ dependencies:
     - scipy
     - seaborn
     - scikit-learn
-    - HiCMatrix
