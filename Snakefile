@@ -625,7 +625,7 @@ rule removeUnmapped:
     input:
         rules.fixmateBam.output
     output:
-        'dat/mapped/{preSample}.hic.bam')
+        'dat/mapped/{preSample}.hic.bam'
     group:
         'prepareBAM'
     log:
