@@ -192,13 +192,9 @@ rule all:
          if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
          if (config['createValidBam'] and regionBin) else []),
-        (expand('dat/ashic/readPairs/{group}_{chr}_{combo}',
-            group=HiC.originalGroups(), chr=list(REGIONS['chr'].unique()),
-            combo=['alt_alt', 'alt_both-ref', 'both-ref_both-ref',
-                   'ref_alt', 'ref_both-ref', 'ref_ref'])
-         if ALLELE_SPECIFIC else []),
-         [expand('dat/ashic/binned/{group}-{region}-{bin}-binned',
-            group=HiC.originalGroups(), region=region, bin=regionBin[region]) for region in regionBin]
+        (expand('dat/ashic/imputed/{group}-{region}-{bin}-imputed',
+            group=HiC.originalGroups(), region=regionBin.keys(), bin=BASE_BIN)
+          if ALLELE_SPECIFIC else [])
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -710,7 +706,7 @@ rule mergeAshic:
         'cat {input} > {output} 2> {log}'
 
 
-rule ASHICBin:
+rule ASHICbin:
     input:
         lambda wc: expand(
             'dat/ashic/readPairs/{{preGroup}}_{chr}_{combo}',
@@ -719,21 +715,55 @@ rule ASHICBin:
                    'ref_alt', 'ref_both-ref', 'ref_ref']),
         chromSizes = getChromSizes
     output:
-        directory('dat/ashic/binned/{preGroup}-{region}-{bin}-binned/')
+        directory(f'dat/ashic/binned/{{preGroup}}-{{region}}-{BASE_BIN}-binned/')
     params:
+        bin = BASE_BIN,
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region]
     log:
-        'logs/ASHICBin/{preGroup}-{region}-{bin}.log'
+        'logs/ASHICbin/{preGroup}-{region}.log'
     conda:
         f'{ENVS}/ashic.yaml'
     shell:
-        'ashic-data binning --res {wildcards.bin} --chrom {params.chr} '
+        'ashic-data binning --res {params.bin} --chrom {params.chr} '
         '--c1 1 --p1 2 --a1 3 --c2 4 --p2 5 --a2 6 '
         '--genome {input.chromSizes} '
         '--start {params.start} --end {params.end} '
-        '{wildcards.preGroup} {output} &> {log}'
+        'dat/ashic/readPairs/{wildcards.preGroup} {output} &> {log}'
+
+
+rule ASHICpack:
+    input:
+        rules.ASHICbin.output
+    output:
+        directory(f'dat/ashic/packed/{{preGroup}}-{{region}}-{BASE_BIN}-packed/')
+    log:
+        'logs/ASHICpack/{preGroup}-{region}.log'
+    conda:
+        f'{ENVS}/ashic.yaml'
+    shell:
+        'ashic-data pack {input} {output} &> {log}'
+
+
+rule ASHIC:
+    input:
+        rules.ASHICpack.output
+    output:
+        directory(f'dat/ashic/imputed/{{preGroup}}-{{region}}-{BASE_BIN}-imputed/')
+    params:
+        model = 'ASHIC-ZIPM',
+        diag = 0,
+        maxIter = 30,
+        seed = 0
+    log:
+        'logs/ASHIC/{preGroup}-{region}.log'
+    conda:
+        f'{ENVS}/ashic.yaml'
+    shell:
+        'ashic -i {input}/*.pickle -o {output} --model {params.model} '
+        '--diag {params.diag} --seed {params.seed} '
+        '--max-iter {params.maxIter} &> {log}'
 
 
 rule mergeSNPsplit:
