@@ -192,9 +192,10 @@ rule all:
          if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
          if (config['createValidBam'] and regionBin) else []),
-        (expand('dat/ashic/imputed/{group}-{region}-{bin}-imputed',
-            group=HiC.originalGroups(), region=regionBin.keys(), bin=BASE_BIN)
+        (expand('dat/matrix/{region}/base/raw/{group}_a{allele}-{region}-ASHIC.{bin}.homer',
+            group=HiC.originalGroups(), region=regionBin.keys(), bin=BASE_BIN, allele=['1','2'])
           if ALLELE_SPECIFIC else [])
+
 
 if ALLELE_SPECIFIC:
     rule maskPhased:
@@ -719,7 +720,7 @@ rule ASHICbin:
     params:
         bin = BASE_BIN,
         chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        start = lambda wc: REGIONS['start'][wc.region],
         end = lambda wc: REGIONS['end'][wc.region]
     log:
         'logs/ASHICbin/{preGroup}-{region}.log'
@@ -754,7 +755,7 @@ rule ASHIC:
     params:
         model = 'ASHIC-ZIPM',
         diag = 0,
-        maxIter = 30,
+        maxIter = 100,
         seed = 0
     log:
         'logs/ASHIC/{preGroup}-{region}.log'
@@ -764,6 +765,40 @@ rule ASHIC:
         'ashic -i {input}/*.pickle -o {output} --model {params.model} '
         '--diag {params.diag} --seed {params.seed} '
         '--max-iter {params.maxIter} &> {log}'
+
+
+rule ASHIC2homer:
+    input:
+        rules.ASHIC.output
+    output:
+        f'dat/matrix/{{region}}/base/raw/{{preGroup}}_a{{allele}}-{{region}}-ASHIC.{BASE_BIN}.homer'
+    params:
+        bin = BASE_BIN,
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region],
+        mat = lambda wc: 't_mm.txt' if wc.allele == '1' else 't_pp.txt'
+    log:
+        'logs/ASHIC/{preGroup}-a{allele}-{region}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/ashic2homer.py {input}/matrices/{params.mat} '
+        '--chrom {params.chr} --start {params.start} --binSize {params.bin} '
+        '> {output} 2> {log} '
+
+
+rule ASHIChomerToH5:
+    input:
+        rules.ASHIC2homer.output
+    output:
+        f'dat/matrix/{{region}}/base/raw/{{preGroup}}_a{{allele}}-{{region}}-ASHIC.{BASE_BIN}.h5'
+    log:
+        'logs/ASHIChomerToH5/{preGroup}-a{allele}-{region}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicConvertFormat --matrices {input} --outFileName {output} '
+        '--inputFormat homer --outputFormat h5 &> {log}'
 
 
 rule mergeSNPsplit:
@@ -932,9 +967,17 @@ rule sumReplicates:
         '&> {log} || touch {output}'
 
 
+def mergeBinInput(wc):
+    """ If allele specific then matrix is built by ASHIC not hicexplorer """
+    if ALLELE_SPECIFIC:
+        return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}-ASHIC.{BASE_BIN}.h5'
+    else:
+        return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}.{BASE_BIN}.h5'
+
+
 rule mergeBins:
     input:
-        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}.h5'
+        mergeBinInput
     output:
         'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
     params:
@@ -1288,7 +1331,9 @@ rule createConfig:
     params:
         tracks = getTracks,
         depth = lambda wc: int(REGIONS['length'][wc.region]),
-        colourmap = config['colourmap']
+        colourmap = config['colourmap'],
+        # Set to manually extract vMin, vMax (to fix bug in ASHIC scale)
+        scale = lambda wc: '--manualScale' if ALLELE_SPECIFIC else ''
     group:
         'processHiC'
     conda:
@@ -1300,7 +1345,7 @@ rule createConfig:
         '--insulations {input.insulations} --log '
         '--loops {input.loops} --colourmap {params.colourmap} '
         '--stripes {input.forwardStripe} {input.reverseStripe} '
-        '--bigWig PCA1,{input.pca} '
+        '--bigWig PCA1,{input.pca} {params.scale} '
         '--tads {input.tads} {params.tracks} '
         '--depth {params.depth} > {output} 2> {log}'
 
@@ -1524,10 +1569,30 @@ rule straw:
         'BP {wildcards.bin} {output} &> {log}'
 
 
+rule reformatSUTM:
+    input:
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.gz'
+    output:
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-sutm.txt'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region],
+    group:
+        'HiCcompare'
+    log:
+        'logs/reformatSUTM/{region}/{bin}/{all}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/homer2sutm.py {input} --chrom {params.chr} '
+        '--start {params.start} --binSize {wildcards.bin} '
+        '> {output} 2> {log}'
+
+
 rule HiCcompare:
     input:
-        'dat/matrix/{region}/{bin}/{group1}-{region}-{bin}-sutm.txt',
-        'dat/matrix/{region}/{bin}/{group2}-{region}-{bin}-sutm.txt'
+        'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-sutm.txt',
+        'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-sutm.txt'
     output:
         all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
         sig = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',

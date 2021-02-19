@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import os
+import numpy as np
 import argparse
+from hicmatrix import HiCMatrix as hm
 
 def main():
 
@@ -76,6 +78,9 @@ def main():
     parser.add_argument(
         '--vMax', type=float,
         help = 'Maximum score value for matrix.')
+    parser.add_argument(
+        '--manualScale', default=False, action='store_true',
+        help='Read matrix and set max value to max contact count.')
 
     args = parser.parse_args()
     func = args.function
@@ -97,10 +102,13 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 bigWig, bed, compare, sumLogFC, sumLogFC_title, stripes,
-                depth, colourmap, vMin, vMax, flip):
+                depth, colourmap, vMin, vMax, flip, manualScale):
 
 
     print('[spacer]')
+    if manualScale:
+        # ASHIC matrices are missing diagonal 1, so manully set
+        vMax = np.percentile(hm.hiCMatrix(matrix).matrix.A.diagonal(2), 80)
     if matrix and not_empty(matrix):
         write_matrix(matrix, cmap=colourmap, depth=depth,
             vMin=vMin, vMax=vMax, log=log)
