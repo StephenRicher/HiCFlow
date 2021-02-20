@@ -82,6 +82,7 @@ default_config = {
     'plotRep':           True,
     'colourmap':         'Purples',
     'multiQCconfig':     None,
+    'rescalePKL':        False,
     'groupJobs':         False,
 }
 
@@ -152,13 +153,15 @@ HiC_mode = ([
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=regionBin.keys()),
-     expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}.pkl',
-        tool=tools, dir=['up', 'down', 'all'], mode=['', '-binary'],
-        compare=HiC.groupCompares(), bin=binRegion.keys()),
-     expand('intervals/{all}-{bin}-{method}.pkl',
-        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
-        bin=binRegion.keys(), method=['PCA', 'TADinsulation', 'TADboundaries']),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
+rescalePKL = ([
+    expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}.pkl',
+            tool=tools, dir=['up', 'down', 'all'], mode=['', '-binary'],
+            compare=HiC.groupCompares(), bin=binRegion.keys()),
+    expand('intervals/{all}-{bin}-{method}.pkl',
+            all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+            bin=binRegion.keys(),
+            method=['PCA', 'TADinsulation', 'TADboundaries'])])
 
 
 def getChromSizes(wc):
@@ -195,7 +198,8 @@ rule all:
          if (config['createValidBam'] and regionBin) else []),
         (expand('dat/matrix/{region}/base/raw/{group}_a{allele}-{region}-ASHIC.{bin}.homer',
             group=HiC.originalGroups(), region=regionBin.keys(), bin=BASE_BIN, allele=['1','2'])
-          if ALLELE_SPECIFIC else [])
+          if ALLELE_SPECIFIC else []),
+        rescalePCL if config['rescalePKL'] else []
 
 
 if ALLELE_SPECIFIC:
@@ -792,7 +796,7 @@ rule ASHIC2homer:
     group:
         'ASHIC'
     log:
-        'logs/ASHIC/{preGroup}-a{allele}-{region}.log'
+        'logs/ASHIC2homer/{preGroup}-a{allele}-{region}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
