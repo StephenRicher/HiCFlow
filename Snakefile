@@ -104,6 +104,12 @@ regionBin, binRegion = filterRegions(REGIONS, config['resolution']['bins'], nbin
 
 # Turn of phasing if allele specific mode is running
 config['phase'] = False if ALLELE_SPECIFIC else config['phase']
+# Turn off plotRep for allele specific mode
+if config['plotRep'] and ALLELE_SPECIFIC:
+    print('Per replicate plots not availale in allele specific mode '
+          'because replicates are merged for ASHIC. Setting plotRep '
+          'to False.', file=sys.stderr)
+    config['plotRep'] = False
 
 if config['phase']:
     if config['gatk']['all_known']:
@@ -158,7 +164,7 @@ HiC_mode = ([
         vis=vis, group=HiC.groups(),
         bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}.png',
-        all=(HiC.all() if (config['plotRep'] and not ALLELE_SPECIFIC) else list(HiC.groups())),
+        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region],
         norm=norm) for region in regionBin],
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
