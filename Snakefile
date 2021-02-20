@@ -1424,7 +1424,7 @@ rule distanceNormalise:
     params:
         method = 'obs_exp'
     group:
-        'plotObsExp'
+        'processHiC'
     log:
         'logs/distanceNormalise/{all}-{region}-{bin}.log'
     conda:
@@ -1446,8 +1446,6 @@ rule plotMatrix:
         title = '"{all} : {region} at {bin} bin size"',
         dpi = 600,
         colour = 'YlGn'
-    group:
-        'plotObsExp'
     log:
         'logs/plotMatrix/{all}-{region}-{bin}.log'
     conda:
