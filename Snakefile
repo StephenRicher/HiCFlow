@@ -685,16 +685,16 @@ rule reformatASHIC:
         dir = directory('dat/ashic/readPairs/{preSample}/')
     params:
         prefix = lambda wc: f'dat/ashic/readPairs/{wc.preSample}/'
-    group:
-        'prepareASHIC'
     log:
         'logs/reformatASHIC/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
     shell:
         '(touch {output.readPairs} && awk -f {SCRIPTS}/processSNPsplit.awk '
-        '-v prefix={params.prefix} <(samtools cat {input} | samtools view)) '
-        '&> {log}'
+        '-v prefix={params.prefix} '
+        '<(samtools cat {input} | samtools view -@ {threads})) &> {log}'
 
 
 rule mergeASHIC:
@@ -705,8 +705,6 @@ rule mergeASHIC:
             chr=wc.chr, combo=wc.combo)
     output:
         'dat/ashic/readPairs/{preGroup}_{chr}_{combo}'
-    group:
-        'prepareASHIC'
     log:
         'logs/mergeAshic/{preGroup}-{chr}-{combo}.log'
     conda:
