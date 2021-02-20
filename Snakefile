@@ -71,16 +71,19 @@ default_config = {
     'resolution':
         {'base':          5000        ,
          'bins':         [5000, 10000],},
+    'plotParams':
+        {'distanceNorm': True         ,
+         'plain'       : True         ,
+         'raw'         : True         ,
+         'colourmap'   : 'Purples'    ,},
     'distanceTransform': True,
     'plot_coordinates':  None,
-    'distanceNorm':      True,
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
     'runQC':             True,
     'runHiCRep':         True,
     'plotRep':           True,
-    'colourmap':         'Purples',
     'multiQCconfig':     None,
     'rescalePKL':        False,
     'groupJobs':         False,
@@ -122,6 +125,7 @@ wildcard_constraints:
     read = r'R[12]',
     bin = r'\d+',
     mode = r'SNP|INDEL',
+    norm = r'raw|KR',
     set = r'logFC|sig|fdr|adjIF1|adjIF2',
     adjIF = r'adjIF1|adjIF2',
     compare = r'HiCcompare|multiHiCcompare',
@@ -139,17 +143,24 @@ COORDS = load_coords([config['plot_coordinates'], config['regions']],
 tools = (
     ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
     else ['HiCcompare'])
+
+# Set whether to print a plain HiC map in addiion to a custom
+vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
+# Set whether to print a raw HiC map in addiion to a KR
+norm = ['raw', 'KR'] if config['plotParams']['plain'] else ['KR']
 HiC_mode = ([
     [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
         region=region, coords=COORDS[region], set=['logFC'],
         compare=HiC.groupCompares(), bin=regionBin[region],
         tool=tools) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coords}-{bin}.png',
-        region=region, coords=COORDS[region],
-        group=HiC.groups(), bin=regionBin[region]) for region in regionBin],
-    [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png',
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}.png',
+        region=region, coords=COORDS[region], norm=norm,
+        vis=vis, group=HiC.groups(),
+        bin=regionBin[region]) for region in regionBin],
+    [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
-        region=region, bin=regionBin[region]) for region in regionBin],
+        region=region, bin=regionBin[region],
+        norm=norm) for region in regionBin],
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=regionBin.keys()),
@@ -1009,30 +1020,25 @@ rule mergeBins:
         '--outFileName {output} &> {log} || touch {output}'
 
 
-rule IceMatrix:
+rule correctMatrix:
     input:
         'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
     output:
-        plot = 'qc/IceMatrix/{all}-{region}-{bin}-diagnosic_plot.png',
-        matrix = 'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.h5'
-    params:
-        iternum = 1000,
-        upper_threshold = 5
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.h5'
     group:
         'processHiC'
     log:
-        'logs/IceMatrix/{all}-{region}-{bin}.log'
+        'logs/correctMatrix/{all}-{region}-{bin}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'bash {SCRIPTS}/hicCorrect.sh -p {output.plot} '
-        '-o {output.matrix} -u {params.upper_threshold} '
-        '-i {params.iternum} {input} &> {log} || touch {output}'
+        'hicCorrectMatrix correct --matrix {input} --correctionMethod KR '
+        '--outFileName {output} &> {log} || touch {output}'
 
 
 rule TadInsulation:
     input:
-        rules.IceMatrix.output.matrix
+        rules.correctMatrix.output
     output:
         expand(
             'dat/matrix/{{region}}/{{bin}}/tads/{{all}}-{{region}}-{{bin}}{ext}',
@@ -1113,7 +1119,7 @@ rule rescaleTADboundaries:
 
 rule detectLoops:
     input:
-        rules.IceMatrix.output.matrix
+        rules.correctMatrix.output
     output:
         'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}.bedgraph'
     params:
@@ -1147,7 +1153,7 @@ rule detectLoops:
 
 rule hicPCA:
     input:
-        rules.IceMatrix.output.matrix
+        rules.correctMatrix.output
     output:
         'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}.bedgraph'
     params:
@@ -1227,9 +1233,9 @@ rule reformatHomer:
 
 rule reformatNxN:
     input:
-        'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.gz'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.gz'
     output:
-        'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.nxn.tsv'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.nxn.tsv'
     group:
         'processHiC'
     log:
@@ -1310,7 +1316,7 @@ rule reformatDomains:
 
 rule computeStripeScore:
     input:
-        'dat/matrix/{region}/{bin}/ice/{all}-{region}-{bin}.gz'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.gz'
     output:
         forward = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-forwardStripe.bedgraph',
         rev = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-reverseStripe.bedgraph'
@@ -1325,6 +1331,24 @@ rule computeStripeScore:
         '{output.forward} {output.rev} &> {log} '
 
 
+rule distanceNormalise:
+    input:
+        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}.h5'
+    output:
+        'dat/matrix/{region}/{bin}/{norm}/obs_exp/{all}-{region}-{bin}.h5'
+    params:
+        method = 'obs_exp'
+    group:
+        'processHiC'
+    log:
+        'logs/distanceNormalise/{all}-{region}-{bin}-{norm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicTransform -m {input} --method {params.method} -o {output} '
+        '&> {log} || touch {output}'
+
+
 def getTracks(wc):
     """ Build track command for generate config """
     command = ''
@@ -1337,10 +1361,25 @@ def getTracks(wc):
 
 def getMatrix(wc):
     """ Return either normal or obs_exp matrix """
-    if config['distanceNorm']:
-        return 'dat/matrix/{region}/{bin}/ice/obs_exp/{group}-{region}-{bin}.h5'
+    if config['plotParams']['distanceNorm']:
+        return 'dat/matrix/{region}/{bin}/{norm}/obs_exp/{group}-{region}-{bin}.h5'
     else:
-        return 'dat/matrix/{region}/{bin}/ice/{group}-{region}-{bin}.h5'
+        return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}.h5'
+
+
+def buildCommand():
+    """ Build shell command for plain or decorated config """
+    command = (
+        'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
+        '{params.log} --colourmap {params.colourmap} {params.tracks} '
+        '--depth {params.depth} {params.vMin} {params.vMax} ')
+    if '{output}'.endswith('custom.ini'):
+        #'--stripes {input.forwardStripe} {input.reverseStripe} '
+        command += (
+            '--insulations {input.insulations} --loops {input.loops} '
+            '--bigWig PCA1,{input.pca} --tads {input.tads} ')
+    command += '> {output} 2> {log}'
+    return command
 
 
 rule createConfig:
@@ -1353,29 +1392,22 @@ rule createConfig:
         #forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
         #reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{bin}.ini'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{bin}-{vis}.ini'
     params:
         tracks = getTracks,
         depth = lambda wc: int(REGIONS['length'][wc.region]),
-        colourmap = config['colourmap'],
-        vMin = '--vMin 0' if config['distanceNorm'] else '',
-        vMax = '--vMax 2' if config['distanceNorm'] else '',
-        log = '' if config['distanceNorm'] else '--log'
+        colourmap = config['plotParams']['colourmap'],
+        vMin = '--vMin 0' if config['plotParams']['distanceNorm'] else '',
+        vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
+        log = '' if config['plotParams']['distanceNorm'] else '--log'
     group:
         'processHiC'
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/createConfig/{region}/{bin}/{group}.log'
+        'logs/createConfig/{group}-{region}-{bin}-{norm}-{vis}.log'
     shell:
-        'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '#--flip '
-        '--insulations {input.insulations} {params.log} '
-        '--loops {input.loops} --colourmap {params.colourmap} '
-        #'--stripes {input.forwardStripe} {input.reverseStripe} '
-        '{params.vMin} {params.vMax} '
-        '--bigWig PCA1,{input.pca} '
-        '--tads {input.tads} {params.tracks} '
-        '--depth {params.depth} > {output} 2> {log}'
+        buildCommand()
 
 
 def setRegion(wc):
@@ -1393,17 +1425,17 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coord}-{bin}.png'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}.png'
     params:
         region = setRegion,
-        title = '"{group} : {region} at {bin} bin size"',
+        title = '"{group} : {region} at {bin} bin size ({norm})"',
         dpi = 600
     group:
         'processHiC'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{region}/{bin}/{group}-{coord}.log'
+        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}.log'
     threads:
         THREADS
     shell:
@@ -1414,38 +1446,20 @@ rule plotHiC:
         '--dpi {params.dpi} &> {log}'
 
 
-rule distanceNormalise:
-    input:
-        rules.IceMatrix.output.matrix
-    output:
-        'dat/matrix/{region}/{bin}/ice/obs_exp/{all}-{region}-{bin}.h5'
-    params:
-        method = 'obs_exp'
-    group:
-        'processHiC'
-    log:
-        'logs/distanceNormalise/{all}-{region}-{bin}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicTransform -m {input} --method {params.method} -o {output} '
-        '&> {log} || touch {output}'
-
-
 rule plotMatrix:
     input:
         rules.distanceNormalise.output
     output:
-        'plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}.png'
+        'plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
-        title = '"{all} : {region} at {bin} bin size"',
+        title = '"{all} : {region} at {bin} bin size ({norm})"',
         dpi = 600,
         colour = 'YlGn'
     log:
-        'logs/plotMatrix/{all}-{region}-{bin}.log'
+        'logs/plotMatrix/{all}-{region}-{bin}-{norm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
