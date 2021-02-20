@@ -158,7 +158,7 @@ HiC_mode = ([
         vis=vis, group=HiC.groups(),
         bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}.png',
-        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+        all=(HiC.all() if (config['plotRep'] and not ALLELE_SPECIFIC) else list(HiC.groups())),
         region=region, bin=regionBin[region],
         norm=norm) for region in regionBin],
      expand('qc/matrixCoverage/{region}/{all}-coverage.png',
