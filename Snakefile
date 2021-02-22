@@ -52,8 +52,8 @@ default_config = {
          'logFC' :       1            ,
          'multi' :       False        ,},
     'compareMatrices':
-        {'vMin'       : -2.5          ,
-         'vMax'       :  2.5          ,
+        {'vMin'       : -4            ,
+         'vMax'       :  4            ,
          'size'       :  1            ,
          'maxDistance':  1000000      ,
          'tads'       :  None         ,},
@@ -87,6 +87,7 @@ default_config = {
     'multiQCconfig':     None,
     'rescalePKL':        False,
     'groupJobs':         False,
+    'ASHIC':             True,
 }
 
 config = set_config(config, default_config)
@@ -138,7 +139,7 @@ wildcard_constraints:
     group = rf'{"|".join(HiC.groups())}',
     group1 = rf'{"|".join(HiC.groups())}',
     group2 = rf'{"|".join(HiC.groups())}',
-    sample = rf'{"|".join(HiC.samples())}',
+    sample = rf'{"|".join(HiC.samples(all=True))}',
     all = rf'{"|".join(HiC.samples() + list(HiC.groups()))}',
     combo = r'alt_alt|alt_both-ref|both-ref_both-ref|ref_alt|ref_both-ref|ref_ref'
 
@@ -692,8 +693,7 @@ rule SNPsplit:
 
 rule reformatASHIC:
     input:
-        expand('dat/snpsplit/{{preSample}}.hic.{ext}.bam',
-            ext=['G1_G1', 'G1_UA', 'G2_G2', 'G2_UA', 'G1_G2', 'UA_UA'])
+        'dat/mapped/{preSample}-validHiC.bam'
     output:
         readPairs = expand('dat/ashic/readPairs/{{preSample}}/{chr}_{combo}',
             chr=list(REGIONS['chr'].unique()),
@@ -852,9 +852,27 @@ rule mergeSNPsplit:
         'samtools merge -n {output} {input} &> {log}'
 
 
+rule mergeALLSNPsplit:
+    input:
+        rules.SNPsplit.output.bam
+    output:
+        temp('dat/snpsplit/merged/{preSample}.ASHIC.bam')
+    group:
+        'mergeALLSNPsplit'
+    log:
+        'logs/mergeSNPsplit/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools merge -n {output} {input} &> {log}'
+
+
 def splitInput(wc):
     if ALLELE_SPECIFIC:
-        return 'dat/snpsplit/merged/{sample}.hic.bam'
+        if config['ASHIC']:
+            return 'dat/snpsplit/merged/{sample}.ASHIC.bam'
+        else:
+            return 'dat/snpsplit/merged/{sample}.hic.bam'
     else:
         return 'dat/mapped/{sample}.fixed.bam'
 
@@ -863,7 +881,7 @@ rule splitPairedReads:
     input:
         splitInput
     output:
-        'dat/mapped/split/{sample}-{read}.bam'
+        temp('dat/mapped/split/{sample}-{read}.bam')
     params:
         flag = lambda wc: '0x40' if wc.read == 'R1' else '0x80'
     group:
@@ -1004,7 +1022,7 @@ rule sumReplicates:
 
 def mergeBinInput(wc):
     """ If allele specific then matrix is built by ASHIC not hicexplorer """
-    if ALLELE_SPECIFIC:
+    if ALLELE_SPECIFIC and config['ASHIC']:
         return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}-ASHIC.{BASE_BIN}.h5'
     else:
         return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}.{BASE_BIN}.h5'

@@ -158,15 +158,18 @@ class HiCSamples:
         """ Return all unmodified sample and group names """
         return list(self.originalSamples()) + list(self.originalGroups().keys())
 
-    def samples(self):
+    def samples(self, all=False):
         """ Return sample list """
         if self.alleleSpecific:
             samples = []
             for sample in self.originalSamples():
                 samples.extend(list(self.sample2Allele(sample)))
+                if all:
+                    samples.append(sample)
         else:
             samples = self.originalSamples().to_list()
         return samples
+
 
     def all(self):
         """ Return groups and samples as combined list """
