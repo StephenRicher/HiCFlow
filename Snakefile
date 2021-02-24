@@ -646,7 +646,7 @@ rule fixmateBam:
     input:
         rules.collateBam.output
     output:
-        temp('dat/mapped/{preSample}.fixed.bam')
+        'dat/mapped/{preSample}.fixed.bam'
     group:
         'prepareBAM'
     log:
