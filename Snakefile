@@ -125,7 +125,7 @@ wildcard_constraints:
     cellType = rf'{"|".join(HiC.cellTypes())}',
     preGroup = rf'{"|".join(HiC.originalGroups())}',
     preSample = rf'{"|".join(HiC.originalSamples())}',
-    chr = rf'{"|".join(list(REGIONS["chr"].unique()))}',
+    chr = rf'{"|".join(list(REGIONS["chr"].unique().astype(str)))}',
     region = rf'{"|".join(REGIONS.index)}',
     allele = r'[12]',
     rep = r'\d+',
