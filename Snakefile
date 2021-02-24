@@ -72,7 +72,7 @@ default_config = {
         {'base':          5000        ,
          'bins':         [5000, 10000],},
     'plotParams':
-        {'distanceNorm': True         ,
+        {'distanceNorm': False        ,
          'plain'       : True         ,
          'raw'         : True         ,
          'colourmap'   : 'Purples'    ,},
@@ -221,12 +221,28 @@ rule all:
 
 
 if ALLELE_SPECIFIC:
+
+    rule filterHomozygous:
+        input:
+            lambda wc: config['phased_vcf'][wc.cellType]
+        output:
+            'dat/genome/{cellType}-phasedHet.vcf'
+        group:
+            'prepareGenome'
+        log:
+            'logs/filterHomozygous/{cellType}.log'
+        conda:
+            f'{ENVS}/bedtools.yaml'
+        shell:
+            'bcftools view -e \'GT="hom"\' {input} > {output} 2> {log}
+
+
     rule maskPhased:
         input:
             genome = lambda wc: config['genome'][wc.cellType],
-            vcf = lambda wc: config['phased_vcf'][wc.cellType]
+            vcf = rules.filterHomozygous.output
         output:
-            'dat/genome/masked/{cellType}.fa'
+            'dat/genome/{cellType}-masked.fa'
         group:
             'prepareGenome'
         log:
@@ -241,7 +257,7 @@ if ALLELE_SPECIFIC:
 
 rule vcf2SNPsplit:
     input:
-        lambda wc: config['phased_vcf'][wc.cellType]
+        rules.filterHomozygous.output
     output:
         'snpsplit/{cellType}-snpsplit.txt'
     group:
