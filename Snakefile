@@ -255,19 +255,19 @@ if ALLELE_SPECIFIC:
             '-bed {input.vcf} -fo {output} 2> {log}'
 
 
-rule vcf2SNPsplit:
-    input:
-        rules.filterHomozygous.output
-    output:
-        'snpsplit/{cellType}-snpsplit.txt'
-    group:
-        'prepareGenome'
-    log:
-        'logs/vcf2SNPsplit/{cellType}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/reformatSNPsplit.py {input} > {output} 2> {log}'
+    rule vcf2SNPsplit:
+        input:
+            rules.filterHomozygous.output
+        output:
+            'snpsplit/{cellType}-snpsplit.txt'
+        group:
+            'prepareGenome'
+        log:
+            'logs/vcf2SNPsplit/{cellType}.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            'python {SCRIPTS}/reformatSNPsplit.py {input} > {output} 2> {log}'
 
 
 rule bgzipGenome:
