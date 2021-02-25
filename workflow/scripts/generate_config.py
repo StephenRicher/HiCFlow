@@ -43,6 +43,9 @@ def main():
         '--compare', default=False, action='store_true',
         help='Generate .ini file for HiC compare.')
     parser.add_argument(
+        '--plain', default=False, action='store_true',
+        help='If set ignore PCA, insulation, loops, stripes and TAD.')
+    parser.add_argument(
         '--matrix2',
         help = 'If --flip argumnet is called, use to plot a different HiC'
         'matrix as inverted.')
@@ -98,8 +101,13 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 bigWig, bed, compare, sumLogFC, sumLogFC_title, stripes,
-                depth, colourmap, vMin, vMax, flip):
+                depth, colourmap, vMin, vMax, flip, plain):
 
+    if plain:
+        loops = []
+        stripes = None
+        tads = []
+        insulations = None
 
     print('[spacer]')
     if matrix and not_empty(matrix):

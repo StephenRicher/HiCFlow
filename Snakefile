@@ -1407,21 +1407,6 @@ def getMatrix(wc):
         return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}.h5'
 
 
-def buildCommand():
-    """ Build shell command for plain or decorated config """
-    command = (
-        'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
-        '{params.log} --colourmap {params.colourmap} {params.tracks} '
-        '--depth {params.depth} {params.vMin} {params.vMax} ')
-    if '{output}'.endswith('custom.ini'):
-        #'--stripes {input.forwardStripe} {input.reverseStripe} '
-        command += (
-            '--insulations {input.insulations} --loops {input.loops} '
-            '--bigWig PCA1,{input.pca} --tads {input.tads} ')
-    command += '> {output} 2> {log}'
-    return command
-
-
 rule createConfig:
     input:
         matrix = getMatrix,
@@ -1439,7 +1424,8 @@ rule createConfig:
         colourmap = config['plotParams']['colourmap'],
         vMin = '--vMin 0' if config['plotParams']['distanceNorm'] else '',
         vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
-        log = '' if config['plotParams']['distanceNorm'] else '--log'
+        log = '' if config['plotParams']['distanceNorm'] else '--log',
+        plain = lambda wc: '--plain' if wc.vis == 'plain' else ''
     group:
         'processHiC'
     conda:
@@ -1447,7 +1433,11 @@ rule createConfig:
     log:
         'logs/createConfig/{group}-{region}-{bin}-{norm}-{vis}.log'
     shell:
-        buildCommand()
+        'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
+        '{params.log} --colourmap {params.colourmap} {params.tracks} '
+        '--depth {params.depth} {params.vMin} {params.vMax} {params.plain} '
+        '--insulations {input.insulations} --loops {input.loops} '
+        '--bigWig PCA1,{input.pca} --tads {input.tads} > {output} 2> {log}'
 
 
 def setRegion(wc):
