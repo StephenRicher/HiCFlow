@@ -64,22 +64,23 @@ start = as.integer(args[4])
 end = as.integer(args[5])
 binsize = as.integer(args[6])
 fdr = as.double(args[7])
-matrix1 = args[8]
-matrix2 = args[9]
+suffix = args[8]
+matrix1 = args[9]
+matrix2 = args[10]
 
 dir.create(qcdir, recursive = TRUE)
 
 group1 = get_group(matrix1)
 group2 = get_group(matrix2)
 
-loess_plot = paste(qcdir, '/', group1, '-vs-', group2, '-loess.png', sep = '')
-filter_plot = paste(qcdir, '/', group1, '-vs-', group2, '-filter_params.png', sep = '')
-compare_plot = paste(qcdir, '/', group1, '-vs-', group2, '-hicCompare.png', sep = '')
-out_links = paste(outdir, '/', group1, '-vs-', group2, '.links', sep = '')
-out_matrix = paste(outdir, '/', group1, '-vs-', group2, '.homer', sep = '')
-out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig.homer', sep = '')
-outIF1 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1.homer', sep = '')
-outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2.homer', sep = '')
+loess_plot = paste(qcdir, '/', group1, '-vs-', group2, '-loess', suffix, '.png', sep = '')
+filter_plot = paste(qcdir, '/', group1, '-vs-', group2, '-filter_params', suffix, '.png', sep = '')
+compare_plot = paste(qcdir, '/', group1, '-vs-', group2, '-hicCompare', suffix, '.png', sep = '')
+out_links = paste(outdir, '/', group1, '-vs-', group2, suffix, '.links', sep = '')
+out_matrix = paste(outdir, '/', group1, '-vs-', group2, suffix, '.homer', sep = '')
+out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig', suffix, '.homer', sep = '')
+outIF1 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1', suffix, '.homer', sep = '')
+outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2', suffix, '.homer', sep = '')
 
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
 
@@ -120,5 +121,3 @@ hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
   out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
-
-

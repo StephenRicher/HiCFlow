@@ -50,6 +50,12 @@ def splitName(file):
     """ Return sample and binsize """
     path, name = os.path.split(file)
     name = name.split('.')[0]
+    if name.endswith('-ASHIC'):
+        name = name[:-6]
+    elif name.endswith('-SNPsplit'):
+        name = name[:-9]
+    elif name.endswith('-full'):
+        name = name[:-5]
     sample, binSize = name.rsplit('-', 1)
     return sample, int(binSize)
 

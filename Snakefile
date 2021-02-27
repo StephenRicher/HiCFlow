@@ -103,14 +103,20 @@ REGIONS = load_regions(config['regions'], adjust=BASE_BIN)
 # Remove region-binSize combinations with too few bins
 regionBin, binRegion = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
 
-# Turn of phasing if allele specific mode is running
-config['phase'] = False if ALLELE_SPECIFIC else config['phase']
-# Turn off plotRep for allele specific mode
-if config['plotRep'] and ALLELE_SPECIFIC:
-    print('Per replicate plots not availale in allele specific mode '
-          'because replicates are merged for ASHIC. Setting plotRep '
-          'to False.', file=sys.stderr)
-    config['plotRep'] = False
+if ALLELE_SPECIFIC:
+    # Turn of phasing if allele specific mode is running
+    config['phase'] = False
+    # Turn off plotRep for allele specific mode
+    if config['ASHIC']:
+        if config['plotRep']:
+            print('Per replicate plots not availale in allele specific mode '
+                  'because replicates are merged for ASHIC. Setting plotRep '
+                  'to False.', file=sys.stderr)
+            config['plotRep'] = False
+        if config['createValidBam']:
+            print('createValid bam not available in ASHIC mode. Setting '
+                  'createValidBam to False.', file=sys.stderr)
+            config['createValidBam'] = False
 
 if config['phase']:
     if config['gatk']['all_known']:
@@ -133,6 +139,7 @@ wildcard_constraints:
     bin = r'\d+',
     mode = r'SNP|INDEL',
     norm = r'raw|KR',
+    pm = r'-ASHIC|-SNPsplit' if ALLELE_SPECIFIC else r'-full',
     set = r'logFC|sig|fdr|adjIF1|adjIF2',
     adjIF = r'adjIF1|adjIF2',
     compare = r'HiCcompare|multiHiCcompare',
@@ -155,30 +162,36 @@ tools = (
 vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
 norm = ['raw', 'KR'] if config['plotParams']['plain'] else ['KR']
+# Set plot suffix for allele specific mode
+if ALLELE_SPECIFIC:
+    phaseMode = '-ASHIC' if config['ASHIC'] else '-SNPsplit'
+else:
+    phaseMode = '-full'
+
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}.png',
-        region=region, coords=COORDS[region], set=['logFC'],
+    [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}{pm}.png',
+        region=region, coords=COORDS[region], set=['logFC'], pm=phaseMode,
         compare=HiC.groupCompares(), bin=regionBin[region],
         tool=tools) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}.png',
-        region=region, coords=COORDS[region], norm=norm,
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}{pm}.png',
+        region=region, coords=COORDS[region], norm=norm, pm=phaseMode,
         vis=vis, group=HiC.groups(),
         bin=regionBin[region]) for region in regionBin],
-    [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}.png',
+    [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}{pm}.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
-        region=region, bin=regionBin[region],
+        region=region, bin=regionBin[region], pm=phaseMode,
         norm=norm) for region in regionBin],
-     expand('qc/matrixCoverage/{region}/{all}-coverage.png',
+     expand('qc/matrixCoverage/{region}/{all}-coverage{pm}.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
-        region=regionBin.keys()),
+        region=regionBin.keys(), pm=phaseMode),
     'qc/hicup/.tmp.aggregatehicupTruncate'])
 rescalePKL = ([
-    expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}.pkl',
+    expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}{pm}.pkl',
             tool=tools, dir=['up', 'down', 'all'], mode=['', '-binary'],
-            compare=HiC.groupCompares(), bin=binRegion.keys()),
-    expand('intervals/{all}-{bin}-{method}.pkl',
+            pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
+    expand('intervals/{all}-{bin}-{method}{pm}.pkl',
             all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
-            bin=binRegion.keys(),
+            bin=binRegion.keys(), pm=phaseMode,
             method=['PCA', 'TADinsulation', 'TADboundaries'])])
 
 
@@ -212,11 +225,9 @@ rule all:
         ([expand('qc/hicrep/{region}-{bin}-hicrep.png', region=region,
             bin=regionBin[region]) for region in regionBin]
          if config['runHiCRep'] else []),
-        (expand('dat/mapped/{sample}-validHiC.bam', sample=HiC.samples())
+        (expand('dat/mapped/{sample}-validHiC{pm}.bam',
+            sample=HiC.samples(), pm=phaseMode)
          if (config['createValidBam'] and regionBin) else []),
-        (expand('dat/matrix/{region}/base/raw/{group}_a{allele}-{region}-ASHIC.{bin}.homer',
-            group=HiC.originalGroups(), region=regionBin.keys(), bin=BASE_BIN, allele=['1','2'])
-          if ALLELE_SPECIFIC else []),
         rescalePCL if config['rescalePKL'] else []
 
 
@@ -707,9 +718,161 @@ rule SNPsplit:
         '--hic --output_dir {params.outdir} &> {log}'
 
 
+rule mergeSNPsplit:
+    input:
+        'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_G{allele}.bam',
+        'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_UA.bam'
+    output:
+        temp('dat/snpsplit/merged/{preGroup}_a{allele}-{rep}.hic.bam')
+    group:
+        'SNPsplit'
+    log:
+        'logs/mergeSNPsplit/{preGroup}_a{allele}-{rep}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools merge -n {output} {input} &> {log}'
+
+
+rule mergeALLSNPsplit:
+    input:
+        rules.SNPsplit.output.bam
+    output:
+        temp('dat/snpsplit/merged/{preSample}.ASHIC.bam')
+    group:
+        'mergeALLSNPsplit'
+    log:
+        'logs/mergeSNPsplit/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools merge -n {output} {input} &> {log}'
+
+
+def splitInput(wc):
+    if ALLELE_SPECIFIC:
+        if config['ASHIC']:
+            return 'dat/snpsplit/merged/{sample}.ASHIC.bam'
+        else:
+            return 'dat/snpsplit/merged/{sample}.hic.bam'
+    else:
+        return 'dat/mapped/{sample}.fixed.bam'
+
+
+rule splitPairedReads:
+    input:
+        splitInput
+    output:
+        temp('dat/mapped/split/{sample}-{read}.bam')
+    params:
+        flag = lambda wc: '0x40' if wc.read == 'R1' else '0x80'
+    group:
+        'prepareBAM'
+    log:
+        'logs/splitPairedReads/{sample}-{read}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools view -@ {threads} -f {params.flag} -b {input} '
+        '> {output} 2> {log}'
+
+
+def getRestSites(wc):
+    """ Retrieve restSite files associated with sample wildcard """
+    try:
+        sample = wc.sample
+    except AttributeError:
+        sample = wc.preSample
+    try:
+        region=f'{wc.region}/'
+    except AttributeError:
+        region=''
+    return expand('dat/genome/{region}{cellType}-{re}-restSites.bed',
+        region=region,
+        cellType=HiC.sample2Cell()[sample],
+        re=HiC.restrictionSeqs()[sample])
+
+
+def getRestrictionSeqs(wc):
+    sequences = HiC.restrictionSeqs(removeCut=True)[wc.sample].values()
+    return ' '.join(sequences)
+
+
+def getDanglingSequences(wc):
+    sequences = HiC.restrictionSeqs(dangling=True)[wc.sample].values()
+    return ' '.join(sequences)
+
+
+rule buildBaseMatrix:
+    input:
+        bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=['R1', 'R2']),
+        restSites = getRestSites
+    output:
+        hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}{{pm}}.h5',
+        bam = 'dat/matrix/{region}/{sample}-{region}{pm}.bam',
+        qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}{{pm}}_QC')
+    params:
+        bin = BASE_BIN,
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region],
+        reSeqs = getRestrictionSeqs,
+        inputBufferSize = 400000,
+        danglingSequences = getDanglingSequences,
+        maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
+        minMappingQuality = config['HiCParams']['minMappingQuality'],
+        minDistance = config['HiCParams']['minDistance'],
+        removeSelfLigation = (
+            'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
+        keepSelfCircles = (
+            '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
+        skipDuplicationCheck = (
+            '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
+    log:
+        'logs/buildBaseMatrix/{sample}-{region}{pm}.log'
+    threads:
+        max(2, config['HiCParams']['threads'])
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicBuildMatrix --samFiles {input.bams} '
+        '--region {params.chr}:{params.start}-{params.end} '
+        '--restrictionCutFile {input.restSites} '
+        '--restrictionSequence {params.reSeqs} '
+        '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
+        '--minDistance {params.minDistance} '
+        '--minMappingQuality {params.minMappingQuality} '
+        '--removeSelfLigation {params.removeSelfLigation} '
+        '--danglingSequence {params.danglingSequences} '
+        '--inputBufferSize {params.inputBufferSize} '
+        '{params.keepSelfCircles} '
+        '{params.skipDuplicationCheck} --binSize {params.bin} '
+        '--outFileName {output.hic} --outBam {output.bam} '
+        '--QCfolder {output.qc} --threads {threads} '
+        '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
+
+
+rule mergeValidHiC:
+    input:
+        expand('dat/matrix/{region}/{{sample}}-{region}{{pm}}.bam',
+            region=regionBin.keys())
+    output:
+        'dat/mapped/{sample}-validHiC{pm}.bam'
+    log:
+        'logs/mergeValidHiC/{sample}{pm}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools merge -@ {threads} {output} {input} 2> {log}'
+
+
 rule reformatASHIC:
     input:
-        'dat/mapped/{preSample}-validHiC.bam'
+        'dat/mapped/{preSample}-ASHIC-validHiC.bam'
     output:
         readPairs = expand('dat/ashic/readPairs/{{preSample}}/{chr}_{combo}',
             chr=list(REGIONS['chr'].unique()),
@@ -840,7 +1003,7 @@ rule ASHIChomerToH5:
     input:
         rules.ASHIC2homer.output
     output:
-        f'dat/matrix/{{region}}/base/raw/{{preGroup}}_a{{allele}}-{{region}}-ASHIC.{BASE_BIN}.h5'
+        f'dat/matrix/{{region}}/base/raw/{{preGroup}}_a{{allele}}-{{region}}.{BASE_BIN}-ASHIC.h5'
     group:
         'ASHIC'
     log:
@@ -850,158 +1013,6 @@ rule ASHIChomerToH5:
     shell:
         'hicConvertFormat --matrices {input} --outFileName {output} '
         '--inputFormat homer --outputFormat h5 &> {log}'
-
-
-rule mergeSNPsplit:
-    input:
-        'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_G{allele}.bam',
-        'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_UA.bam'
-    output:
-        temp('dat/snpsplit/merged/{preGroup}_a{allele}-{rep}.hic.bam')
-    group:
-        'SNPsplit'
-    log:
-        'logs/mergeSNPsplit/{preGroup}_a{allele}-{rep}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools merge -n {output} {input} &> {log}'
-
-
-rule mergeALLSNPsplit:
-    input:
-        rules.SNPsplit.output.bam
-    output:
-        temp('dat/snpsplit/merged/{preSample}.ASHIC.bam')
-    group:
-        'mergeALLSNPsplit'
-    log:
-        'logs/mergeSNPsplit/{preSample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools merge -n {output} {input} &> {log}'
-
-
-def splitInput(wc):
-    if ALLELE_SPECIFIC:
-        if config['ASHIC']:
-            return 'dat/snpsplit/merged/{sample}.ASHIC.bam'
-        else:
-            return 'dat/snpsplit/merged/{sample}.hic.bam'
-    else:
-        return 'dat/mapped/{sample}.fixed.bam'
-
-
-rule splitPairedReads:
-    input:
-        splitInput
-    output:
-        temp('dat/mapped/split/{sample}-{read}.bam')
-    params:
-        flag = lambda wc: '0x40' if wc.read == 'R1' else '0x80'
-    group:
-        'prepareBAM'
-    log:
-        'logs/splitPairedReads/{sample}-{read}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools view -@ {threads} -f {params.flag} -b {input} '
-        '> {output} 2> {log}'
-
-
-def getRestSites(wc):
-    """ Retrieve restSite files associated with sample wildcard """
-    try:
-        sample = wc.sample
-    except AttributeError:
-        sample = wc.preSample
-    try:
-        region=f'{wc.region}/'
-    except AttributeError:
-        region=''
-    return expand('dat/genome/{region}{cellType}-{re}-restSites.bed',
-        region=region,
-        cellType=HiC.sample2Cell()[sample],
-        re=HiC.restrictionSeqs()[sample])
-
-
-def getRestrictionSeqs(wc):
-    sequences = HiC.restrictionSeqs(removeCut=True)[wc.sample].values()
-    return ' '.join(sequences)
-
-
-def getDanglingSequences(wc):
-    sequences = HiC.restrictionSeqs(dangling=True)[wc.sample].values()
-    return ' '.join(sequences)
-
-
-rule buildBaseMatrix:
-    input:
-        bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=['R1', 'R2']),
-        restSites = getRestSites
-    output:
-        hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
-        bam = 'dat/matrix/{region}/{sample}-{region}.bam',
-        qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}_QC')
-    params:
-        bin = BASE_BIN,
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
-        reSeqs = getRestrictionSeqs,
-        inputBufferSize = 400000,
-        danglingSequences = getDanglingSequences,
-        maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
-        minMappingQuality = config['HiCParams']['minMappingQuality'],
-        minDistance = config['HiCParams']['minDistance'],
-        removeSelfLigation = (
-            'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
-        keepSelfCircles = (
-            '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
-        skipDuplicationCheck = (
-            '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
-    log:
-        'logs/buildBaseMatrix/{sample}-{region}.log'
-    threads:
-        max(2, config['HiCParams']['threads'])
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicBuildMatrix --samFiles {input.bams} '
-        '--region {params.chr}:{params.start}-{params.end} '
-        '--restrictionCutFile {input.restSites} '
-        '--restrictionSequence {params.reSeqs} '
-        '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
-        '--minDistance {params.minDistance} '
-        '--minMappingQuality {params.minMappingQuality} '
-        '--removeSelfLigation {params.removeSelfLigation} '
-        '--danglingSequence {params.danglingSequences} '
-        '--inputBufferSize {params.inputBufferSize} '
-        '{params.keepSelfCircles} '
-        '{params.skipDuplicationCheck} --binSize {params.bin} '
-        '--outFileName {output.hic} --outBam {output.bam} '
-        '--QCfolder {output.qc} --threads {threads} '
-        '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
-
-
-rule mergeValidHiC:
-    input:
-        expand('dat/matrix/{region}/{{sample}}-{region}.bam',
-            region=regionBin.keys())
-    output:
-        'dat/mapped/{sample}-validHiC.bam'
-    log:
-        'logs/mergeValidHiC/{sample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools merge -@ {threads} {output} {input} 2> {log}'
 
 
 def nonEmpty(wc, output, input):
@@ -1021,14 +1032,14 @@ def nonEmpty(wc, output, input):
 rule sumReplicates:
     input:
         lambda wc: expand(
-            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}.h5',
+            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}{{pm}}.h5',
             rep=HiC.groups()[wc.group], bin=BASE_BIN),
     output:
-        f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}.h5'
+        f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}{{pm}}.h5'
     params:
         nonEmpty = nonEmpty
     log:
-        'logs/sumReplicates/{group}-{region}.log'
+        'logs/sumReplicates/{group}-{region}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1046,13 +1057,13 @@ def mergeBinInput(wc):
 
 rule mergeBins:
     input:
-        mergeBinInput
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}{{pm}}.h5'
     output:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}{pm}.h5'
     params:
         nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
     log:
-        'logs/mergeBins/{all}-{region}-{bin}.log'
+        'logs/mergeBins/{all}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1062,13 +1073,13 @@ rule mergeBins:
 
 rule correctMatrix:
     input:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}{pm}.h5'
     output:
-        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}{pm}.h5'
     group:
         'processHiC'
     log:
-        'logs/correctMatrix/{all}-{region}-{bin}.log'
+        'logs/correctMatrix/{all}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1081,10 +1092,10 @@ rule TadInsulation:
         rules.correctMatrix.output
     output:
         expand(
-            'dat/matrix/{{region}}/{{bin}}/tads/{{all}}-{{region}}-{{bin}}{ext}',
+            'dat/matrix/{{region}}/{{bin}}/tads/{{all}}-{{region}}-{{bin}}{{pm}}{ext}',
             ext = ['_boundaries.bed', '_boundaries.gff', '_domains.bed',
                    '_score.bedgraph', '_zscore_matrix.h5']),
-        score = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}_tad_score.bm'
+        score = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}{pm}_tad_score.bm'
     params:
         method = 'fdr',
         bin = lambda wc: wc.bin,
@@ -1092,13 +1103,13 @@ rule TadInsulation:
         all = lambda wc: wc.all,
         min_depth = lambda wc: int(wc.bin) * 3,
         max_depth = lambda wc: int(wc.bin) * 10,
-        prefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}'
+        prefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}{pm}'
     group:
         'processHiC'
     threads:
         THREADS
     log:
-        'logs/TadInsulation/{all}-{region}-{bin}.log'
+        'logs/TadInsulation/{all}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1112,11 +1123,11 @@ rule TadInsulation:
 rule rescaleTADinsulation:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}_score.bedgraph',
+            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}{{pm}}_score.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{all}-{bin}-TADinsulation.pkl'
+        'intervals/{all}-{bin}-TADinsulation{pm}.pkl'
     params:
         regions = config['regions'],
         name = lambda wc: f'{wc.all}-{wc.bin}',
@@ -1124,7 +1135,7 @@ rule rescaleTADinsulation:
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleTADinsulations/{all}-{bin}.log'
+        'logs/rescaleTADinsulations/{all}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1137,18 +1148,18 @@ rule rescaleTADinsulation:
 rule rescaleTADboundaries:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}_boundaries.bed',
+            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}{{pm}}_boundaries.bed',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{all}-{bin}-TADboundaries.pkl'
+        'intervals/{all}-{bin}-TADboundaries{pm}.pkl'
     params:
         name = lambda wc: f'{wc.all}-{wc.bin}',
         regions = config['regions']
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleTADboundaries/{all}-{bin}.log'
+        'logs/rescaleTADboundaries/{all}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1161,7 +1172,7 @@ rule detectLoops:
     input:
         rules.correctMatrix.output
     output:
-        'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}.bedgraph'
+        'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}{pm}.bedgraph'
     params:
         peakWidth = 6,
         windowSize = 10,
@@ -1173,7 +1184,7 @@ rule detectLoops:
     group:
         'processHiC'
     log:
-        'logs/detectLoops/{all}-{region}-{bin}.log'
+        'logs/detectLoops/{all}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     threads:
@@ -1195,14 +1206,14 @@ rule hicPCA:
     input:
         rules.correctMatrix.output
     output:
-        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}.bedgraph'
+        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}{pm}.bedgraph'
     params:
         method = "dist_norm",
         format = 'bedgraph'
     group:
         'processHiC'
     log:
-        'logs/hicPCA/{all}-{region}-{bin}.log'
+        'logs/hicPCA/{all}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1216,13 +1227,13 @@ rule fixBedgraph:
     input:
         rules.hicPCA.output
     output:
-        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}-fix.bedgraph'
+        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}-fix{pm}.bedgraph'
     params:
         pos = lambda wc: REGIONS['end'][wc.region]
     group:
         'processHiC'
     log:
-        'logs/fixBedgraph/{all}-{region}-{bin}.log'
+        'logs/fixBedgraph/{all}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1233,11 +1244,11 @@ rule fixBedgraph:
 rule rescalePCA:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/PCA/{{all}}-{region}-{{bin}}-fix.bedgraph',
+            'dat/matrix/{region}/{{bin}}/PCA/{{all}}-{region}-{{bin}}-fix{{pm}}.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{all}-{bin}-PCA.pkl'
+        'intervals/{all}-{bin}-PCA{pm}.pkl'
     params:
         regions = config['regions'],
         name = lambda wc: f'{wc.all}-{wc.bin}',
@@ -1245,7 +1256,7 @@ rule rescalePCA:
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescalePCA/{all}-{bin}.log'
+        'logs/rescalePCA/{all}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1257,13 +1268,13 @@ rule rescalePCA:
 
 rule reformatHomer:
     input:
-        'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}{pm}.h5'
     output:
-        'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}.gz'
+        'dat/matrix/{region}/{bin}/{method}/{all}-{region}-{bin}{pm}.gz'
     group:
         'processHiC'
     log:
-        'logs/reformatHomer/{all}-{region}-{bin}-{method}.log'
+        'logs/reformatHomer/{all}-{region}-{bin}-{method}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1273,13 +1284,13 @@ rule reformatHomer:
 
 rule reformatNxN:
     input:
-        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.gz'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}{pm}.gz'
     output:
-        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.nxn.tsv'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}{pm}.nxn.tsv'
     group:
         'processHiC'
     log:
-        'logs/reformatNxN/{region}/{bin}/{all}.log'
+        'logs/reformatNxN/{region}/{bin}/{all}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1289,17 +1300,17 @@ rule reformatNxN:
 
 rule plotCoverage:
     input:
-        lambda wc: expand('dat/matrix/{{region}}/{bin}/raw/{{all}}-{{region}}-{bin}.gz',
+        lambda wc: expand('dat/matrix/{{region}}/{bin}/raw/{{all}}-{{region}}-{bin}{{pm}}.gz',
             bin=regionBin[wc.region])
     output:
-        'qc/matrixCoverage/{region}/{all}-coverage.png'
+        'qc/matrixCoverage/{region}/{all}-coverage{pm}.png'
     params:
         dpi = 300,
         nBins = 10000,
         fontSize = 12,
         nonEmpty = nonEmpty
     log:
-        'logs/plotCoverage/{region}/{all}.log'
+        'logs/plotCoverage/{region}/{all}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1312,16 +1323,16 @@ rule OnTAD:
     input:
         rules.reformatNxN.output
     output:
-        bed = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad.bed',
-        tad = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad.tad'
+        bed = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad{pm}.bed',
+        tad = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad{pm}.tad'
     params:
         chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         length = lambda wc: REGIONS['length'][wc.region],
-        outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad'
+        outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad{pm}'
     group:
         'processHiC'
     log:
-        'logs/OnTAD/{region}/{bin}/{all}.log'
+        'logs/OnTAD/{region}/{bin}/{all}{pm}.log'
     shell:
         '{SCRIPTS}/OnTAD {input} -o {params.outprefix} -bedout chr{params.chr} '
         '{params.length} {wildcards.bin} &> {log} || touch {output}'
@@ -1339,14 +1350,14 @@ rule reformatDomains:
     input:
         rules.OnTAD.output.bed
     output:
-        'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad_domains.bed'
+        'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}{pm}-ontad_domains.bed'
     params:
         scale = lambda wc: REGIONS['start'][wc.region],
         trimChr = setTrim
     group:
         'processHiC'
     log:
-        'logs/reformatDomains/{region}/{bin}/{all}.log'
+        'logs/reformatDomains/{region}/{bin}/{all}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1356,16 +1367,16 @@ rule reformatDomains:
 
 rule computeStripeScore:
     input:
-        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}.gz'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}{pm}.gz'
     output:
-        forward = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-forwardStripe.bedgraph',
-        rev = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-reverseStripe.bedgraph'
+        forward = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-forwardStripe{pm}.bedgraph',
+        rev = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-reverseStripe{pm}.bedgraph'
     group:
         'processHiC'
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/computeStripeScore/{all}-{region}-{bin}.log'
+        'logs/computeStripeScore/{all}-{region}-{bin}{pm}.log'
     shell:
         'python {SCRIPTS}/computeStripeScore.py {input} '
         '{output.forward} {output.rev} &> {log} '
@@ -1373,15 +1384,15 @@ rule computeStripeScore:
 
 rule distanceNormalise:
     input:
-        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}{pm}.h5'
     output:
-        'dat/matrix/{region}/{bin}/{norm}/obs_exp/{all}-{region}-{bin}.h5'
+        'dat/matrix/{region}/{bin}/{norm}/obs_exp/{all}-{region}-{bin}{pm}.h5'
     params:
         method = 'obs_exp'
     group:
         'processHiC'
     log:
-        'logs/distanceNormalise/{all}-{region}-{bin}-{norm}.log'
+        'logs/distanceNormalise/{all}-{region}-{bin}-{norm}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1402,22 +1413,22 @@ def getTracks(wc):
 def getMatrix(wc):
     """ Return either normal or obs_exp matrix """
     if config['plotParams']['distanceNorm']:
-        return 'dat/matrix/{region}/{bin}/{norm}/obs_exp/{group}-{region}-{bin}.h5'
+        return 'dat/matrix/{region}/{bin}/{norm}/obs_exp/{group}-{region}-{bin}{pm}.h5'
     else:
-        return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}.h5'
+        return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}{pm}.h5'
 
 
 rule createConfig:
     input:
         matrix = getMatrix,
-        loops = 'dat/matrix/{region}/{bin}/loops/{group}-{region}-{bin}.bedgraph',
-        insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}_tad_score.bm',
-        tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-ontad_domains.bed',
-        pca = 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix.bedgraph',
+        loops = 'dat/matrix/{region}/{bin}/loops/{group}-{region}-{bin}{pm}.bedgraph',
+        insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}{pm}_tad_score.bm',
+        tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}{pm}-ontad_domains.bed',
+        pca = 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix{pm}.bedgraph',
         #forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
         #reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{bin}-{vis}.ini'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{bin}-{vis}{pm}.ini'
     params:
         tracks = getTracks,
         depth = lambda wc: int(REGIONS['length'][wc.region]),
@@ -1431,7 +1442,7 @@ rule createConfig:
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/createConfig/{group}-{region}-{bin}-{norm}-{vis}.log'
+        'logs/createConfig/{group}-{region}-{bin}-{norm}-{vis}{pm}.log'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
@@ -1455,17 +1466,17 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}.png'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}{pm}.png'
     params:
         region = setRegion,
-        title = '"{group} : {region} at {bin} bin size ({norm})"',
+        title = '"{group} : {region} at {bin} bin size ({norm} {pm})"',
         dpi = 600
     group:
         'processHiC'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}.log'
+        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}{pm}.log'
     threads:
         THREADS
     shell:
@@ -1480,16 +1491,16 @@ rule plotMatrix:
     input:
         rules.distanceNormalise.output
     output:
-        'plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}.png'
+        'plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}{pm}.png'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
-        title = '"{all} : {region} at {bin} bin size ({norm})"',
+        title = '"{all} : {region} at {bin} bin size ({norm} {pm})"',
         dpi = 600,
         colour = 'YlGn'
     log:
-        'logs/plotMatrix/{all}-{region}-{bin}-{norm}.log'
+        'logs/plotMatrix/{all}-{region}-{bin}-{norm}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1504,13 +1515,13 @@ rule plotMatrix:
 
 rule reformatNxN3p:
     input:
-        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.gz'
+        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}{pm}.gz'
     output:
-        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}.nxnp3.tsv'
+        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}{pm}.nxnp3.tsv'
     group:
         'HiCRep'
     log:
-        'logs/reformatNxN3p/{sample}-{region}-{bin}.log'
+        'logs/reformatNxN3p/{sample}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1520,17 +1531,17 @@ rule reformatNxN3p:
 
 rule HiCRep:
     input:
-        'dat/matrix/{region}/{bin}/raw/{sample1}-{region}-{bin}.nxnp3.tsv',
-        'dat/matrix/{region}/{bin}/raw/{sample2}-{region}-{bin}.nxnp3.tsv',
+        'dat/matrix/{region}/{bin}/raw/{sample1}-{region}-{bin}{pm}.nxnp3.tsv',
+        'dat/matrix/{region}/{bin}/raw/{sample2}-{region}-{bin}{pm}.nxnp3.tsv',
     output:
-        'qc/hicrep/data/{sample1}-vs-{sample2}-{region}-{bin}-hicrep.csv'
+        'qc/hicrep/data/{sample1}-vs-{sample2}-{region}-{bin}{pm}-hicrep.csv'
     params:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region]
     group:
         'HiCRep'
     log:
-        'logs/HiCRep/{sample1}-vs-{sample2}-{region}-{bin}.log'
+        'logs/HiCRep/{sample1}-vs-{sample2}-{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/hicrep.yaml'
     shell:
@@ -1540,16 +1551,16 @@ rule HiCRep:
 
 rule plotHiCRep:
     input:
-        expand('qc/hicrep/data/{compare}-{{region}}-{{bin}}-hicrep.csv',
+        expand('qc/hicrep/data/{compare}-{{region}}-{{bin}}-hicrep{{pm}}.csv',
             compare=HiC.sampleCompares())
     output:
-        'qc/hicrep/{region}-{bin}-hicrep.png'
+        'qc/hicrep/{region}-{bin}-hicrep{pm}.png'
     params:
         dpi = 600,
     group:
         'HiCRep'
     log:
-        'logs/plotHiCRep/{region}-{bin}.log'
+        'logs/plotHiCRep/{region}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1615,42 +1626,18 @@ rule juicerPre:
         '{input.tsv} {output} {input.chrom_sizes} &> {log}'
 
 
-# Reform for HiCcompare input
-rule straw:
-    input:
-        rules.juicerPre.output
-    output:
-        'dat/matrix/{region}/{bin}/{all}-{region}-{bin}-sutm.txt'
-    params:
-        # Strip 'chr' as juicer removes by default
-        chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
-        start = lambda wc: REGIONS['start'][wc.region],
-        end = lambda wc: REGIONS['end'][wc.region]
-    group:
-        'HiCcompare'
-    log:
-        'logs/straw/{region}/{bin}/{all}.log'
-    conda:
-        f'{ENVS}/hic-straw.yaml'
-    shell:
-        'python {SCRIPTS}/run-straw.py NONE {input} '
-        '{params.chr}:{params.start}:{params.end} '
-        '{params.chr}:{params.start}:{params.end} '
-        'BP {wildcards.bin} {output} &> {log}'
-
-
 rule reformatSUTM:
     input:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}.gz'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}{pm}.gz'
     output:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-sutm.txt'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}{pm}-sutm.txt'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region],
     group:
         'HiCcompare'
     log:
-        'logs/reformatSUTM/{region}/{bin}/{all}.log'
+        'logs/reformatSUTM/{region}/{bin}/{all}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1661,31 +1648,32 @@ rule reformatSUTM:
 
 rule HiCcompare:
     input:
-        'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-sutm.txt',
-        'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-sutm.txt'
+        'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}{pm}-sutm.txt',
+        'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}{pm}-sutm.txt'
     output:
-        all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
-        sig = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
-        links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.links',
-        adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1.homer',
-        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2.homer'
+        all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}{pm}.homer',
+        sig = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig{pm}.homer',
+        links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}{pm}.links',
+        adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1{pm}.homer',
+        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2{pm}.homer'
     params:
         dir = lambda wc: f'dat/HiCcompare/{wc.region}/{wc.bin}',
         qcdir = lambda wc: f'qc/HiCcompare/{wc.region}/{wc.bin}',
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
+        suffix = lambda wc: wc.pm,
         fdr = config['HiCcompare']['fdr']
     group:
         'HiCcompare'
     log:
-        'logs/HiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/HiCcompare/{region}/{bin}/{group1}-vs-{group2}{pm}.log'
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
         'Rscript {SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} '
         '{params.chr} {params.start} {params.end} '
-        '{wildcards.bin} {params.fdr} {input} &> {log}'
+        '{wildcards.bin} {params.fdr} {params.suffix} {input} &> {log}'
 
 
 rule multiHiCcompare:
@@ -1723,15 +1711,15 @@ rule multiHiCcompare:
 
 rule applyMedianFilter:
     input:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}.homer'
+        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}{pm}.homer'
     output:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-logFC.homer'
+        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-logFC{pm}.homer'
     params:
         size = config['compareMatrices']['size']
     group:
         'HiCcompare'
     log:
-        'logs/applyMedianFilter/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/applyMedianFilter/{compare}/{region}/{bin}/{group1}-vs-{group2}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1743,15 +1731,15 @@ rule hicCompareBedgraph:
     input:
         rules.applyMedianFilter.output
     output:
-        all = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-all.bedgraph',
-        up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up.bedgraph',
-        down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down.bedgraph'
+        all = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-all{pm}.bedgraph',
+        up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up{pm}.bedgraph',
+        down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down{pm}.bedgraph'
     params:
         maxDistance = config['compareMatrices']['maxDistance']
     group:
         'HiCcompare'
     log:
-        'logs/hicCompareBedgraph/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/hicCompareBedgraph/{compare}/{region}/{bin}/{group1}-vs-{group2}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1763,11 +1751,11 @@ rule hicCompareBedgraph:
 rule rescaleHiCcompare:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}.bedgraph',
+            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}{{pm}}.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{group1}-vs-{group2}-{dir}-{compare}-{bin}.pkl'
+        'intervals/{group1}-vs-{group2}-{dir}-{compare}-{bin}{pm}.pkl'
     params:
         regions = config['regions'],
         name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}',
@@ -1775,7 +1763,7 @@ rule rescaleHiCcompare:
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleHiCcompare/{group1}-vs-{group2}-{dir}-{compare}-{bin}.log'
+        'logs/rescaleHiCcompare/{group1}-vs-{group2}-{dir}-{compare}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1788,11 +1776,11 @@ rule rescaleHiCcompare:
 rule rescaleHiCcompareBinary:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}.bedgraph',
+            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}{{pm}}.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{group1}-vs-{group2}-{dir}-{compare}-binary-{bin}.pkl'
+        'intervals/{group1}-vs-{group2}-{dir}-{compare}-binary-{bin}{pm}.pkl'
     params:
         threshold = 1.96,
         regions = config['regions'],
@@ -1800,7 +1788,7 @@ rule rescaleHiCcompareBinary:
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleHiCcompareBinary/{group1}-vs-{group2}-{dir}-{compare}-{bin}.log'
+        'logs/rescaleHiCcompareBinary/{group1}-vs-{group2}-{dir}-{compare}-{bin}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1812,13 +1800,13 @@ rule rescaleHiCcompareBinary:
 
 rule homerToH5:
     input:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.homer'
+        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}{pm}.homer'
     output:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5'
+        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}{pm}.h5'
     group:
         'HiCcompare'
     log:
-        'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.log'
+        'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1828,17 +1816,17 @@ rule homerToH5:
 
 rule filterHiCcompare:
     input:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}.links'
+        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}{pm}.links'
     output:
-        up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up.links',
-        down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down.links'
+        up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up{pm}.links',
+        down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down{pm}.links'
     params:
         p_value = config['HiCcompare']['fdr'],
         log_fc = config['HiCcompare']['logFC'],
     group:
         'HiCcompare'
     log:
-        'logs/filterHiCcompare/{compare}/{region}/{bin}/{group1}-vs-{group2}.log'
+        'logs/filterHiCcompare/{compare}/{region}/{bin}/{group1}-vs-{group2}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1875,7 +1863,7 @@ def setControl(wc):
         adj = 'adjIF2'
     else:
         adj = 'adjIF1'
-    return f'dat/HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{adj}.h5'
+    return f'dat/HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{adj}{{pm}}.h5'
 
 
 def setDomains(wc):
@@ -1886,27 +1874,27 @@ def setDomains(wc):
         group = wc.group1
     else:
         group = wc.group2
-    return f'dat/matrix/{{region}}/{{bin}}/tads/{group}-{{region}}-{{bin}}-ontad_domains.bed'
+    return f'dat/matrix/{{region}}/{{bin}}/tads/{group}-{{region}}-{{bin}}{{pm}}-ontad_domains.bed'
 
 
 rule differentialTAD:
     input:
-        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}.h5',
+        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}{pm}.h5',
         control = setControl,
         tadDomains = setDomains
     output:
-        accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_accepted.diff_tad',
-        rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_rejected.diff_tad'
+        accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}{pm}_accepted.diff_tad',
+        rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}{pm}_rejected.diff_tad'
     params:
         pValue = 0.05,
         mode = 'all',
         modeReject = 'one',
         chr = lambda wc: REGIONS['chr'][wc.region],
-        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}'
+        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}{wc.pm}'
     group:
         'HiCcompare'
     log:
-        'logs/differentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}.log'
+        'logs/differentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1920,13 +1908,13 @@ rule differentialTAD:
 
 rule reformatDifferentialTAD:
     input:
-        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_{result}.diff_tad'
+        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}{pm}_{result}.diff_tad'
     output:
-        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}_{result}_domains.bed'
+        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}{pm}_{result}_domains.bed'
     group:
         'HiCcompare'
     log:
-        'logs/reformatDifferentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{result}.log'
+        'logs/reformatDifferentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}{pm}-{result}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1936,13 +1924,13 @@ rule reformatDifferentialTAD:
 
 rule createCompareConfig:
     input:
-        mat = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}.h5',
+        mat = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}{pm}.h5',
         upBed = rules.hicCompareBedgraph.output.up,
         downBed = rules.hicCompareBedgraph.output.down,
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1_rejected_domains.bed',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2_rejected_domains.bed'
+        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1{pm}_rejected_domains.bed',
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2{pm}_rejected_domains.bed'
     output:
-        'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}.ini',
+        'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}{pm}.ini',
     params:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
@@ -1953,7 +1941,7 @@ rule createCompareConfig:
     group:
         'HiCcompare'
     log:
-        'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}-{set}.log'
+        'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}-{set}{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1986,13 +1974,14 @@ def title(wc):
         title += 'adj. logFC"'
     else:
         title += 'FDR"'
+    title += f'{wc.pm}'
     return title
 
 rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}.png'
+        'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}{pm}.png'
     params:
         title = title,
         region = setRegion,
@@ -2002,7 +1991,7 @@ rule plotCompare:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}.log'
+        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}{pm}.log'
     threads:
         THREADS
     shell:
