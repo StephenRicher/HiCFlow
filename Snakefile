@@ -232,7 +232,7 @@ if ALLELE_SPECIFIC:
         log:
             'logs/filterHomozygous/{cellType}.log'
         conda:
-            f'{ENVS}/bedtools.yaml'
+            f'{ENVS}/bcftools.yaml'
         shell:
             'bcftools view -e \'GT="hom"\' {input} > {output} 2> {log}'
 
