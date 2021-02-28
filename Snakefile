@@ -117,6 +117,10 @@ if ALLELE_SPECIFIC:
             print('createValid bam not available in ASHIC mode. Setting '
                   'createValidBam to False.', file=sys.stderr)
             config['createValidBam'] = False
+        if config['runHiCRep']:
+            print('HiCRep not available in ASHIC mode. Setting '
+                  'runHiCRep to False.', file=sys.stderr)
+            config['runHiCRep'] = False
 
 if config['phase']:
     if config['gatk']['all_known']:
@@ -876,7 +880,7 @@ rule mergeValidHiC:
 
 rule reformatASHIC:
     input:
-        'dat/mapped/{preSample}-ASHIC-validHiC.bam'
+        'dat/mapped/{preSample}-validHiC-ASHIC.bam'
     output:
         readPairs = expand('dat/ashic/readPairs/{{preSample}}/{chr}_{combo}',
             chr=list(REGIONS['chr'].unique()),
@@ -1054,7 +1058,7 @@ rule sumReplicates:
 def mergeBinInput(wc):
     """ If allele specific then matrix is built by ASHIC not hicexplorer """
     if ALLELE_SPECIFIC and config['ASHIC']:
-        return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}-ASHIC.{BASE_BIN}.h5'
+        return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}.{BASE_BIN}-ASHIC.h5'
     else:
         return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}.{BASE_BIN}.h5'
 
@@ -2840,12 +2844,12 @@ rule multiqc:
             sample=HiC.originalSamples()),
          expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
             sample=HiC.originalSamples(), read=['R1', 'R2']),
-        [expand('qc/hicexplorer/{sample}-{region}.{bin}_QC', region=region,
-            sample=HiC.samples(), bin=BASE_BIN) for region in regionBin],
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
             sample=HiC.originalSamples(), read=['R1', 'R2']) if config['fastq_screen'] else [],
          expand('qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt',
-            region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []]
+            region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []],
+        [expand('qc/hicexplorer/{sample}-{region}.{bin}_QC', region=region,
+            sample=HiC.samples(), bin=BASE_BIN) for region in regionBin] if not config['ASHIC'] else [],
     output:
         directory('qc/multiqc')
     params:
