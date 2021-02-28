@@ -730,8 +730,10 @@ rule mergeSNPsplit:
         'logs/mergeSNPsplit/{preGroup}_a{allele}-{rep}.log'
     conda:
         f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
     shell:
-        'samtools merge -n {output} {input} &> {log}'
+        'samtools merge -@ {threads} -n {output} {input} &> {log}'
 
 
 rule mergeALLSNPsplit:
@@ -745,8 +747,10 @@ rule mergeALLSNPsplit:
         'logs/mergeSNPsplit/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
     shell:
-        'samtools merge -n {output} {input} &> {log}'
+        'samtools merge -@ {threads} -n {output} {input} &> {log}'
 
 
 def splitInput(wc):
