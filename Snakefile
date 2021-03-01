@@ -875,7 +875,8 @@ rule mergeValidHiC:
     threads:
         THREADS
     shell:
-        'samtools merge -@ {threads} {output} {input} 2> {log}'
+        'samtools merge -@ {threads} {output} {input} '
+        '2> {log} || touch {output}'
 
 
 rule reformatASHIC:
@@ -898,7 +899,8 @@ rule reformatASHIC:
     shell:
         '(touch {output.readPairs} && awk -f {SCRIPTS}/processSNPsplit.awk '
         '-v prefix={params.prefix} '
-        '<(samtools cat {input} | samtools view -@ {threads})) &> {log}'
+        '<(samtools cat {input} | samtools view -@ {threads})) &> {log} '
+        '|| touch {output.readPairs}; mkdir -p {output.dir}'
 
 
 rule mergeASHIC:
