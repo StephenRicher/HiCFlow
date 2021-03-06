@@ -1544,7 +1544,7 @@ rule HiCRep:
         'dat/matrix/{region}/{bin}/raw/{sample1}-{region}-{bin}{pm}.nxnp3.tsv',
         'dat/matrix/{region}/{bin}/raw/{sample2}-{region}-{bin}{pm}.nxnp3.tsv',
     output:
-        'qc/hicrep/data/{sample1}-vs-{sample2}-{region}-{bin}{pm}-hicrep.csv'
+        'qc/hicrep/data/{sample1}-vs-{sample2}-{region}-{bin}-hicrep{pm}.csv'
     params:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region]
