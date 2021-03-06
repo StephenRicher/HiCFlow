@@ -818,9 +818,9 @@ rule buildBaseMatrix:
         bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=['R1', 'R2']),
         restSites = getRestSites
     output:
-        hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}.h5',
-        bam = 'dat/matrix/{region}/{sample}-{region}.bam',
-        qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}_QC')
+        hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}{{pm}}.h5',
+        bam = 'dat/matrix/{region}/{sample}-{region}{pm}.bam',
+        qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}{{pm}}_QC')
     params:
         bin = BASE_BIN,
         chr = lambda wc: REGIONS['chr'][wc.region],
@@ -839,7 +839,7 @@ rule buildBaseMatrix:
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
     log:
-        'logs/buildBaseMatrix/{sample}-{region}.log'
+        'logs/buildBaseMatrix/{sample}-{region}{pm}.log'
     threads:
         max(2, config['HiCParams']['threads'])
     conda:
@@ -864,7 +864,7 @@ rule buildBaseMatrix:
 
 rule mergeValidHiC:
     input:
-        expand('dat/matrix/{region}/{{sample}}-{region}.bam',
+        expand('dat/matrix/{region}/{{sample}}-{region}{{pm}}.bam',
             region=regionBin.keys())
     output:
         'dat/mapped/{sample}-validHiC{pm}.bam'
@@ -1042,14 +1042,14 @@ def nonEmpty(wc, output, input):
 rule sumReplicates:
     input:
         lambda wc: expand(
-            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}.h5',
+            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{bin}{{pm}}.h5',
             rep=HiC.groups()[wc.group], bin=BASE_BIN),
     output:
-        f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}.h5'
+        f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}{{pm}}.h5'
     params:
         nonEmpty = nonEmpty
     log:
-        'logs/sumReplicates/{group}-{region}.log'
+        'logs/sumReplicates/{group}-{region}{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1067,7 +1067,7 @@ def mergeBinInput(wc):
 
 rule mergeBins:
     input:
-        mergeBinInput
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}{{pm}}.h5'
     output:
         'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}{pm}.h5'
     params:
