@@ -226,8 +226,8 @@ rule all:
          if (config['phase'] and PHASE_MODE == 'GATK') else []),
         (['qc/multiqc', 'qc/filterQC/ditagLength.png',
          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
-        ([expand('qc/hicrep/{region}-{bin}-hicrep.png', region=region,
-            bin=regionBin[region]) for region in regionBin]
+        ([expand('qc/hicrep/{region}-{bin}-hicrep{pm}.png', region=region,
+            bin=regionBin[region], pm=phaseMode) for region in regionBin]
          if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC{pm}.bam',
             sample=HiC.samples(), pm=phaseMode)
