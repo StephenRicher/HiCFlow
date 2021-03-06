@@ -771,13 +771,13 @@ rule splitPairedReads:
     input:
         splitInput
     output:
-        temp('dat/mapped/split/{sample}-{read}.bam')
+        temp('dat/mapped/split/{sample}-{read}{pm}.bam')
     params:
         flag = lambda wc: '0x40' if wc.read == 'R1' else '0x80'
     group:
         'prepareBAM'
     log:
-        'logs/splitPairedReads/{sample}-{read}.log'
+        'logs/splitPairedReads/{sample}-{read}{pm}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
@@ -815,7 +815,7 @@ def getDanglingSequences(wc):
 
 rule buildBaseMatrix:
     input:
-        bams = expand('dat/mapped/split/{{sample}}-{read}.bam', read=['R1', 'R2']),
+        bams = expand('dat/mapped/split/{{sample}}-{read}{{pm}}.bam', read=['R1', 'R2']),
         restSites = getRestSites
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}{{pm}}.h5',
@@ -2850,8 +2850,8 @@ rule multiqc:
             sample=HiC.originalSamples(), read=['R1', 'R2']) if config['fastq_screen'] else [],
          expand('qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt',
             region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []],
-        [expand('qc/hicexplorer/{sample}-{region}.{bin}_QC', region=region,
-            sample=HiC.samples(), bin=BASE_BIN) for region in regionBin] if not config['ASHIC'] else [],
+        [expand('qc/hicexplorer/{sample}-{region}.{bin}{pm}_QC', region=region,
+            sample=HiC.samples(), bin=BASE_BIN, pm=phaseMode) for region in regionBin] if not config['ASHIC'] else [],
     output:
         directory('qc/multiqc')
     params:
