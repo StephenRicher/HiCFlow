@@ -249,7 +249,8 @@ if ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
-            'bcftools view -e \'GT="hom"\' {input} > {output} 2> {log}'
+            'bcftools view -H -m 2 -M 2 -v snps -i \'GT="het"\' {input} '
+            '> {output} 2> {log}'
 
 
     rule maskPhased:
@@ -954,7 +955,8 @@ rule ASHICpack:
     output:
         directory(f'dat/ashic/packed/{{preGroup}}-{{region}}-{BASE_BIN}-packed/')
     params:
-        diag = 0
+        diag = 0,
+        perc = 0
     group:
         'ASHIC'
     log:
@@ -962,7 +964,8 @@ rule ASHICpack:
     conda:
         f'{ENVS}/ashic.yaml'
     shell:
-        'ashic-data pack --diag {params.diag} {input} {output} &> {log}'
+        'ashic-data pack --diag {params.diag} --perc {params.perc} {input} '
+        '{output} &> {log}'
 
 
 rule ASHIC:
