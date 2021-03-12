@@ -12,7 +12,9 @@ BEGIN {
 {
     if (header()) {
         next
-    }
+    } else if ($7 != "=") { # Skip inter-chromosomal pairs
+		next
+	}
     sequence++
 	# Get allelic assignment for each read
 	split($NF, arr, ":")
@@ -31,38 +33,42 @@ BEGIN {
 		next
 	} else {
 		assign2 = assign
-		# Skip inter-chromosomal pairs
-		if ($7 != "="){
-			next
-		} else {
-			# Define output file suffix
-			if (assign1 == "ref") {
-				if (assign2 == "ref") {
-					suffix = "ref_ref"
-				} else if (assign2 == "alt") {
-					suffix = "ref_alt"
-				} else {
-					suffix = "ref_both-ref"
-				}
-			} else if (assign1 == "alt") {
-				if (assign2 == "ref") {
-					suffix = "ref_alt"
-				} else if (assign2 == "alt") {
-					suffix = "alt_alt"
-				} else {
-					suffix = "alt_both-ref"
-				}
+		# Define output file suffix
+		if (assign1 == "ref") {
+			if (assign2 == "ref") {
+				suffix = "ref_ref"
+			} else if (assign2 == "alt") {
+				suffix = "ref_alt"
 			} else {
-				if (assign2 == "ref") {
-					suffix = "ref_both-ref"
-				} else if (assign2 == "alt") {
-					suffix = "alt_both-ref"
-				} else {
-					suffix = "both-ref_both-ref"
-				}
+				suffix = "ref_both-ref"
 			}
-			chr = $3
-			out = prefix""chr"_"suffix
+		} else if (assign1 == "alt") {
+			if (assign2 == "ref") {
+				suffix = "ref_alt"
+			} else if (assign2 == "alt") {
+				suffix = "alt_alt"
+			} else {
+				suffix = "alt_both-ref"
+			}
+		} else {
+			if (assign2 == "ref") {
+				suffix = "ref_both-ref"
+			} else if (assign2 == "alt") {
+				suffix = "alt_both-ref"
+			} else {
+				suffix = "both-ref_both-ref"
+			}
+		}
+		chr = $3
+		out = prefix""chr"_"suffix
+		# Fix column order, both-ref takes lowest priority
+		if (assign1 != assign2 && assign1 != "both-ref") {
+			if (assign2 == "both-ref" || assign2 == "alt") {
+				print($3, $8, assign1, $3, $4, assign2, "") > out
+			} else {
+				print($3, $4, assign2, $3, $8, assign1, "") > out
+			}
+		} else {
 			print($3, $4, assign2, $3, $8, assign1, "") > out
 		}
 	}
