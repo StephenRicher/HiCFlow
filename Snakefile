@@ -222,8 +222,6 @@ rule all:
         HiC_mode,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
          if config['phase'] else []),
-        (expand('dat/gatk/.tmp.{cellType}-applyBQSR', cellType=HiC.cellTypes())
-         if (config['phase'] and PHASE_MODE == 'GATK') else []),
         (['qc/multiqc', 'qc/filterQC/ditagLength.png',
          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
         ([expand('qc/hicrep/{region}-{bin}-hicrep{pm}.png', region=region,
@@ -249,8 +247,8 @@ if ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
-            'bcftools view -H -m 2 -M 2 -v snps -i \'GT="het"\' {input} '
-            '> {output} 2> {log}'
+            'bcftools view -H -m 2 -M 2 -v snps -i \'GT="het"\' --phased '
+            '{input} > {output} 2> {log}'
 
 
     rule maskPhased:
@@ -2229,17 +2227,6 @@ if not ALLELE_SPECIFIC:
             '--bqsr-recal-file {input.recal_table} --output {output.bam} '
             '--intervals {input.interval} --interval-padding 100 '
             '--tmp-dir {params.tmp} {params.extra} &> {log}'
-
-
-    rule aggregateApplyBQSR:
-        input:
-            expand(
-                'dat/mapped/mergeByCell/{{cellType}}-{rep}.recalibrated.bam',
-                rep=[str(i).zfill(4) for i in range(config['gatk']['scatterCount'])])
-        output:
-            touch('dat/gatk/.tmp.{cellType}-applyBQSR')
-        group:
-            'applyBQSR' if config['groupJobs'] else 'aggregateTarget'
 
 
     rule haplotypeCaller:
