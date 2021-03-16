@@ -3,6 +3,8 @@
 import sys
 import itertools
 import pandas as pd
+from itertools import combinations
+
 
 class ConfigurationError(Exception):
     pass
@@ -305,7 +307,27 @@ def load_regions(regions_file, adjust=None):
         sys.exit(f'Invalid region definition in {regions_file}.\n'
             'Region names must not contain the following characters: - . /')
 
+    if anyOverlapping(regions):
+        sys.exit(f'Overlapping intervals detected in {regions_file}.\n')
+
     return regions
+
+
+def rangeIntersect(r1, r2):
+    """ Find intersect between ranges """
+    return range(max(r1.start,r2.start), min(r1.stop,r2.stop)) or None
+
+
+def anyOverlapping(allRegions):
+    """ Check if any within chromosome overlaps """
+    for chrom, regions in allRegions.groupby('chr'):
+        coordRanges = []
+        for name, row in regions.iterrows():
+            coordRanges.append(range(row['start'], row['end']))
+        for a, b in combinations(coordRanges, 2):
+            if rangeIntersect(a, b) is not None:
+                return True
+    return False
 
 
 def load_coords(files, adjust=None):
