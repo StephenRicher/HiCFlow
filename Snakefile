@@ -1507,7 +1507,7 @@ rule plotMatrix:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
-        title = '"{all} : {region} at {bin} bin size ({norm} -{pm})"',
+        title = '"{all} : {region} at {bin} bin size ({norm} - {pm})"',
         dpi = 600,
         colour = 'YlGn'
     log:
@@ -1901,7 +1901,7 @@ rule differentialTAD:
         mode = 'all',
         modeReject = 'one',
         chr = lambda wc: REGIONS['chr'][wc.region],
-        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}{wc.pm}'
+        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}-{wc.pm}'
     group:
         'HiCcompare'
     log:
@@ -1985,7 +1985,7 @@ def title(wc):
         title += 'adj. logFC"'
     else:
         title += 'FDR"'
-    title += f'{wc.pm}'
+    title += f' - {wc.pm}'
     return title
 
 rule plotCompare:
