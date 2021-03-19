@@ -1980,12 +1980,12 @@ def title(wc):
     title = f'"{wc.group1} vs {wc.group2} - {wc.region} at {wc.bin} bin size - '
     if wc.set == 'sig':
         threshold = config['HiCcompare']['fdr']
-        title += f'adj. logFC (FDR <= {threshold})"'
+        title += f'adj. logFC (FDR <= {threshold})'
     elif wc.set == 'logFC':
-        title += 'adj. logFC"'
+        title += 'adj. logFC'
     else:
-        title += 'FDR"'
-    title += f' - {wc.pm}'
+        title += 'FDR'
+    title += f' - {wc.pm}"'
     return title
 
 rule plotCompare:
