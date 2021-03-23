@@ -962,7 +962,7 @@ rule ASHICpack:
         directory(f'dat/ashic/packed/{{preGroup}}-{{region}}-{BASE_BIN}-packed/')
     params:
         diag = 0,
-        perc = 0
+        perc = 2
     group:
         'ASHIC'
     log:
