@@ -1535,10 +1535,10 @@ def makeViewRegion(wc):
     end = int(''.join(region[inds[-1]+1:]))
     start = int(''.join(region[inds[-2]+1:inds[-1]]))
     chrom = ''.join(region[:inds[-2]])
-    mid = (start + end) // 2
-    size = 500_000
-    start = mid - size if start >= size else 0
-    end = mid + size
+    size = 1000_000
+    # Ensure padding does not exceed region length
+    start = max(start - size, REGIONS.loc[wc.region, 'start'])
+    end = min(end + size, REGIONS.loc[wc.region, 'end'])
     return f'{chrom}:{start}-{end}'
 
 
