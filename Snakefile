@@ -78,6 +78,7 @@ default_config = {
          'colourmap'   : 'Purples'    ,},
     'distanceTransform': True,
     'plot_coordinates':  None,
+    'viewpointCoords':   None,
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
@@ -155,8 +156,9 @@ wildcard_constraints:
     combo = r'alt_alt|alt_both-ref|both-ref_both-ref|ref_alt|ref_both-ref|ref_ref'
 
 # Generate dictionary of plot coordinates, may be multple per region
-COORDS = load_coords([config['plot_coordinates'], config['regions']],
-    adjust=BASE_BIN)
+COORDS = load_coords(REGIONS, config['plot_coordinates'], adjust=BASE_BIN)
+# Generate dictionary of plot viewpoints
+VIEWPOINTS =  load_coords(REGIONS, config['viewpointCoords'], includeRegions=False)
 
 tools = (
     ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
@@ -181,6 +183,9 @@ HiC_mode = ([
         region=region, coords=COORDS[region], norm=norm, pm=phaseMode,
         vis=vis, group=HiC.groups(),
         bin=regionBin[region]) for region in regionBin],
+    [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-{pm}.png',
+        region=region, coords=VIEWPOINTS[region], norm=norm, pm=phaseMode,
+        preGroup=HiC.groups(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=phaseMode,
@@ -1058,17 +1063,40 @@ rule sumReplicates:
         '&> {log} || touch {output}'
 
 
-def mergeBinInput(wc):
-    """ If allele specific then matrix is built by ASHIC not hicexplorer """
-    if ALLELE_SPECIFIC and config['ASHIC']:
-        return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}.{BASE_BIN}-ASHIC.h5'
-    else:
-        return f'dat/matrix/{wc.region}/base/raw/{wc.all}-{wc.region}.{BASE_BIN}.h5'
+rule normCounts01:
+    input:
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}.h5'
+    output:
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-norm01.h5'
+    log:
+        'logs/normCounts01/{all}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicNormalize --matrices {input} --normalize norm_range '
+        '--outFileName {output} &> {log} || touch {output}'
+
+
+rule normCountsConstant:
+    input:
+        rules.normCounts01.output
+    output:
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-normConstant.h5'
+    params:
+        multiplicativeValue = 1000
+    log:
+        'logs/normCountsConstant/{all}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicNormalize --matrices {input} --normalize multiplicative '
+        '--multiplicativeValue {params.multiplicativeValue} '
+        '--outFileName {output} &> {log} || touch {output}'
 
 
 rule mergeBins:
     input:
-        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}.h5'
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-normConstant.h5'
     output:
         'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.h5'
     params:
@@ -1480,7 +1508,7 @@ rule plotHiC:
         'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}.png'
     params:
         region = setRegion,
-        title = '"{group} : {region} at {bin} bin size ({norm} -{pm})"',
+        title = '"{group} : {region} at {bin} bin size ({norm} - {pm})"',
         dpi = 600
     group:
         'processHiC'
@@ -1496,6 +1524,46 @@ rule plotHiC:
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
+
+
+def makeViewRegion(wc):
+    """ Pad either side of viewpoint to define view range then
+        replace underscores with : and - for valid --region argument. """
+    region = list(wc.coord)
+    # Find indices of all underscores
+    inds = [i for i,c in enumerate(region) if c == '_']
+    end = int(''.join(region[inds[-1]+1:]))
+    start = int(''.join(region[inds[-2]+1:inds[-1]]))
+    chrom = ''.join(region[:inds[-2]])
+    mid = (start + end) // 2
+    size = 500_000
+    start = mid - size if start >= size else 0
+    end = mid + size
+    return f'{chrom}:{start}-{end}'
+
+
+
+rule plotViewpoint:
+    input:
+        'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
+    output:
+        plot = 'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-{pm}.png',
+        bedgraph = 'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-{pm}.bedgraph'
+    params:
+        referencePoint = setRegion,
+        region = makeViewRegion,
+        dpi = 600
+    group:
+        'processHiC'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    log:
+        'logs/plotViewpoint/{group}-{coord}-{region}-{bin}-{norm}-{pm}.log'
+    shell:
+        '(hicPlotViewpoint --matrix {input} --region {params.region} '
+        '--outFileName {output.plot} --referencePoint {params.referencePoint} '
+        '--interactionOutFileName {output.bedgraph} --dpi {params.dpi} '
+        '&& mv {output.bedgraph}_*.bedgraph {output.bedgraph}) &> {log}'
 
 
 rule plotMatrix:

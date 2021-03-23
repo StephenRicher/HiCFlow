@@ -3,7 +3,6 @@
 import sys
 import itertools
 import pandas as pd
-from itertools import combinations
 
 
 class ConfigurationError(Exception):
@@ -324,24 +323,41 @@ def anyOverlapping(allRegions):
         coordRanges = []
         for name, row in regions.iterrows():
             coordRanges.append(range(row['start'], row['end']))
-        for a, b in combinations(coordRanges, 2):
+        for a, b in itertools.combinations(coordRanges, 2):
             if rangeIntersect(a, b) is not None:
                 return True
     return False
 
 
-def load_coords(files, adjust=None):
-    """ Read plot coordinates from plot coordinate and region BED file. """
-    coords = {}
-    for file in files:
-        if not file:
-            continue
-        with open(file) as fh:
+def reformatRegions(regions):
+    """ Reformat the load_regions df to dictionary with merged
+        coordinates. Serves as valid input for plot coordinates
+        and plot viewpoint. """
+
+    coords = regions[['chr', 'start', 'end']].astype(str).agg('_'.join, axis=1).to_dict()
+    coords = {name:[pos] for (name, pos) in coords.items()}
+    return coords
+
+
+def load_coords(regions, coordFile=None, adjust=None, includeRegions=True):
+    """ Reformat plot regions to required dictionary format and
+        optionally load additional plot coordinates """
+    coords = reformatRegions(regions)
+    # Initalise empty dictionary with matching keys
+    newCoords = {name : [] for name in coords.keys()}
+    if coordFile is not None:
+        with open(coordFile) as fh:
             for line in fh:
                 chr, start, end, region = line.strip().split()
                 if adjust is not None:
                     start, end = adjustCoordinates(int(start), int(end), adjust)
                 if region not in coords:
-                    coords[region] = []
-                coords[region].append(f'{chr}_{start}_{end}')
-    return coords
+                    print(f'{region} not in regions file - skipping.',
+                          file=sys.stderr)
+                else:
+                    newCoords[region].append(f'{chr}_{start}_{end}')
+    # If includeRegions is True then add original regions to coords
+    if includeRegions:
+        for region, pos in coords.items():
+            newCoords[region].extend(pos)
+    return newCoords
