@@ -179,6 +179,9 @@ HiC_mode = ([
         region=region, coords=COORDS[region], set=['logFC'], pm=phaseMode,
         compare=HiC.groupCompares(), bin=regionBin[region],
         tool=tools) for region in regionBin],
+    [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-{pm}.png',
+        region=region, coords=VIEWPOINTS[region], set=['logFC'], pm=phaseMode,
+        compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.png',
         region=region, coords=COORDS[region], norm=norm, pm=phaseMode,
         vis=vis, group=HiC.groups(),
@@ -2056,6 +2059,7 @@ def title(wc):
     title += f' - {wc.pm}"'
     return title
 
+
 rule plotCompare:
     input:
         rules.createCompareConfig.output
@@ -2079,6 +2083,29 @@ rule plotCompare:
         '--outFileName {output} '
         '--title {params.title} '
         '--dpi {params.dpi} &> {log}'
+
+
+rule plotCompareViewpoint:
+    input:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}.h5'
+    output:
+        plot = 'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.png',
+        bedgraph = 'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.bedgraph'
+    params:
+        referencePoint = setRegion,
+        region = makeViewRegion,
+        dpi = 600
+    group:
+        'processHiC'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    log:
+        'logs/plotViewpoint/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.log'
+    shell:
+        '(hicPlotViewpoint --matrix {input} --region {params.region} '
+        '--outFileName {output.plot} --referencePoint {params.referencePoint} '
+        '--interactionOutFileName {output.bedgraph} --dpi {params.dpi} '
+        '&& mv {output.bedgraph}_*.bedgraph {output.bedgraph}) &> {log}'
 
 
 if not ALLELE_SPECIFIC:
