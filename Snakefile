@@ -2087,10 +2087,10 @@ rule plotCompare:
 
 rule plotCompareViewpoint:
     input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.h5',
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.h5',
     output:
-        plot = 'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.png',
-        bedgraph = 'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.bedgraph'
+        'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.png',
     params:
         referencePoint = setRegion,
         region = makeViewRegion,
@@ -2100,12 +2100,11 @@ rule plotCompareViewpoint:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     log:
-        'logs/plotViewpoint/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.log'
+        'logs/plotCompareViewpoint/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.log'
     shell:
-        '(hicPlotViewpoint --matrix {input} --region {params.region} '
-        '--outFileName {output.plot} --referencePoint {params.referencePoint} '
-        '--interactionOutFileName {output.bedgraph} --dpi {params.dpi} '
-        '&& mv {output.bedgraph}_*.bedgraph {output.bedgraph}) &> {log}'
+        'hicPlotViewpoint --matrix {input} --region {params.region} '
+        '--outFileName {output} --referencePoint {params.referencePoint} '
+        '--dpi {params.dpi} &> {log}'
 
 
 if not ALLELE_SPECIFIC:
