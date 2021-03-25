@@ -180,7 +180,7 @@ HiC_mode = ([
         compare=HiC.groupCompares(), bin=regionBin[region],
         tool=tools) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-{pm}.png',
-        region=region, coords=VIEWPOINTS[region], set=['logFC'], pm=phaseMode,
+        region=region, coords=VIEWPOINTS[region], pm=phaseMode,
         compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.png',
         region=region, coords=COORDS[region], norm=norm, pm=phaseMode,
@@ -1545,7 +1545,6 @@ def makeViewRegion(wc):
     return f'{chrom}:{start}-{end}'
 
 
-
 rule plotViewpoint:
     input:
         'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
@@ -2085,25 +2084,46 @@ rule plotCompare:
         '--dpi {params.dpi} &> {log}'
 
 
-rule plotCompareViewpoint:
+rule runCompareViewpoint:
     input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.h5',
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.h5',
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
     output:
-        'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.png',
+        plot = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-{set}-{region}-{coord}-{bin}-{pm}.png',
+        bedgraph = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-{set}-{region}-{coord}-{bin}-{pm}.bedgraph',
     params:
         referencePoint = setRegion,
         region = makeViewRegion,
         dpi = 600
     group:
-        'processHiC'
+        'HiCcompare'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     log:
+        'logs/runCompareViewpoint/{group1}-vs-{group2}-{set}-{region}-{coord}-{bin}-{pm}.log'
+    shell:
+        '(hicPlotViewpoint --matrix {input} --region {params.region} '
+        '--outFileName {output.plot} --referencePoint {params.referencePoint} '
+        '--interactionOutFileName {output.bedgraph} --dpi {params.dpi} '
+        '&& mv {output.bedgraph}_*.bedgraph {output.bedgraph}) &> {log}'
+
+
+rule plotCompareViewpoint:
+    input:
+        IF1 = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-adjIF1-{region}-{coord}-{bin}-{pm}.bedgraph',
+        IF2 = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-adjIF2-{region}-{coord}-{bin}-{pm}.bedgraph',
+        logFC = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-logFC-{region}-{coord}-{bin}-{pm}.bedgraph',
+    output:
+        'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.png',
+    params:
+        dpi = 600
+    group:
+        'HiCcompare'
+    conda:
+        f'{ENVS}/python3.yaml'
+    log:
         'logs/plotCompareViewpoint/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.log'
     shell:
-        'hicPlotViewpoint --matrix {input} --region {params.region} '
-        '--outFileName {output} --referencePoint {params.referencePoint} '
+        'python {SCRIPTS}/plotCompareViewpoint.py {input} --out {output} '
         '--dpi {params.dpi} &> {log}'
 
 
