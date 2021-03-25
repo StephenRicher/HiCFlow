@@ -281,7 +281,7 @@ class HiCSamples:
 def adjustCoordinates(start, end, nbases):
     """ Adjust coordinates to a multiple of nbases """
     # Round down start to closest multiple of nbases
-    start = start - (start % nbases)
+    start = start + (nbases - (start % nbases))
     # Get amount contract end position
     adjustContract = (end - start ) % nbases
     end = end - adjustContract
