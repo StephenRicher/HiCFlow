@@ -289,7 +289,7 @@ def adjustCoordinates(start, end, nbases):
     return start, end
 
 
-def load_regions(regions_file, adjust=None):
+def load_regions(regions_file, adjust=1):
 
     regions = pd.read_table(
         regions_file,
@@ -339,7 +339,18 @@ def reformatRegions(regions):
     return coords
 
 
-def load_coords(regions, coordFile=None, adjust=None, includeRegions=True):
+def outOfRange(chr, start, end, region):
+    """ Ensure coordinates are within the associated region """
+    if region['chr'] != chr:
+        return True
+    elif (start < region['start']) or (start > region['end']):
+        return True
+    elif (end <= region['start']) or (end > region['end']):
+        return True
+    return False
+
+
+def load_coords(regions, coordFile=None, adjust=1, includeRegions=True):
     """ Reformat plot regions to required dictionary format and
         optionally load additional plot coordinates """
     coords = reformatRegions(regions)
@@ -349,10 +360,13 @@ def load_coords(regions, coordFile=None, adjust=None, includeRegions=True):
         with open(coordFile) as fh:
             for line in fh:
                 chr, start, end, region = line.strip().split()
-                if adjust is not None:
-                    start, end = adjustCoordinates(int(start), int(end), adjust)
+                start, end = adjustCoordinates(int(start), int(end), adjust)
                 if region not in coords:
                     print(f'{region} not in regions file - skipping.',
+                          file=sys.stderr)
+                elif outOfRange(chr, start, end, regions.loc[region]):
+                    print(f'Viewpoint {chr}:{start}-{end} not in '
+                          f'range of region {region} - skipping.',
                           file=sys.stderr)
                 else:
                     newCoords[region].append(f'{chr}_{start}_{end}')
