@@ -280,7 +280,7 @@ class HiCSamples:
 
 def adjustCoordinates(start, end, nbases):
     """ Adjust coordinates to a multiple of nbases """
-    # Round down start to closest multiple of nbases
+    # Round up start to closest multiple of nbases
     start = start + (nbases - (start % nbases))
     # Get amount contract end position
     adjustContract = (end - start ) % nbases
@@ -295,7 +295,7 @@ def load_regions(regions_file, adjust=1):
         regions_file,
         names=['chr', 'start', 'end', 'region'],
         index_col='region',
-        dtype={'start': int, 'end': int})
+        dtype={'start': int, 'end': int}, sep='\s+')
     if adjust is not None:
         regions['start'], regions['end'] = adjustCoordinates(
             regions['start'], regions['end'], adjust)
