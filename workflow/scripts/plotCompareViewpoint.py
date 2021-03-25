@@ -51,9 +51,6 @@ def plotCompareViewpoint(bedgraphs: List, out: str, dpi: int):
     #ax2.set_ylabel('LogFC interactions')
 
 
-
-
-
 def processFilename(name):
     """ Extract important information from filepath """
     name = Path(name).name # Remove directory
