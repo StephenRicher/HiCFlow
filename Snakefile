@@ -1540,7 +1540,7 @@ def makeViewRegion(wc):
     chrom = ''.join(region[:inds[-2]])
     size = 1000_000
     # Ensure padding does not exceed region length
-    start = max(start - size, REGIONS.loc[wc.region, 'start'])
+    start = max(start - size, REGIONS.loc[wc.region, 'start'] + 1)
     end = min(end + size, REGIONS.loc[wc.region, 'end'])
     return f'{chrom}:{start}-{end}'
 
