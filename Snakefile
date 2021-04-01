@@ -88,6 +88,7 @@ default_config = {
     'multiQCconfig':     None,
     'rescalePKL':        False,
     'groupJobs':         False,
+    'microC':            False,
     'ASHIC':             True,
 }
 
@@ -196,7 +197,7 @@ HiC_mode = ([
      expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.png',
         all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
         region=regionBin.keys(), pm=phaseMode),
-    'qc/hicup/.tmp.aggregatehicupTruncate'])
+    'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
 rescalePKL = ([
     expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}-{pm}.pkl',
             tool=tools, dir=['up', 'down', 'all'], mode=['', '-binary'],
@@ -572,9 +573,16 @@ def bowtie2Basename(wc):
     return f'dat/genome/index/{cellType}'
 
 
+def fastqInput(wc):
+    if config['microC']:
+        return 'dat/fastq/trimmed/{preSample}-{read}.trim.fastq.gz'
+    else:
+        return 'dat/fastq/truncated/{preSample}-{read}.trunc.fastq.gz'
+
+
 rule bowtie2:
     input:
-        fastq = 'dat/fastq/truncated/{preSample}-{read}.trunc.fastq.gz',
+        fastq = fastqInput,
         bt2_index = bowtie2Index
     output:
         sam = pipe('dat/mapped/{preSample}-{read}.sam'),
@@ -2947,7 +2955,7 @@ rule multiqc:
          expand('qc/cutadapt/{sample}.cutadapt.txt',
             sample=HiC.originalSamples()),
          expand('qc/hicup/HiCUP_summary_report-{sample}.txt',
-            sample=HiC.originalSamples()),
+            sample=HiC.originalSamples()) if not config['microC'] else [],
          expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
             sample=HiC.originalSamples(), read=['R1', 'R2']),
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
