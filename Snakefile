@@ -827,54 +827,96 @@ def getDanglingSequences(wc):
     sequences = HiC.restrictionSeqs(dangling=True)[wc.sample].values()
     return ' '.join(sequences)
 
-
-rule buildBaseMatrix:
-    input:
-        bams = expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2']),
-        restSites = getRestSites
-    output:
-        hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
-        bam = 'dat/matrix/{region}/{sample}-{region}-{pm}.bam',
-        qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC')
-    params:
-        bin = BASE_BIN,
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
-        reSeqs = getRestrictionSeqs,
-        inputBufferSize = 400000,
-        danglingSequences = getDanglingSequences,
-        maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
-        minMappingQuality = config['HiCParams']['minMappingQuality'],
-        minDistance = config['HiCParams']['minDistance'],
-        removeSelfLigation = (
-            'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
-        keepSelfCircles = (
-            '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
-        skipDuplicationCheck = (
-            '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
-    log:
-        'logs/buildBaseMatrix/{sample}-{region}-{pm}.log'
-    threads:
-        max(2, config['HiCParams']['threads'])
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicBuildMatrix --samFiles {input.bams} '
-        '--region {params.chr}:{params.start}-{params.end} '
-        '--restrictionCutFile {input.restSites} '
-        '--restrictionSequence {params.reSeqs} '
-        '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
-        '--minDistance {params.minDistance} '
-        '--minMappingQuality {params.minMappingQuality} '
-        '--removeSelfLigation {params.removeSelfLigation} '
-        '--danglingSequence {params.danglingSequences} '
-        '--inputBufferSize {params.inputBufferSize} '
-        '{params.keepSelfCircles} '
-        '{params.skipDuplicationCheck} --binSize {params.bin} '
-        '--outFileName {output.hic} --outBam {output.bam} '
-        '--QCfolder {output.qc} --threads {threads} '
-        '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
+if config['microC']:
+    rule buildBaseMatrix:
+        input:
+            bams = expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2']),
+        output:
+            hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
+            bam = 'dat/matrix/{region}/{sample}-{region}-{pm}.bam',
+            qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC')
+        params:
+            bin = BASE_BIN,
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region] + 1,
+            end = lambda wc: REGIONS['end'][wc.region],
+            inputBufferSize = 400000,
+            maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
+            minMappingQuality = config['HiCParams']['minMappingQuality'],
+            minDistance = config['HiCParams']['minDistance'],
+            removeSelfLigation = (
+                'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
+            keepSelfCircles = (
+                '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
+            skipDuplicationCheck = (
+                '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
+        log:
+            'logs/buildBaseMatrix/{sample}-{region}-{pm}.log'
+        threads:
+            max(2, config['HiCParams']['threads'])
+        conda:
+            f'{ENVS}/hicexplorer3.4.yaml'
+        shell:
+            'hicBuildMatrix --samFiles {input.bams} '
+            '--region {params.chr}:{params.start}-{params.end} '
+            '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
+            '--minDistance {params.minDistance} '
+            '--minMappingQuality {params.minMappingQuality} '
+            '--removeSelfLigation {params.removeSelfLigation} '
+            '--inputBufferSize {params.inputBufferSize} '
+            '{params.keepSelfCircles} '
+            '{params.skipDuplicationCheck} --binSize {params.bin} '
+            '--outFileName {output.hic} --outBam {output.bam} '
+            '--QCfolder {output.qc} --threads {threads} '
+            '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
+else:
+    rule buildBaseMatrix:
+        input:
+            bams = expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2']),
+            restSites = getRestSites
+        output:
+            hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
+            bam = 'dat/matrix/{region}/{sample}-{region}-{pm}.bam',
+            qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC')
+        params:
+            bin = BASE_BIN,
+            chr = lambda wc: REGIONS['chr'][wc.region],
+            start = lambda wc: REGIONS['start'][wc.region] + 1,
+            end = lambda wc: REGIONS['end'][wc.region],
+            reSeqs = getRestrictionSeqs,
+            inputBufferSize = 400000,
+            danglingSequences = getDanglingSequences,
+            maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
+            minMappingQuality = config['HiCParams']['minMappingQuality'],
+            minDistance = config['HiCParams']['minDistance'],
+            removeSelfLigation = (
+                'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
+            keepSelfCircles = (
+                '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
+            skipDuplicationCheck = (
+                '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
+        log:
+            'logs/buildBaseMatrix/{sample}-{region}-{pm}.log'
+        threads:
+            max(2, config['HiCParams']['threads'])
+        conda:
+            f'{ENVS}/hicexplorer.yaml'
+        shell:
+            'hicBuildMatrix --samFiles {input.bams} '
+            '--region {params.chr}:{params.start}-{params.end} '
+            '--restrictionCutFile {input.restSites} '
+            '--restrictionSequence {params.reSeqs} '
+            '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
+            '--minDistance {params.minDistance} '
+            '--minMappingQuality {params.minMappingQuality} '
+            '--removeSelfLigation {params.removeSelfLigation} '
+            '--danglingSequence {params.danglingSequences} '
+            '--inputBufferSize {params.inputBufferSize} '
+            '{params.keepSelfCircles} '
+            '{params.skipDuplicationCheck} --binSize {params.bin} '
+            '--outFileName {output.hic} --outBam {output.bam} '
+            '--QCfolder {output.qc} --threads {threads} '
+            '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
 rule mergeValidHiC:
