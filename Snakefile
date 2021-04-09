@@ -25,6 +25,7 @@ default_config = {
     'data':              ''          ,
     'phased_vcf':        None        ,
     'genome':            ''          ,
+    'build':             None        ,
     'bigWig':            {}          ,
     'bed':               {}          ,
     'regions':           ''          ,
@@ -1554,6 +1555,20 @@ def setRegion(wc):
     return ''.join(region)
 
 
+def setMatrixTitle(wc):
+    if config['build'] is not None:
+        build = build.replace('"', '') # Double quotes disallowed
+        build = f' ({build})'
+    else:
+        build = ''
+    try:
+        name = wc.group
+    except AttributeError:
+        name = wc.all
+    title = f'"{name} : {wc.region} at {wc.bin}{build} bin size ({wc.norm} - {wc.pm})"',
+    return title
+
+
 rule plotHiC:
     input:
         rules.createConfig.output
@@ -1561,7 +1576,7 @@ rule plotHiC:
         'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}.png'
     params:
         region = setRegion,
-        title = '"{group} : {region} at {bin} bin size ({norm} - {pm})"',
+        title = setMatrixTitle,
         dpi = 600
     group:
         'processHiC'
@@ -1627,7 +1642,7 @@ rule plotMatrix:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
-        title = '"{all} : {region} at {bin} bin size ({norm} - {pm})"',
+        title = setMatrixTitle,
         dpi = 600,
         colour = 'YlGn'
     log:
@@ -2096,8 +2111,13 @@ def round_up(wc):
     return end - (end%bin) + bin
 
 
-def title(wc):
-    title = f'"{wc.group1} vs {wc.group2} - {wc.region} at {wc.bin} bin size - '
+def setCompareTitle(wc):
+    if config['build'] is not None:
+        build = build.replace('"', '') # Double quotes disallowed
+        build = f' ({build})'
+    else:
+        build = ''
+    title = f'"{wc.group1} vs {wc.group2} - {wc.region}{build} at {wc.bin} bin size - '
     if wc.set == 'sig':
         threshold = config['HiCcompare']['fdr']
         title += f'adj. logFC (FDR <= {threshold})'
@@ -2115,7 +2135,7 @@ rule plotCompare:
     output:
         'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}.png'
     params:
-        title = title,
+        title = setCompareTitle,
         region = setRegion,
         dpi = 600
     group:
