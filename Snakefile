@@ -1565,7 +1565,7 @@ def setMatrixTitle(wc):
         name = wc.group
     except AttributeError:
         name = wc.all
-    title = f'"{name} : {wc.region} at {wc.bin}{build} bin size ({wc.norm} - {wc.pm})"',
+    title = f'"{name} : {wc.region}{build} at {wc.bin} bin size ({wc.norm} - {wc.pm})"',
     return title
 
 
