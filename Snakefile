@@ -1557,7 +1557,7 @@ def setRegion(wc):
 
 def setMatrixTitle(wc):
     if config['build'] is not None:
-        build = build.replace('"', '') # Double quotes disallowed
+        build = config['build'].replace('"', '') # Double quotes disallowed
         build = f' ({build})'
     else:
         build = ''
@@ -2113,7 +2113,7 @@ def round_up(wc):
 
 def setCompareTitle(wc):
     if config['build'] is not None:
-        build = build.replace('"', '') # Double quotes disallowed
+        build = config['build'].replace('"', '') # Double quotes disallowed
         build = f' ({build})'
     else:
         build = ''
