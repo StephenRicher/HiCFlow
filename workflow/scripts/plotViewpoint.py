@@ -24,7 +24,6 @@ def plotCompareViewpoint(bedgraphs: List, out: str, dpi: int):
         pathInfo = processFilename(file)
         df = pd.read_csv(file, sep='\t', names=names)
         df['sample'] = pathInfo['sample']
-        df['logFC'] = pathInfo['logFC']
         allData.append(df)
         if (i > 0) and (pathInfo['viewpoint'] != prevViewpoint):
             logging.error('Viewpoints do not match between files.')
@@ -39,31 +38,30 @@ def plotCompareViewpoint(bedgraphs: List, out: str, dpi: int):
     title = f'{pathInfo["region"]} at {pathInfo["binSize"]} binsize'
     fig, ax = plt.subplots()
     sns.lineplot(x='distance', y='score', hue='sample', alpha=0.5,
-                 data=allData[allData['logFC']==False], ax=ax)
+                 data=allData, ax=ax)
     ax.set_ylabel('Interactions')
     ax.set_xlabel(f'Distance (bp) from viewpoint at {viewpoint}')
     ax.set_title(title, loc='left')
     fig.tight_layout()
     fig.savefig(out, dpi=dpi, bbox_inches='tight')
 
-    #sns.lineplot(x='distance', y='score', hue='sample',
-    #             data=allData[allData['logFC']==True], ax=ax2)
-    #ax2.set_ylabel('LogFC interactions')
-
 
 def processFilename(name):
     """ Extract important information from filepath """
     name = Path(name).name # Remove directory
     name = name.split('-')
-    if name[3] == 'logFC':
-        logFC = True
-        sample = '-'.join(name[:3])
-    else:
-        logFC = False
+    if name[1] == 'vs':
         sample = name[0] if name[3] == 'adjIF1' else name[2]
-    return {'sample': sample, 'region': name[4],
-            'viewpoint': name[5], 'binSize': name[6],
-            'logFC': logFC}
+        region = name[4]
+        viewpoint = name[5]
+        binSize = name[6]
+    else:
+        sample = name[0]
+        region = name[1]
+        viewpoint = name[2]
+        binSize = name[3]
+    return {'sample': sample, 'region': region,
+            'viewpoint': viewpoint, 'binSize': binSize}
 
 
 def reformatCoordinates(coords):
@@ -82,7 +80,7 @@ def parseArgs():
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=plotCompareViewpoint)
     parser.add_argument(
-        'bedgraphs', nargs=3,
+        'bedgraphs', nargs='+',
         help='Viewpoint bedgraphs, adjIF1, adjIF2 and logFC.')
     parser.add_argument(
         '--dpi', type=int, default=300,
