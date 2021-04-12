@@ -159,6 +159,8 @@ wildcard_constraints:
 
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords(REGIONS, config['plot_coordinates'], adjust=BASE_BIN)
+
+print(COORDS)
 # Generate dictionary of plot viewpoints
 VIEWPOINTS =  load_coords(REGIONS, config['viewpointCoords'], includeRegions=False)
 
@@ -1638,7 +1640,8 @@ rule plotViewpoint:
     output:
         'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-{pm}.png'
     params:
-        dpi = 600
+        dpi = 600,
+        build = f'--build {config["build"]}' if config['build'] else ''
     group:
         'processHiC'
     conda:
@@ -1647,7 +1650,7 @@ rule plotViewpoint:
         'logs/plotViewpoint/{group}-{coord}-{region}-{bin}-{norm}-{pm}.log'
     shell:
         'python {SCRIPTS}/plotViewpoint.py {input} --out {output} '
-        '--dpi {params.dpi} &> {log}'
+        '--dpi {params.dpi} {params.build} &> {log}'
 
 
 rule plotMatrix:
@@ -2201,7 +2204,8 @@ rule plotCompareViewpoint:
     output:
         'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.png',
     params:
-        dpi = 600
+        dpi = 600,
+        build = f'--build {config["build"]}' if config['build'] else ''
     group:
         'HiCcompare'
     conda:
@@ -2210,7 +2214,7 @@ rule plotCompareViewpoint:
         'logs/plotCompareViewpoint/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.log'
     shell:
         'python {SCRIPTS}/plotViewpoint.py {input} --out {output} '
-        '--dpi {params.dpi} &> {log}'
+        '--dpi {params.dpi} {params.build} &> {log}'
 
 
 if not ALLELE_SPECIFIC:

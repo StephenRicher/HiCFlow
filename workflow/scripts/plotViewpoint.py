@@ -16,7 +16,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def plotCompareViewpoint(bedgraphs: List, out: str, dpi: int):
+def plotCompareViewpoint(bedgraphs: List, out: str, build: str, dpi: int):
 
     allData = []
     names=['viewRef', 'viewStart', 'viewEnd', 'chrom', 'start', 'end', 'score']
@@ -37,10 +37,14 @@ def plotCompareViewpoint(bedgraphs: List, out: str, dpi: int):
     viewpoint = reformatCoordinates(pathInfo['viewpoint'])
     title = f'{pathInfo["region"]} at {pathInfo["binSize"]} binsize'
     fig, ax = plt.subplots()
-    sns.lineplot(x='distance', y='score', hue='sample', alpha=0.5,
-                 data=allData, ax=ax)
+    alpha = 1 if len(bedgraphs) == 1 else 0.5
+    sns.lineplot(x='distance', y='score', hue='sample', alpha=alpha,
+                 ci=None, data=allData, ax=ax)
     ax.set_ylabel('Interactions')
-    ax.set_xlabel(f'Distance (bp) from viewpoint at {viewpoint}')
+    xlabel = f'Distance (bp) from viewpoint at {viewpoint}'
+    if build is not None:
+        xlabel += f' ({build})'
+    ax.set_xlabel(xlabel)
     ax.set_title(title, loc='left')
     fig.tight_layout()
     fig.savefig(out, dpi=dpi, bbox_inches='tight')
@@ -81,7 +85,10 @@ def parseArgs():
     parser.set_defaults(function=plotCompareViewpoint)
     parser.add_argument(
         'bedgraphs', nargs='+',
-        help='Viewpoint bedgraphs, adjIF1, adjIF2 and logFC.')
+        help='Viewpoint bedgraphs.')
+    parser.add_argument(
+        '--build',
+        help='Reference build label (default: %(default)s)')
     parser.add_argument(
         '--dpi', type=int, default=300,
         help='Resolution for plot (default: %(default)s)')
