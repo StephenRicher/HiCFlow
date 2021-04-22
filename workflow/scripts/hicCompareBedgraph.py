@@ -47,9 +47,11 @@ def hicCompareBedgraph(
             out = allOut
             subset = mat.loc[:, 'score'].groupby('start').sum()
 
+        # Save index because it is lost on Z-score transformation
+        subsetIndex = subset.index
         if Z:
             subset = stats.zscore(subset)
-        score = pd.Series(subset, index=subset.index, name='score')
+        score = pd.Series(subset, index=subsetIndex, name='score')
         bed = pd.merge(
             allStart, score, how='left', left_on='start', right_index=True).fillna(0)
         bed['chrom'] = mat.attrs['chrom']
