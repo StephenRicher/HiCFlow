@@ -201,8 +201,8 @@ HiC_mode = ([
         region=regionBin.keys(), pm=phaseMode),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
 rescalePKL = ([
-    expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}-{pm}.pkl',
-            tool=tools, dir=['up', 'down', 'all'], mode=['', '-count'],
+    expand('intervals/{compare}-{dir}-{tool}-{bin}-{pm}.pkl',
+            tool=tools, dir=['up', 'down', 'all'],
             pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
@@ -241,7 +241,7 @@ rule all:
         (expand('dat/mapped/{sample}-validHiC-{pm}.bam',
             sample=HiC.samples(), pm=phaseMode)
          if (config['createValidBam'] and regionBin) else []),
-        rescalePCL if config['rescalePKL'] else []
+        rescalePKL if config['rescalePKL'] else []
 
 
 if ALLELE_SPECIFIC:
@@ -1224,7 +1224,7 @@ rule rescaleTADinsulation:
         'intervals/{all}-{bin}-TADinsulation-{pm}.pkl'
     params:
         regions = config['regions'],
-        name = lambda wc: f'{wc.all}-{wc.bin}',
+        name = lambda wc: f'{wc.all}-{wc.bin}-TADinsulation',
         transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'
@@ -1248,7 +1248,7 @@ rule rescaleTADboundaries:
     output:
         'intervals/{all}-{bin}-TADboundaries-{pm}.pkl'
     params:
-        name = lambda wc: f'{wc.all}-{wc.bin}',
+        name = lambda wc: f'{wc.all}-{wc.bin}-TADboundary',
         regions = config['regions']
     group:
         'rescaleBedgraphs'
@@ -1345,7 +1345,7 @@ rule rescalePCA:
         'intervals/{all}-{bin}-PCA-{pm}.pkl'
     params:
         regions = config['regions'],
-        name = lambda wc: f'{wc.all}-{wc.bin}',
+        name = lambda wc: f'{wc.all}-{wc.bin}-PCA',
         transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'

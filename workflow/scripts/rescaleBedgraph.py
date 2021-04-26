@@ -116,8 +116,6 @@ def readBedgraph(bedGraph, binSize, mode, filetype=None, threshold=None):
     assert mode in ['sum', 'count']
     with open(bedGraph) as fh:
         for i, line in enumerate(fh):
-            if i % 10_000 == 0:
-                print(i)
             if mode == 'sum':
                 chrom, start, end, score = splitScore(line, filetype)
             else:
@@ -199,7 +197,7 @@ def parseArgs():
     formatRequired = formatParser.add_argument_group('required named arguments')
     formatRequired.add_argument(
         '--filetype',  required=True, choices=['bed', 'bedgraph'],
-        help='Input filetype to correctly retrive score column.')
+        help='Input filetype to correctly retrieve score column.')
 
     chromSizeParser = argparse.ArgumentParser(add_help=False)
     chromSizeParser.add_argument(
