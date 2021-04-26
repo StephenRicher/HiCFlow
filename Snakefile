@@ -201,8 +201,8 @@ HiC_mode = ([
         region=regionBin.keys(), pm=phaseMode),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
 rescalePKL = ([
-    expand('intervals/{compare}-{dir}-{tool}-{bin}-{pm}.pkl',
-            tool=tools, dir=['up', 'down', 'all'],
+    expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}-{pm}.pkl',
+            tool=tools, dir=['up', 'down', 'all'],  mode=['', '-count'],
             pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
