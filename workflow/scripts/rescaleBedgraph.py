@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
-""" Convert bedgraph intervals to new window size and write to PANDAS. """
+""" Convert bedgraph intervals to new binsize and write to PANDAS. """
 
 import sys
 import json
 import logging
 import argparse
+import numpy as np
 import pandas as pd
 from collections import defaultdict
 from utilities import setDefaults, createMainParent
@@ -15,39 +16,35 @@ from bedgraphUtils import splitScore, readRegions, splitPos
 __version__ = '1.0.0'
 
 
-def rescaleBinCount(bedGraph: str, chromSizes: str, out: str, window: int,
+def rescaleBinCount(bedGraph: str, chromSizes: str, out: str, binSize: int,
                     name: str, regions: str, filetype: str = None,
-                    threshold: float = None):
+                    threshold: float = False):
 
-    if threshold is not None:
-        mode = 'binary'
-        if (threshold is not False) and (filetype is None):
-            logging.error(
-                'If --threshold is set then --filetype must also be specified')
-            return 1
-    else:
-        mode = 'count'
-
-    scores = readBedgraph(bedGraph, window, filetype, threshold)
+    if (threshold) and (filetype is None):
+        logging.error(
+            'If --threshold is set then --filetype must also be specified')
+        return 1
+    mode = 'count'
+    scores = readBedgraph(bedGraph, binSize, mode, filetype, threshold)
     name = bedGraph if name is None else name
     template = makeTemplate(
-        name, window, mode, regions, chromSizes,
+        name, binSize, mode, regions, chromSizes,
         distanceTransform=False, includeZero=True, threshold=threshold)
     df = convert2pandas(makeRescaledSum(scores, template))
     df.to_pickle(out)
 
 
-def rescaleSum(bedGraph: str, chromSizes: str, out: str, window: int, name: str,
+def rescaleSum(bedGraph: str, chromSizes: str, out: str, binSize: int, name: str,
                regions: str, filetype: str, distanceTransform: bool,
                includeZero: bool):
-    """ Rescale intervals to a set window size and sum interval scores
-        within a window. Optionally performing distancing correction. """
+    """ Rescale intervals to a set binsize and sum interval scores
+        within a bin. Optionally performing distancing correction. """
 
-    scores = readBedgraphSum(bedGraph, window, filetype)
-    name = bedGraph if name is None else name
     mode = 'sum'
+    scores = readBedgraph(bedGraph, binSize, mode, filetype)
+    name = bedGraph if name is None else name
     template = makeTemplate(
-        name, window, mode, regions, chromSizes,
+        name, binSize, mode, regions, chromSizes,
         distanceTransform, includeZero, threshold=None)
     df = convert2pandas(makeRescaledSum(scores, template))
     df.to_pickle(out)
@@ -66,25 +63,6 @@ def convert2pandas(template):
     return df
 
 
-def makeRescaled(scores, template):
-    """ Generate rescaled dictionary for binary and count mode. """
-
-    for chrom, size in template['meta']['chromSizes'].items():
-        for start in range(0, size, template['meta']['window']):
-            # Skip windows where start not in regions
-            if not validRegion(template['meta']['regions'], chrom, start):
-                continue
-            try:
-                score = scores[chrom][start]
-            except KeyError:
-                score = 0
-            if template['meta']['mode'] == 'binary':
-                score = score > 0.5
-            else:
-                score = round(score)
-            template['data'][chrom][start] = score
-    return template
-
 
 def makeRescaledSum(scores, template):
     """ Generate rescaled dictionary for binary and count mode. """
@@ -92,8 +70,8 @@ def makeRescaledSum(scores, template):
     for chrom, size in template['meta']['chromSizes'].items():
         # Reset prevScore for each chromosome
         prevScore = None
-        for start in range(0, size, template['meta']['window']):
-            # Skip windows where start not in regions
+        for start in range(0, size, template['meta']['binSize']):
+            # Skip bins where start not in regions
             if not validRegion(template['meta']['regions'], chrom, start):
                 prevScore = None
                 continue
@@ -109,20 +87,20 @@ def makeRescaledSum(scores, template):
                 try:
                     template['data'][chrom][start] = score - prevScore
                 except TypeError:
-                    pass  # Skip windows where prevScore set to None
+                    pass  # Skip bins where prevScore set to None
             else:
                 template['data'][chrom][start] = score
             prevScore = score
     return template
 
 
-def makeTemplate(name, window, mode, regions, chromSizes,
+def makeTemplate(name, binSize, mode, regions, chromSizes,
                  distanceTransform, includeZero, threshold):
     """ Return template rescaled JSON with metadata """
     template = {'data':              defaultdict(dict),
                 'meta':
                     {'name':              name                      ,
-                     'window':            window                    ,
+                     'binSize':           binSize                  ,
                      'mode':              mode                      ,
                      'threshold':         threshold                 ,
                      'regions':           readRegions(regions)      ,
@@ -133,39 +111,34 @@ def makeTemplate(name, window, mode, regions, chromSizes,
     return template
 
 
-def readBedgraph(bedGraph, window, filetype=None, threshold=None):
+def readBedgraph(bedGraph, binSize, mode, filetype=None, threshold=None):
     scores = defaultdict(dict)
-    with open(bedGraph) as fh:
-        for line in fh:
-            # Score column must be retrieved if threshold set
-            if isinstance(threshold, float):
-                chrom, start, end, score = splitScore(line, filetype)
-                score > threshold
-            else:
-                chrom, start, end = splitPos(line)
-                score = 1
-            regionLength = end - start
-            for base in range(start, end):
-                pos = getWindow(base, window)
-                try:
-                    scores[chrom][pos] += score / regionLength
-                except KeyError:
-                    scores[chrom][pos] = score / regionLength
-    return scores
-
-
-def readBedgraphSum(bedGraph, window, filetype):
-    scores = defaultdict(dict)
+    assert mode in ['sum', 'count']
     with open(bedGraph) as fh:
         for i, line in enumerate(fh):
-            chrom, start, end, score = splitScore(line, filetype)
-            regionLength = end - start
-            for base in range(start, end):
-                pos = getWindow(base, window)
+            if i % 10_000 == 0:
+                print(i)
+            if mode == 'sum':
+                chrom, start, end, score = splitScore(line, filetype)
+            else:
+                if isinstance(threshold, float):
+                    chrom, start, end, score = splitScore(line, filetype)
+                    score = score > threshold
+                else:
+                    chrom, start, end = splitPos(line)
+                    score = 1
+            if score == 0:
+                continue
+            score = score / (end - start)
+            perBaseBin = getBin(np.array(range(start, end)), binSize)
+            bin, counts = np.unique(perBaseBin, return_counts=True)
+            counts = counts * score
+            perBinScore = dict(zip(bin, counts))
+            for bin, binScore in perBinScore.items():
                 try:
-                    scores[chrom][pos] += score / regionLength
+                    scores[chrom][bin] += binScore
                 except KeyError:
-                    scores[chrom][pos] = score / regionLength
+                    scores[chrom][bin] = binScore
     return scores
 
 
@@ -180,9 +153,9 @@ def validRegion(regions, chrom, start):
     return False
 
 
-def getWindow(pos, window):
-    """ Return 0-based window start for a given position"""
-    return (pos // window) * window
+def getBin(pos, binSize):
+    """ Return 0-based bin start for a given position"""
+    return (pos // binSize) * binSize
 
 
 def readChromSizes(file):
@@ -219,7 +192,7 @@ def parseArgs():
     regionsParser = argparse.ArgumentParser(add_help=False)
     regionsRequired = regionsParser.add_argument_group('required named arguments')
     regionsRequired.add_argument(
-        '--regions', required=True,
+        '--regions',
         help='BED file indicating regions to process.')
 
     formatParser = argparse.ArgumentParser(add_help=False)
@@ -236,53 +209,41 @@ def parseArgs():
     infileParser.add_argument(
         'bedGraph', help='BedGraph/BED interval file to rescale.')
 
-    windowParser = argparse.ArgumentParser(add_help=False)
-    windowRequired = windowParser.add_argument_group('required named arguments')
-    windowRequired.add_argument(
-        '--window', type=int, required=True,
-        help='Rescaled interval window size.')
+    binSizeParser = argparse.ArgumentParser(add_help=False)
+    binSizeRequired = binSizeParser.add_argument_group('required named arguments')
+    binSizeRequired.add_argument(
+        '--binSize', type=int, required=True,
+        help='Rescaled interval binSize size.')
 
     count = subparser.add_parser(
         'count',
-        description='Rescale intervals to a set window size and '
+        description='Rescale intervals to a set binsize and '
                     'count number of intervals falling into each '
-                    'window. Interval scores ignored.',
-        help='Count number of intervals within each window.',
+                    'bin. Interval scores ignored.',
+        help='Count number rescaleSumof intervals within each bin.',
         epilog=parser.epilog,
         parents=[mainParent, infileParser, chromSizeParser,
-                 baseParser, regionsParser, windowParser])
-    count.set_defaults(function=rescaleBinCount)
-
-    binary = subparser.add_parser(
-        'binary',
-        description='Rescale intervals to a set window size and '
-                    'assign each window True/False depending on '
-                    'if it contains atleast 1 interval. Interval '
-                    'scores ignored.',
-        help='Set True/False if window contains atleast 1 interval.',
-        epilog=parser.epilog,
-        parents=[mainParent, infileParser, chromSizeParser,
-                 baseParser, regionsParser, windowParser])
-    binary.add_argument(
+                 baseParser, regionsParser, binSizeParser])
+    count.add_argument(
         '--threshold', type=float, default=False,
         help='Minimum score threshold for determining binary '
              'intervals (default: None)')
-    binary.add_argument(
+    count.add_argument(
         '--filetype',  choices=['bed', 'bedgraph'],
         help='Input format to correctly retrieve score column. '
              'Only required if --threshold used (default: %(default)s)')
-    binary.set_defaults(function=rescaleBinCount)
+    count.set_defaults(function=rescaleBinCount)
 
     sum = subparser.add_parser(
         'sum',
         description=rescaleSum.__doc__,
-        help='Sum scores across intervals in a window.',
+        help='Sum scores across intervals in a bin.',
         epilog=parser.epilog,
         parents=[mainParent, infileParser, chromSizeParser,
-                 baseParser, regionsParser, windowParser, formatParser])
+                 baseParser, regionsParser, binSizeParser, formatParser])
     sum.add_argument(
         '--includeZero', action='store_true',
-        help='Include windows with a 0 score (default: %(default)s)')
+        help='Include bins with a 0 score (default: %(default)s)')
     sum.add_argument(
         '--distanceTransform', action='store_true',
         help='Perform differencing to remove series '

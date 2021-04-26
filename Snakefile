@@ -202,7 +202,7 @@ HiC_mode = ([
     'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
 rescalePKL = ([
     expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}-{pm}.pkl',
-            tool=tools, dir=['up', 'down', 'all'], mode=['', '-binary'],
+            tool=tools, dir=['up', 'down', 'all'], mode=['', '-count'],
             pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
@@ -1234,7 +1234,7 @@ rule rescaleTADinsulation:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '{params.transform} --filetype bedgraph &> {log}'
 
@@ -1257,8 +1257,8 @@ rule rescaleTADboundaries:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py binary <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} &> {log}'
 
 
@@ -1355,7 +1355,7 @@ rule rescalePCA:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '{params.transform} --filetype bedgraph &> {log}'
 
@@ -1908,7 +1908,7 @@ rule hicCompareBedgraph:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/hicCompareBedgraph.py '
+        'python {SCRIPTS}/hicCompareBedgraph.py --Z '
         '--maxDistance {params.maxDistance} --allOut {output.all} '
         '--upOut {output.up} --downOut {output.down} {input} &> {log}'
 
@@ -1933,19 +1933,19 @@ rule rescaleHiCcompare:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '{params.transform} --filetype bedgraph &> {log}'
 
 
-rule rescaleHiCcompareBinary:
+rule rescaleHiCcompareCount:
     input:
         bedgraphs = lambda wc: expand(
             'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}-{{pm}}.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{group1}-vs-{group2}-{dir}-{compare}-binary-{bin}-{pm}.pkl'
+        'intervals/{group1}-vs-{group2}-{dir}-{compare}-count-{bin}-{pm}.pkl'
     params:
         threshold = 1.96,
         regions = config['regions'],
@@ -1957,8 +1957,8 @@ rule rescaleHiCcompareBinary:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py binary <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --window {wildcards.bin} '
+        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '--threshold {params.threshold} --filetype bedgraph &> {log}'
 
