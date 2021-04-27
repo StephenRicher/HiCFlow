@@ -71,13 +71,14 @@ default_config = {
         {'base':          5000        ,
          'bins':         [5000, 10000],},
     'plotParams':
-        {'distanceNorm': False        ,
-         'plain'       : True         ,
-         'raw'         : True         ,
-         'colourmap'   : 'Purples'    ,
-         'coordinates' : None         ,
-         'viewpoints'  : None         ,
-         'plotRep'     : True         ,},
+        {'distanceNorm'  : False    ,
+         'plain'         : True     ,
+         'raw'           : True     ,
+         'colourmap'     : 'Purples',
+         'coordinates'   : None     ,
+         'viewpoints'    : None     ,
+         'viewpointRange': 500000   ,
+         'plotRep'       : True     ,},
     'bigWig'           : {}           ,
     'bed'              : {}           ,
     'distanceTransform': True,
@@ -1623,7 +1624,7 @@ def makeViewRegion(wc):
     end = int(''.join(region[inds[-1]+1:]))
     start = int(''.join(region[inds[-2]+1:inds[-1]]))
     chrom = ''.join(region[:inds[-2]])
-    size = 1000_000
+    size = config['plotParams']['viewpointRange']
     # Ensure padding does not exceed region length
     start = max(start - size, REGIONS.loc[wc.region, 'start'] + 1)
     end = min(end + size, REGIONS.loc[wc.region, 'end'])
