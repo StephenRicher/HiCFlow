@@ -26,8 +26,6 @@ default_config = {
     'phased_vcf':        None        ,
     'genome':            ''          ,
     'build':             None        ,
-    'bigWig':            {}          ,
-    'bed':               {}          ,
     'regions':           ''          ,
     'cutadapt':
         {'forwardAdapter': 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA',
@@ -76,16 +74,18 @@ default_config = {
         {'distanceNorm': False        ,
          'plain'       : True         ,
          'raw'         : True         ,
-         'colourmap'   : 'Purples'    ,},
+         'colourmap'   : 'Purples'    ,
+         'coordinates' : None         ,
+         'viewpoints'  : None         ,
+         'plotRep'     : True         ,},
+    'bigWig'           : {}           ,
+    'bed'              : {}           ,
     'distanceTransform': True,
-    'plot_coordinates':  None,
-    'viewpointCoords':   None,
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
     'runQC':             True,
     'runHiCRep':         True,
-    'plotRep':           True,
     'multiQCconfig':     None,
     'rescalePKL':        False,
     'groupJobs':         False,
@@ -111,11 +111,11 @@ if ALLELE_SPECIFIC:
     config['phase'] = False
     # Turn off plotRep for allele specific mode
     if config['ASHIC']:
-        if config['plotRep']:
+        if config['plotParams']['plotRep']:
             print('Per replicate plots not availale in allele specific mode '
                   'because replicates are merged for ASHIC. Setting plotRep '
                   'to False.', file=sys.stderr)
-            config['plotRep'] = False
+            config['plotParams']['plotRep'] = False
         if config['createValidBam']:
             print('createValid bam not available in ASHIC mode. Setting '
                   'createValidBam to False.', file=sys.stderr)
@@ -158,10 +158,10 @@ wildcard_constraints:
     combo = r'alt_alt|alt_both-ref|both-ref_both-ref|ref_alt|ref_both-ref|ref_ref'
 
 # Generate dictionary of plot coordinates, may be multple per region
-COORDS = load_coords(REGIONS, config['plot_coordinates'], adjust=BASE_BIN)
+COORDS = load_coords(REGIONS, config['plotParams']['coordinates'], adjust=BASE_BIN)
 
 # Generate dictionary of plot viewpoints
-VIEWPOINTS =  load_coords(REGIONS, config['viewpointCoords'], includeRegions=False)
+VIEWPOINTS =  load_coords(REGIONS, config['plotParams']['viewpoints'], includeRegions=False)
 
 tools = (
     ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
@@ -193,11 +193,11 @@ HiC_mode = ([
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=phaseMode,
         preGroup=HiC.groups(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.png',
-        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+        all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=phaseMode,
         norm=norm) for region in regionBin],
      expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.png',
-        all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+        all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=regionBin.keys(), pm=phaseMode),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
 rescalePKL = ([
@@ -205,7 +205,7 @@ rescalePKL = ([
             tool=tools, dir=['up', 'down', 'all'],  mode=['', '-count'],
             pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
-            all=(HiC.all() if config['plotRep'] else list(HiC.groups())),
+            all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
             bin=binRegion.keys(), pm=phaseMode,
             method=['PCA', 'TADinsulation', 'TADboundaries'])])
 
@@ -1266,7 +1266,7 @@ rule detectLoops:
     input:
         rules.correctMatrix.output
     output:
-        'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}-{pm}.bedgraph'
+        'dat/matrix/{region}/{bin}/loops/unmod/{all}-{region}-{bin}-{pm}.bedgraph'
     params:
         peakWidth = 6,
         windowSize = 10,
@@ -1294,6 +1294,25 @@ rule detectLoops:
         '--peakInteractionsThreshold {params.peakInteractionsThreshold} '
         '--threads 1 --threadsPerChromosome {threads} '
         '&> {log} || touch {output} && touch {output} '
+
+# Hacky fix to correct loop intervals that extend too far
+rule clampLoops:
+    input:
+        rules.detectLoops.output
+    output:
+        'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}-{pm}.bedgraph'
+    params:
+        minPos = lambda wc: REGIONS['start'][wc.region],
+        maxPos = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'processHiC'
+    log:
+        'logs/clampLoops/{all}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/clampLoops.py '
+        '{params.minPos} {params.maxPos} {input} > {output} 2> {log}'
 
 
 rule hicPCA:
@@ -1446,7 +1465,7 @@ rule reformatDomains:
     output:
         'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-{pm}-ontad_domains.bed'
     params:
-        scale = lambda wc: REGIONS['start'][wc.region],
+        scale = lambda wc: REGIONS['start'][wc.region] - int(wc.bin),
         trimChr = setTrim
     group:
         'processHiC'
