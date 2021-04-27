@@ -48,7 +48,9 @@ def scoreInterval(bed, bedGraph, intervalSize, shift):
         except KeyError:
             pass
     score = np.array(score)
-    return pd.Series([score.sum(), score.std()])
+    scoreSum = score.sum()
+    scoreStd = np.nan if len(score) == 0 else score.std()
+    return pd.Series([scoreSum, scoreStd])
 
 
 def countBins(positions, binSize: int, shift: int):
@@ -89,6 +91,7 @@ def readBed(file: str):
     if len(bed.columns) > 6:
         bed = bed[[0,1,2,3,4,5]]
     bed = bed.rename(columns=columns)
+    bed['chrom'] = bed['chrom'].astype(str)
     return bed
 
 
