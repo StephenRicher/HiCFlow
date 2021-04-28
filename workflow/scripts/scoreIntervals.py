@@ -3,6 +3,7 @@
 """ Summarise bedgraph score per interval region """
 
 import sys
+import logging
 import argparse
 import numpy as np
 import pandas as pd
@@ -22,7 +23,6 @@ def scoreAllIntervals(
         groupName: bool, multiplier: int, threads: int):
     intervalSize, shift, bedGraph = readBedgraph(bedGraph)
     bed = pd.concat(readBed(bed) for bed in beds)
-
     if (threads > 1) and ('pandarallel' in sys.modules):
         pandarallel.initialize(nb_workers=threads, verbose=0)
         bed[['score', 'std']] = bed.parallel_apply(
@@ -83,15 +83,22 @@ def readBedgraph(file: str):
     return intervalSize, shift, bedGraph
 
 
+def addName(bed):
+    """ Create BED entry name if absent """
+    if pd.isna(bed['name']):
+        return f'{bed["chrom"]}:{bed["start"]}-{bed["end"]}'
+    else:
+        return bed['name']
+
+
 def readBed(file: str):
     """ Read BED file into Pandas """
-    columns = {0: 'chrom', 1: 'start', 2: 'end',
-               3: 'name', 4: 'score', 5: 'strand'}
-    bed = pd.read_csv(file, sep='\t', comment='#', header=None)
-    if len(bed.columns) > 6:
-        bed = bed[[0,1,2,3,4,5]]
-    bed = bed.rename(columns=columns)
-    bed['chrom'] = bed['chrom'].astype(str)
+    columns = {'chrom': str, 'start': int, 'end': int,
+               'name': str, 'score': float, 'strand': str}
+    bed = pd.read_csv(
+        file, sep='\t', comment='#', header=None,
+        dtype=columns, names=columns.keys())
+    bed['name'] = bed.apply(addName, axis=1)
     return bed
 
 
