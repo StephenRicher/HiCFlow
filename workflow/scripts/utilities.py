@@ -96,3 +96,16 @@ def readHomer(matrix, upperOnly=False, sparse=True, diagonal=False, distanceNorm
     mat.attrs['binSize'] = int(binSize)
 
     return mat[['start', 'start2', 'score']]
+
+
+def readChromSizes(file):
+    """ Read chromosome sizes to dict """
+    chromSizes = {}
+    with open(file) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            chrom, size = line.split()
+            chromSizes[chrom] = int(size)
+    return chromSizes
