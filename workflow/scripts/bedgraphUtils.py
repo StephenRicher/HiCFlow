@@ -104,6 +104,10 @@ class Bed:
         except IndexError:
             return None
 
+    def __repr__(self):
+        return f'{self.chrom}:{self.start}-{self.end}'
+
+
 class Bedgraph:
     def __init__(self, line):
         self.record = line.strip('\n').split()
@@ -224,7 +228,7 @@ def readBed(file, buffer=0, filetype='bed'):
 
 
 def readBedLength(file, fileType='bed'):
-    """ Read BED as dictory of BED (keys) and BED length (values) """
+    """ Read BED as dictionary of BED (keys) and BED length (values) """
     assert fileType.lower() in ['bed', 'links']
     fileType = Bed if fileType.lower() == 'bed' else Links
     allEntries = {}
