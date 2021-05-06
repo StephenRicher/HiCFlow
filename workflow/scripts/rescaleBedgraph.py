@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from utilities import setDefaults, createMainParent
+from utilities import setDefaults, createMainParent, readChromSizes
 from bedgraphUtils import splitScore, readRegions, splitPos
 
 
@@ -154,19 +154,6 @@ def validRegion(regions, chrom, start):
 def getBin(pos, binSize):
     """ Return 0-based bin start for a given position"""
     return (pos // binSize) * binSize
-
-
-def readChromSizes(file):
-    """ Read chromosome sizes to dict """
-    chromSizes = {}
-    with open(file) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            chrom, size = line.split()
-            chromSizes[chrom] = int(size)
-    return chromSizes
 
 
 def parseArgs():
