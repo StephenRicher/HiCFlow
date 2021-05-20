@@ -24,6 +24,7 @@ The pipeline utilises the workflow management system Snakemake and automatically
   * [Example output](#example-output)
      * [HiC track](#hic-track)
      * [HiCcompare track](#hiccompare-track)
+     * [Viewpoints](#viewpoints)
   * [Quality Control](#quality-control)
      * [HiCRep](#hicrep)
      * [MultiQC report](#multiqc-report)
