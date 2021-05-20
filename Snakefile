@@ -81,6 +81,7 @@ default_config = {
     'bigWig'           : {}           ,
     'bed'              : {}           ,
     'fastq_screen':      None,
+    'runQC':             True,
     'phase':             True,
     'createValidBam':    False,
     'runHiCRep':         True,
@@ -231,7 +232,8 @@ rule all:
         HiC_mode,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
          if config['phase'] else []),
-        (['qc/multiqc', 'qc/filterQC/ditagLength.png', 'qc/fastqc/.tmp.aggregateFastqc']),
+        (['qc/multiqc', 'qc/filterQC/ditagLength.png',
+          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
         ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.png', region=region,
             bin=regionBin[region], pm=phaseMode) for region in regionBin]
          if config['runHiCRep'] else []),
