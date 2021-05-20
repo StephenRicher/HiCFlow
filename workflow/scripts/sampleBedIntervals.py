@@ -63,7 +63,7 @@ def writeNotFound(sampleIntervals, rep, sampleFormat):
     """ Write blank entries for any sample intervals
         with no valid random position """
     for selection in sampleIntervals:
-        name = f'{selection.id}-{rep}'
+        name = f'{selection}-{rep}'
         if sampleFormat == 'links':
             print("", "", "", "", "", "", name, sep='\t')
         else:
