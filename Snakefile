@@ -181,14 +181,14 @@ HiC_mode = ([
         region=region, coords=COORDS[region], set=['logFC'], pm=phaseMode,
         compare=HiC.groupCompares(), bin=regionBin[region],
         tool=tools) for region in regionBin],
-    [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-{pm}.png',
+    [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.png',
         region=region, coords=VIEWPOINTS[region], pm=phaseMode,
         compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.png',
         region=region, coords=COORDS[region], norm=norm, pm=phaseMode,
         vis=vis, group=HiC.groups(),
         bin=regionBin[region]) for region in regionBin],
-    [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-{pm}.png',
+    [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.png',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=phaseMode,
         preGroup=HiC.groups(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.png',
@@ -1670,7 +1670,7 @@ rule runViewpoint:
     input:
         'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
     output:
-        bedgraph = 'dat//{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.bedgraph',
+        bedgraph = 'dat/viewpoints/{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.bedgraph',
         plot = temp('dat/viewpoints/{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.png')
     params:
         referencePoint = setRegion,
@@ -2255,7 +2255,7 @@ rule plotCompareViewpoint:
         IF1 = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-adjIF1-{region}-{coord}-{bin}-{pm}.bedgraph',
         IF2 = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-adjIF2-{region}-{coord}-{bin}-{pm}.bedgraph',
     output:
-        'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.png',
+        'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-viewpoint-{pm}.png',
     params:
         dpi = 600,
         build = f'--build {config["build"]}' if config['build'] else ''
