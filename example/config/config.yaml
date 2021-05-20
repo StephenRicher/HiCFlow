@@ -17,8 +17,11 @@ regions: ../config/regions.bed
 genome :
     S2Rplus : ../genome/BDGP6.28.fa.gz
 
+build: BDGP6
+
 # Set True to perform phasing and haplotype assembly pipeline.
-phase : False
+phase: False
+ASHIC: False
 
 # Phased VCF file for allele specific analysis. Must specify a VCF for each
 # cell type defined in config['data']. If not set then run normal HiC mode.
@@ -60,6 +63,18 @@ HiCParams:
     keepSelfCircles:      False
     skipDuplicationCheck: False
     nofill:               False
+    threads:              4
+
+plotParams:
+    distanceNorm:   False
+    plain:          True
+    colourmap:      Purples
+    # BED file for creating plots of additional viewpoints in addition to those
+    # defined config['protocol']['regions'].
+    coordinates:    ../config/plot_coordinates.bed
+    viewpoints:     ../config/viewpoints.bed
+    viewpointRange: 150_000
+    plotRep:        True
 
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
@@ -70,13 +85,6 @@ bigWig :
 bed :
     Genes : ../genome/BDGP6.28.99.genes.bed
 
-# BED file for creating plots of additional viewpoints in addition to those
-# defined config['protocol']['regions'].
-plot_coordinates: ../config/plot_coordinates.bed
-
-# Matplotlib colour map for HiC plots
-colourmap : 'Purples'
-
 HiCcompare:
     fdr:   0.1  # FDR threshold for significant differential interactions.
     logFC: 0    # Fold-change threshold for significant differential interactions.
@@ -86,6 +94,7 @@ compareMatrices:
     vMin: -1.96 # Mimimum logFC value for colour scale.
     vMax: 1.96  # Maximum logFC value for colour scale.
     size: 3     # Size of median filter to denoise comparison matrix.
+    maxDistance:  1000000
 
 # GATK variant calling best practises for human data
 gatk:
@@ -100,9 +109,14 @@ gatk:
     trustPoly:  True
     downSample: 42.1 # Optionally downsample reads for baseRecalibrator
 
-plotRep: True
-
+# Optional run HiCRep - may take a while for high res datasets.
 runHiCRep: True
+
+# Treat data as microC - ignore restriction digest.
+microC: False
+
+# Write TAD and HiCcompare status and score to a binned pandas
+rescalePKL: True
 
 # Output a BAM file containing only valid HiC read pairs within defined regions.
 createValidBam: False

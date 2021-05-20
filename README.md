@@ -48,7 +48,7 @@ The configuration file for this example dataset is shown below and can be found 
 
 **Note:** If relative file paths are provided in the configuration file then these are **relative to the working directory**.
 The working directory itself (defined by workdir) is relative to the directory snakemake is executed in.
-If not set, the working directory defaults to the directory containg the Snakefile.
+If not set, the working directory defaults to the directory contaning the Snakefile.
 Relative paths can be confusing, they are used here to ensure the example dataset works for all users.
 If in doubt simply provide absolute paths.
 
@@ -72,8 +72,11 @@ regions: ../config/regions.bed
 genome :
     S2Rplus : ../genome/BDGP6.28.fa.gz
 
+build: BDGP6
+
 # Set True to perform phasing and haplotype assembly pipeline.
-phase : True
+phase: False
+ASHIC: False
 
 # Phased VCF file for allele specific analysis. Must specify a VCF for each
 # cell type defined in config['data']. If not set then run normal HiC mode.
@@ -85,7 +88,9 @@ phased_vcf:
 # List of binsizes to analyse HiC data at different resolutions.
 # The first binsize defines the base resolution, all subsequence bin sizes
 # must be whole divisible by the base bin size e.g. [1000, 1500] is invalid.
-binsize : [1000, 3000]
+resolution:
+    base : 1000
+    bins : [1000, 3000]
 
 # Parameters for cutadapt - see https://cutadapt.readthedocs.io/en/stable/guide.html
 cutadapt:
@@ -101,15 +106,30 @@ cutadapt:
 # List of restriction sequence in order of protocol usage. Cut site is denoted
 # using the '^' symbol. Ensure restriction enzyme names are given as strings.
 restrictionSeqs:
-    'DpnII' : '^GATC'
+    A:
+        DpnII : '^GATC'
 
 HiCParams:
-    minDistance: 300
+    minBins:              50
+    minDistance:          300
     maxLibraryInsertSize: 1000
-    removeSelfLigation: True
-    keepSelfCircles: False
+    minMappingQuality:    15
+    removeSelfLigation:   True
+    keepSelfCircles:      False
     skipDuplicationCheck: False
-    nofill: False
+    nofill:               False
+    threads:              4
+
+plotParams:
+    distanceNorm:   False
+    plain:          True
+    colourmap:      Purples
+    # BED file for creating plots of additional viewpoints in addition to those
+    # defined config['protocol']['regions'].
+    coordinates:    ../config/plot_coordinates.bed
+    viewpoints:     ../config/viewpoints.bed
+    viewpointRange: 150_000
+    plotRep:        True
 
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
@@ -120,22 +140,38 @@ bigWig :
 bed :
     Genes : ../genome/BDGP6.28.99.genes.bed
 
-# BED file for creating plots of additional viewpoints in addition to those
-# defined config['protocol']['regions'].
-plot_coordinates: ../config/plot_coordinates.bed
-
-# Matplotlib colour map for HiC plots
-colourmap : 'Purples'
-
 HiCcompare:
-    fdr: 0.1 # FDR threshold for significant differential interactions.
-    logFC: 0 # Fold-change threshold for significant differential interactions.
-    multi: True # Run multiHiCcompare when replicates are available.
+    fdr:   0.1  # FDR threshold for significant differential interactions.
+    logFC: 0    # Fold-change threshold for significant differential interactions.
+    multi: False # Run multiHiCcompare when replicates are available.
 
 compareMatrices:
     vMin: -1.96 # Mimimum logFC value for colour scale.
     vMax: 1.96  # Maximum logFC value for colour scale.
     size: 3     # Size of median filter to denoise comparison matrix.
+    maxDistance:  1000000
+
+# GATK variant calling best practises for human data
+gatk:
+    hapmap:     #'gatkResourceBundle/hapmap_3.3.hg38.vcf.gz'
+    omni:       #'gatkResourceBundle/1000G_omni2.5.hg38.vcf.gz'
+    G1K:        #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz'
+    dbsnp:      #'gatkResourceBundle/dbsnp_146.hg38.vcf.gz'
+    mills:      #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz'
+    all_known:  #['gatkResourceBundle/dbsnp_146.hg38.vcf.gz',
+                #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
+                #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+    trustPoly:  True
+    downSample: 42.1 # Optionally downsample reads for baseRecalibrator
+
+# Optional run HiCRep - may take a while for high res datasets.
+runHiCRep: True
+
+# Treat data as microC - ignore restriction digest.
+microC: False
+
+# Write TAD and HiCcompare status and score to a binned pandas
+rescalePKL: True
 
 # Output a BAM file containing only valid HiC read pairs within defined regions.
 createValidBam: False
@@ -146,6 +182,12 @@ multiQCconfig : ../config/multiqc_config.yaml
 # Configuration file of paths to genome indexes for FastQ Screen.
 # See template in example/config/fastq_screen.config
 fastq_screen :
+
+# Cluster only - group certain jobs (e.g. lammps simulations / post-processing)
+# into a single job submission. Some clusters be default assign a job all
+# threads even for single-thread operation. Therefore it may by quicker to
+# run all replicates in parallel in one job rather than have wasted threads.
+groupJobs: True
 
 ```
 
@@ -177,13 +219,18 @@ Consult the official Snakemake documentation [here](https://snakemake.readthedoc
 
 ### HiC track
 
-HiCflow utilises pyGenomeTracks to plot annotated HiC tracks with nested TAD domains, loops and TAD insulation scores. ChIP data and orientation of CTCF sites can also be provided.
-![HiC plot example](./README_files/AS-chr3L-3L_5500000_6000000-3000.png)
+HiCflow utilises pyGenomeTracks to plot annotated HiC tracks with nested TAD domains, loops and TAD insulation scores. Custom BED and Bedgraph files can be provided through the configuration file.
+![HiC plot example](./README_files/AS-chr3L-3L_5500000_6000000-3000-custom-full.png)
 
 ### HiCcompare track
 
-HiCflow uses HiCcompare to produce joint normalised Z-score subtraction matrices between pairs of samples. Statistically significant changes are highlighted as points on the subtraction matrix.
-![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC.png)
+HiCflow uses HiCcompare to produce joint normalised log fold-change subtraction matrices between pairs of samples.
+![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC-full.png)
+
+### Viewpoints
+
+HiCFlow can also plot custom viewpoints of specific regions. Viewpoint regions must be provided as  a BED file in the configuration file under plotParams -> viewpoints. The below example compares two samples using between-sample normalised contact frequencies provided by HiCcompare.
+![Viewpoint example](./README_files/G1S-vs-AS-chr3L-3L_5740000_5750000-3000-viewpoint-full.png)
 
 ## Quality Control
 
@@ -194,15 +241,15 @@ HiCflow utilises MultiQC to aggregate the QC and metric report across all sample
 ### HiCRep
 
 HiCflow uses HiCRep to assess sample-reproducibility by calculating the stratum-adjusted correlation coefficient between all pairwise samples.
-![HiCRep example](./README_files/chr3L-1000-hicrep.png)
+![HiCRep example](./README_files/chr3L-1000-hicrep-full.png)
 
 ### Other QC Metrics
 
 #### Insert Size Distribution
-![InsertSize](./README_files/insert_size_frequency.png)
+![InsertSize](./README_files/insertSizeFrequency.png)
 
 #### Ditag Length
-![Ditag Length](./README_files/ditag_length.png)
+![Ditag Length](./README_files/ditagLength.png)
 
 ###### References
 Qi Wang, Qiu Sun, Daniel M. Czajkowsky, and Zhifeng Shao. Sub-kb Hi-C in D.
