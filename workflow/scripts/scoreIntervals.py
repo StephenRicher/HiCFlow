@@ -94,10 +94,10 @@ def addName(bed):
 def readBed(file: str):
     """ Read BED file into Pandas """
     columns = {'chrom': str, 'start': int, 'end': int,
-               'name': str, 'score': float, 'strand': str}
+               'name': str, 'score': str, 'strand': str}
     bed = pd.read_csv(
         file, sep='\t', comment='#', header=None,
-        dtype=columns, names=columns.keys())
+        usecols=range(6), dtype=columns, names=columns.keys())
     bed['name'] = bed.apply(addName, axis=1)
     return bed
 
