@@ -81,7 +81,6 @@ default_config = {
          'plotRep'       : True     ,},
     'bigWig'           : {}           ,
     'bed'              : {}           ,
-    'distanceTransform': True,
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
@@ -208,7 +207,7 @@ rescalePKL = ([
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
             bin=binRegion.keys(), pm=phaseMode,
-            method=['PCA', 'TADinsulation', 'TADboundaries'])])
+            method=['PCA', 'TADinsulation', 'TADboundaries', 'TADdomains'])])
 
 
 def getChromSizes(wc):
@@ -1182,7 +1181,7 @@ rule correctMatrix:
         '--outFileName {output} &> {log} || touch {output}'
 
 
-rule TadInsulation:
+rule TADinsulation:
     input:
         rules.correctMatrix.output
     output:
@@ -1204,7 +1203,7 @@ rule TadInsulation:
     threads:
         THREADS
     log:
-        'logs/TadInsulation/{all}-{region}-{bin}-{pm}.log'
+        'logs/TADinsulation/{all}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1226,7 +1225,6 @@ rule rescaleTADinsulation:
     params:
         regions = config['regions'],
         name = lambda wc: f'{wc.all}-{wc.bin}-TADinsulation',
-        transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'
     log:
@@ -1234,22 +1232,45 @@ rule rescaleTADinsulation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph2.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
-        '{params.transform} --filetype bedgraph &> {log}'
+        '--filetype bedgraph &> {log}'
+
+
+rule rescaleTADdomains:
+    input:
+        bedgraphs = lambda wc: expand(
+            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}-{{pm}}-ontad_domains.bed',
+            region=binRegion[wc.bin]),
+        chromSizes = getChromSizes
+    output:
+        'intervals/{all}-{bin}-TADdomains-{pm}.pkl'
+    params:
+        name = lambda wc: f'{wc.all}-{wc.bin}-TADdomains',
+        regions = config['regions']
+    group:
+        'rescaleBedgraphs'
+    log:
+        'logs/rescaleTADdomains/{all}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/rescaleBedgraph2.py count <(cat {input.bedgraphs}) '
+        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
+        '--regions {params.regions} --name {params.name} &> {log}'
 
 
 rule rescaleTADboundaries:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}-{{pm}}_boundaries.bed',
+            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}-{{pm}}-ontad_boundaries.bed',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
         'intervals/{all}-{bin}-TADboundaries-{pm}.pkl'
     params:
-        name = lambda wc: f'{wc.all}-{wc.bin}-TADboundary',
+        name = lambda wc: f'{wc.all}-{wc.bin}-TADboundaries',
         regions = config['regions']
     group:
         'rescaleBedgraphs'
@@ -1258,7 +1279,7 @@ rule rescaleTADboundaries:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph2.py count <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} &> {log}'
 
@@ -1366,7 +1387,6 @@ rule rescalePCA:
     params:
         regions = config['regions'],
         name = lambda wc: f'{wc.all}-{wc.bin}-PCA',
-        transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'
     log:
@@ -1374,10 +1394,10 @@ rule rescalePCA:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph2.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
-        '{params.transform} --filetype bedgraph &> {log}'
+        '--filetype bedgraph &> {log}'
 
 
 rule reformatHomer:
@@ -1477,6 +1497,22 @@ rule reformatDomains:
     shell:
         'python {SCRIPTS}/reformatDomains.py {input} --scale {params.scale} '
         '{params.trimChr} > {output} 2> {log}'
+
+
+rule domain2boundaries:
+    input:
+        rules.reformatDomains.output
+    output:
+        'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-{pm}-ontad_boundaries.bed'
+    group:
+        'processHiC'
+    log:
+        'logs/domain2boundaries/{region}/{bin}/{all}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/TADdomains2boundaries.py {wildcards.bin} {input} '
+        '> {output} 2> {log}'
 
 
 rule computeStripeScore:
@@ -1944,7 +1980,6 @@ rule rescaleHiCcompare:
     params:
         regions = config['regions'],
         name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}',
-        transform = '--distanceTransform' if config['distanceTransform'] else ''
     group:
         'rescaleBedgraphs'
     log:
@@ -1952,10 +1987,10 @@ rule rescaleHiCcompare:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph2.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
-        '{params.transform} --filetype bedgraph &> {log}'
+        '--filetype bedgraph &> {log}'
 
 
 rule rescaleHiCcompareCount:
@@ -1967,9 +2002,9 @@ rule rescaleHiCcompareCount:
     output:
         'intervals/{group1}-vs-{group2}-{dir}-{compare}-count-{bin}-{pm}.pkl'
     params:
-        threshold = 1.96,
+        threshold = 2,
         regions = config['regions'],
-        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}',
+        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}-peak',
     group:
         'rescaleBedgraphs'
     log:
@@ -1977,7 +2012,7 @@ rule rescaleHiCcompareCount:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph2.py count <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '--threshold {params.threshold} --filetype bedgraph &> {log}'
