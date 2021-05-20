@@ -6,6 +6,7 @@ import sys
 import json
 import logging
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 from collections import defaultdict
@@ -16,144 +17,130 @@ from bedgraphUtils import splitScore, readRegions, splitPos
 __version__ = '1.0.0'
 
 
-def rescaleBinCount(bedGraph: str, chromSizes: str, out: str, binSize: int,
-                    name: str, regions: str, filetype: str = None,
-                    threshold: float = False):
+def rescaleCount(bedGraph: str, chromSizes: str, out: str, binSize: int,
+                 name: str, regions: str, minOverlap: int,
+                 filetype: str = None, threshold: float = False):
+    chromSizes = readChromSizes(chromSizes)
+    if threshold:
+        if filetype is None:
+            logging.error('If --threshold is set then --filetype '
+                          'must also be specified')
+            return 1
+        # Select coordinate and score columns depending on filetype
+        bed = readBedgraph(bedGraph, filetype=filetype, score=True)
+        # Filter score regions by threshold
+        bed = bed.loc[bed['score'] >= threshold]
+    else:
+        bed = readBedgraph(bedGraph, score=False)
 
-    if (threshold) and (filetype is None):
-        logging.error(
-            'If --threshold is set then --filetype must also be specified')
-        return 1
-    mode = 'count'
-    scores = readBedgraph(bedGraph, binSize, mode, filetype, threshold)
-    name = bedGraph if name is None else name
-    template = makeTemplate(
-        name, binSize, mode, regions, chromSizes,
-        distanceTransform=False, includeZero=True, threshold=threshold)
-    df = convert2pandas(makeRescaledSum(scores, template))
-    df.to_pickle(out)
+    rescaledByChrom = []
+    for chrom, df in bed.groupby('chrom'):
+        # For count mode, region scores are set to the region length
+        df['score'] = df['end'] - df['start']
+        # Split regions into seperate rows according to their bin
+        df = rescaleInterval(df, binSize)
+        # Count a region if atleast X number of bases overlap a bin
+        df['count'] = df['overlap'] > minOverlap
+        # Start position of last bin in chromosome
+        maxBin = (chromSizes[chrom] // binSize) * binSize
+        df = (df
+            .groupby('startBin').apply(baseOverlap, binSize)
+            .rename({0: 'overlap', 1: 'count'}, axis=1)
+            .reindex(range(0, maxBin, binSize), fill_value=0)
+            .reset_index()
+            .rename({'startBin': 'start'}, axis=1))
+        df['chrom'] = chrom
+        rescaledByChrom.append(df)
+    # Merge across chromosomes and save
+    rescaledByChrom = pd.concat(rescaledByChrom, axis=0)
+    rescaledByChrom['end'] = rescaledByChrom['start'] + binSize
+    rescaledByChrom.attrs['name'] = name
+    rescaledByChrom.attrs['mode'] = 'count'
+    cols = ['chrom', 'start', 'end', 'overlap', 'count']
+    rescaledByChrom[cols].to_pickle(out)
 
 
-def rescaleSum(bedGraph: str, chromSizes: str, out: str, binSize: int, name: str,
-               regions: str, filetype: str, distanceTransform: bool,
-               includeZero: bool):
+
+def rescaleSum(bedGraph: str, chromSizes: str, out: str, binSize: int,
+               name: str, regions: str, filetype: str):
     """ Rescale intervals to a set binsize and sum interval scores
         within a bin. Optionally performing distancing correction. """
+    chromSizes = readChromSizes(chromSizes)
+    bed = readBedgraph(bedGraph, filetype=filetype, score=True)
 
-    mode = 'sum'
-    scores = readBedgraph(bedGraph, binSize, mode, filetype)
-    name = bedGraph if name is None else name
-    template = makeTemplate(
-        name, binSize, mode, regions, chromSizes,
-        distanceTransform, includeZero, threshold=None)
-    df = convert2pandas(makeRescaledSum(scores, template))
-    df.to_pickle(out)
-
-
-def convert2pandas(template):
-    """ Write dictionary template to pandas DF with metadata """
-    columnIndex = pd.MultiIndex.from_tuples(
-        [(template['meta']['mode'], template['meta']['name'])],
-        names=('mode', 'name'))
-    df = pd.DataFrame.from_dict(
-        template['data'], orient='index').stack().to_frame()
-    df.columns = columnIndex
-    df = df.reindex(df.index.set_names(['chromosome', 'start']))
-    df.attrs['meta'] = template['meta']
-    return df
-
-
-
-def makeRescaledSum(scores, template):
-    """ Generate rescaled dictionary for binary and count mode. """
-
-    for chrom, size in template['meta']['chromSizes'].items():
-        # Reset prevScore for each chromosome
-        prevScore = None
-        for start in range(0, size, template['meta']['binSize']):
-            # Skip bins where start not in regions
-            if not validRegion(template['meta']['regions'], chrom, start):
-                prevScore = None
-                continue
-            try:
-                score = scores[chrom][start]
-            except KeyError:
-                prevScore = 0
-                if template['meta']['includeZero']:
-                    score = 0
-                else:
-                    continue
-            if template['meta']['distanceTransform']:
-                try:
-                    template['data'][chrom][start] = score - prevScore
-                except TypeError:
-                    pass  # Skip bins where prevScore set to None
-            else:
-                template['data'][chrom][start] = score
-            prevScore = score
-    return template
+    rescaledByChrom = []
+    for chrom, df in bed.groupby('chrom'):
+        # Split regions into seperate rows according to their bin
+        df = rescaleInterval(df, binSize)
+        # Start position of last bin in chromosome
+        maxBin = (chromSizes[chrom] // binSize) * binSize
+        df = (df
+            .groupby('startBin')['score']
+            .sum()
+            .rename('score')
+            .reindex(range(0, maxBin, binSize), fill_value=0)
+            .reset_index()
+            .rename({'startBin': 'start'}, axis=1))
+        df['chrom'] = chrom
+        df['scoreDiff'] = df['score'].diff(1)
+        rescaledByChrom.append(df)
+        # Merge across chromosomes and save
+        rescaledByChrom = pd.concat(rescaledByChrom, axis=0)
+        rescaledByChrom['end'] = rescaledByChrom['start'] + binSize
+        cols = ['chrom', 'start', 'end', 'score', 'scoreDiff']
+        rescaledByChrom.attrs['name'] = name
+        rescaledByChrom.attrs['mode'] = 'sum'
+        rescaledByChrom[cols].to_pickle(out)
 
 
-def makeTemplate(name, binSize, mode, regions, chromSizes,
-                 distanceTransform, includeZero, threshold):
-    """ Return template rescaled JSON with metadata """
-    template = {'data':              defaultdict(dict),
-                'meta':
-                    {'name':              name                      ,
-                     'binSize':           binSize                  ,
-                     'mode':              mode                      ,
-                     'threshold':         threshold                 ,
-                     'regions':           readRegions(regions)      ,
-                     'chromSizes':        readChromSizes(chromSizes),
-                     'distanceTransform': distanceTransform         ,
-                     'includeZero':       includeZero               ,}
-                }
-    return template
+def rescaleInterval(bed, binSize):
+    df2 = pd.DataFrame(
+        [x for x in itertools.chain.from_iterable(
+            [IntervGen(row.start, row.end, row.score, binSize) for row in bed.itertuples()])],
+        columns=['start', 'end', 'score'])
+    # Calculate number of bases each region overlaps a particular bin
+    df2['overlap'] = df2['end'] - df2['start']
+    # Round start positions down to nearest multiple of binSize
+    df2['startBin'] = (df2['start'] // binSize) * binSize
+    return df2
 
 
-def readBedgraph(bedGraph, binSize, mode, filetype=None, threshold=None):
-    scores = defaultdict(dict)
-    assert mode in ['sum', 'count']
-    with open(bedGraph) as fh:
-        for i, line in enumerate(fh):
-            if mode == 'sum':
-                chrom, start, end, score = splitScore(line, filetype)
-            else:
-                if isinstance(threshold, float):
-                    chrom, start, end, score = splitScore(line, filetype)
-                    score = score > threshold
-                else:
-                    chrom, start, end = splitPos(line)
-                    score = 1
-            if score == 0:
-                continue
-            score = score / (end - start)
-            perBaseBin = getBin(np.array(range(start, end)), binSize)
-            bin, counts = np.unique(perBaseBin, return_counts=True)
-            counts = counts * score
-            perBinScore = dict(zip(bin, counts))
-            for bin, binScore in perBinScore.items():
-                try:
-                    scores[chrom][bin] += binScore
-                except KeyError:
-                    scores[chrom][bin] = binScore
-    return scores
+def readBedgraph(file, filetype='bedgraph', score=True):
+    if score == False:
+        useCols = [0, 1, 2]
+        names = ['chrom', 'start', 'end']
+    else:
+        names =  ['chrom', 'start', 'end', 'score']
+        useCols = [0, 1, 2, 3] if filetype == 'bed' else [0, 1, 2, 4]
+    return pd.read_csv(
+        file, usecols=useCols, comment='#', names=names, sep='\t')
 
 
-def validRegion(regions, chrom, start):
-    """ Return True if interval present in regions dict """
-    # All regions assumed valid if no regions dict provided
-    if regions is None:
-        return True
-    for interval in regions[chrom]:
-        if start in interval:
-            return True
-    return False
+def IntervGen(st, en, val, binSize):
+    """ https://stackoverflow.com/questions/62651415/change-interval-length-in-pandas """
+    nxtSt = (st // binSize + 1) * binSize
+    totalSize = en - st
+    origVal = val
+    while st < en:
+        if en <= nxtSt:
+            yield st, en, val
+            return
+        currSize = nxtSt - st
+        currVal = origVal * currSize / totalSize
+        yield st, nxtSt, currVal
+        st = nxtSt
+        nxtSt += binSize
+        val -= currVal
 
 
-def getBin(pos, binSize):
-    """ Return 0-based bin start for a given position"""
-    return (pos // binSize) * binSize
+def baseOverlap(df, binSize):
+    """ Proportion of non-overlapping bases in a bin. """
+    allPos = []
+    for start, end, startBin in zip(df['start'], df['end'], df['startBin']):
+        end = min(end, startBin + binSize)
+        allPos.extend(list(range(start, end)))
+    count = df['count'].sum()
+    return pd.Series([len(set(allPos)) / binSize, count])
 
 
 def parseArgs():
@@ -205,7 +192,7 @@ def parseArgs():
         description='Rescale intervals to a set binsize and '
                     'count number of intervals falling into each '
                     'bin. Interval scores ignored.',
-        help='Count number rescaleSumof intervals within each bin.',
+        help='Count number of intervals within each bin.',
         epilog=parser.epilog,
         parents=[mainParent, infileParser, chromSizeParser,
                  baseParser, regionsParser, binSizeParser])
@@ -214,10 +201,14 @@ def parseArgs():
         help='Minimum score threshold for determining binary '
              'intervals (default: None)')
     count.add_argument(
+        '--minOverlap', default=1000, type=int,
+        help='Minimum number of bases required to overlap bin to be counted '
+             'as present in that bin (default: %(default)s)')
+    count.add_argument(
         '--filetype',  choices=['bed', 'bedgraph'],
         help='Input format to correctly retrieve score column. '
              'Only required if --threshold used (default: %(default)s)')
-    count.set_defaults(function=rescaleBinCount)
+    count.set_defaults(function=rescaleCount)
 
     sum = subparser.add_parser(
         'sum',
@@ -226,13 +217,6 @@ def parseArgs():
         epilog=parser.epilog,
         parents=[mainParent, infileParser, chromSizeParser,
                  baseParser, regionsParser, binSizeParser, formatParser])
-    sum.add_argument(
-        '--includeZero', action='store_true',
-        help='Include bins with a 0 score (default: %(default)s)')
-    sum.add_argument(
-        '--distanceTransform', action='store_true',
-        help='Perform differencing to remove series '
-             'dependence. (default: %(default)s)')
     sum.set_defaults(function=rescaleSum)
 
     return setDefaults(parser)
