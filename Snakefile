@@ -73,7 +73,6 @@ default_config = {
     'plotParams':
         {'distanceNorm'  : False    ,
          'plain'         : True     ,
-         'raw'           : True     ,
          'colourmap'     : 'Purples',
          'coordinates'   : None     ,
          'viewpoints'    : None     ,
@@ -84,7 +83,6 @@ default_config = {
     'fastq_screen':      None,
     'phase':             True,
     'createValidBam':    False,
-    'runQC':             True,
     'runHiCRep':         True,
     'multiQCconfig':     None,
     'rescalePKL':        False,
@@ -233,8 +231,7 @@ rule all:
         HiC_mode,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
          if config['phase'] else []),
-        (['qc/multiqc', 'qc/filterQC/ditagLength.png',
-         'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
+        (['qc/multiqc', 'qc/filterQC/ditagLength.png', 'qc/fastqc/.tmp.aggregateFastqc']),
         ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.png', region=region,
             bin=regionBin[region], pm=phaseMode) for region in regionBin]
          if config['runHiCRep'] else []),
@@ -1671,7 +1668,7 @@ rule runViewpoint:
     input:
         'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
     output:
-        bedgraph = 'dat/viewpoints/{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.bedgraph',
+        bedgraph = 'dat//{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.bedgraph',
         plot = temp('dat/viewpoints/{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.png')
     params:
         referencePoint = setRegion,
@@ -1693,7 +1690,7 @@ rule plotViewpoint:
     input:
         rules.runViewpoint.output.bedgraph
     output:
-        'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-{pm}.png'
+        'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-viewpoint-{pm}.png'
     params:
         dpi = 600,
         build = f'--build {config["build"]}' if config['build'] else ''
