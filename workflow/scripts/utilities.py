@@ -107,5 +107,5 @@ def readChromSizes(file):
             if not line:
                 continue
             chrom, size = line.split()
-            chromSizes[chrom] = int(size)
+            chromSizes[str(chrom)] = int(size)
     return chromSizes
