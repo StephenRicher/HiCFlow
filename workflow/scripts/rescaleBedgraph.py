@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 from utilities import setDefaults, createMainParent, readChromSizes
-from bedgraphUtils import splitScore, readRegions, splitPos
 
 
 __version__ = '1.0.0'
@@ -84,13 +83,13 @@ def rescaleSum(bedGraph: str, chromSizes: str, out: str, binSize: int,
         df['chrom'] = chrom
         df['scoreDiff'] = df['score'].diff(1)
         rescaledByChrom.append(df)
-        # Merge across chromosomes and save
-        rescaledByChrom = pd.concat(rescaledByChrom, axis=0)
-        rescaledByChrom['end'] = rescaledByChrom['start'] + binSize
-        cols = ['chrom', 'start', 'end', 'score', 'scoreDiff']
-        rescaledByChrom.attrs['name'] = name
-        rescaledByChrom.attrs['mode'] = 'sum'
-        rescaledByChrom[cols].to_pickle(out)
+    # Merge across chromosomes and save
+    rescaledByChrom = pd.concat(rescaledByChrom, axis=0)
+    rescaledByChrom['end'] = rescaledByChrom['start'] + binSize
+    cols = ['chrom', 'start', 'end', 'score', 'scoreDiff']
+    rescaledByChrom.attrs['name'] = name
+    rescaledByChrom.attrs['mode'] = 'sum'
+    rescaledByChrom[cols].to_pickle(out)
 
 
 def rescaleInterval(bed, binSize):
@@ -108,12 +107,13 @@ def rescaleInterval(bed, binSize):
 def readBedgraph(file, filetype='bedgraph', score=True):
     if score == False:
         useCols = [0, 1, 2]
-        names = ['chrom', 'start', 'end']
+        dtypes = {'chrom': str, 'start': int, 'end': int}
     else:
-        names =  ['chrom', 'start', 'end', 'score']
         useCols = [0, 1, 2, 3] if filetype == 'bed' else [0, 1, 2, 4]
+        dtypes = {'chrom': str, 'start': int, 'end': int, 'score': float}
     return pd.read_csv(
-        file, usecols=useCols, comment='#', names=names, sep='\t')
+        file, usecols=useCols, comment='#',
+        names=dtypes.keys(), dtype=dtyes, sep='\t')
 
 
 def IntervGen(st, en, val, binSize):
