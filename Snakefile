@@ -1231,7 +1231,7 @@ rule rescaleTADinsulation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph2.py sum <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '--filetype bedgraph &> {log}'
@@ -1255,7 +1255,7 @@ rule rescaleTADdomains:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph2.py count <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} &> {log}'
 
@@ -1278,7 +1278,7 @@ rule rescaleTADboundaries:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph2.py count <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} &> {log}'
 
@@ -1393,7 +1393,7 @@ rule rescalePCA:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph2.py sum <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '--filetype bedgraph &> {log}'
@@ -1986,7 +1986,7 @@ rule rescaleHiCcompare:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph2.py sum <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '--filetype bedgraph &> {log}'
@@ -2011,7 +2011,7 @@ rule rescaleHiCcompareCount:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph2.py count <(cat {input.bedgraphs}) '
+        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
         '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
         '--regions {params.regions} --name {params.name} '
         '--threshold {params.threshold} --filetype bedgraph &> {log}'
