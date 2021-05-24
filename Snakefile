@@ -49,6 +49,7 @@ default_config = {
     'HiCcompare':
         {'fdr' :         0.05         ,
          'logFC' :       1            ,
+         'minZ':         2            ,
          'multi' :       False        ,},
     'compareMatrices':
         {'vMin'       : -4            ,
@@ -2001,7 +2002,7 @@ rule rescaleHiCcompareCount:
     output:
         'intervals/{group1}-vs-{group2}-{dir}-{compare}-count-{bin}-{pm}.pkl'
     params:
-        threshold = 2,
+        threshold = config['HiCcompare']['minZ'],
         regions = config['regions'],
         name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}-peak',
     group:
@@ -2154,7 +2155,8 @@ rule createCompareConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
         tracks = getTracks,
-        sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp)"',
+        threshold = config['HiCcompare']['minZ'],
+        sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp) threshold = {config["HiCcompare"]["minZ"]}"',
         vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
         vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
     group:
@@ -2167,6 +2169,7 @@ rule createCompareConfig:
         'python {SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
         '--sumLogFC {input.upBed} {input.downBed} '
         '--sumLogFC_title {params.sumLogFC_title} '
+        '--sumLogFC_hline {params.threshold} '
         '--tads {input.tads1} {input.tads2} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'

@@ -88,6 +88,7 @@ bed :
 HiCcompare:
     fdr:   0.1  # FDR threshold for significant differential interactions.
     logFC: 0    # Fold-change threshold for significant differential interactions.
+    minZ:  2    # Z-score threshold for defining a HiCcompare 'peak'.
     multi: False # Run multiHiCcompare when replicates are available.
 
 compareMatrices:

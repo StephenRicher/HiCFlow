@@ -64,6 +64,9 @@ def main():
         '--sumLogFC_title', default='sum(logFC)',
         help='Title for sumLogFC track')
     parser.add_argument(
+        '--sumLogFC_hline', type=int, default=None,
+        help='Horizontal line to add to sumLogFC track.')
+    parser.add_argument(
         '--bed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
@@ -100,8 +103,8 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                bigWig, bed, compare, sumLogFC, sumLogFC_title, stripes,
-                depth, colourmap, vMin, vMax, flip, plain):
+                bigWig, bed, compare, sumLogFC, sumLogFC_title, sumLogFC_hline,
+                stripes, depth, colourmap, vMin, vMax, flip, plain):
 
     if plain:
         loops = []
@@ -142,6 +145,8 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                     colour = '#0000FF80'
                 write_bigwig(file=file, title=sumLogFC_title, type='bedgraph',
                              alpha=0.5, colour=colour, overlay=overlay)
+                if sumLogFC_hline is not None:
+                    writeHline(sumLogFC_hline)
         print('[spacer]')
 
 
@@ -286,6 +291,15 @@ def write_bed(file, title):
           f'height = 3',
           f'file_type = bed',
           f'labels = true', sep = '\n')
+
+
+def writeHline(y):
+    print(f'[Hlines overlayed]',
+          f'color = black',
+          f'line_style = dotted',
+          f'y_values = {y}',
+          f'overlay_previous = share-y',
+          f'file_type = hlines', sep='\n')
 
 
 if __name__ == "__main__":
