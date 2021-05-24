@@ -63,10 +63,9 @@ chr = args[3]
 start = as.integer(args[4])
 end = as.integer(args[5])
 binsize = as.integer(args[6])
-fdr = as.double(args[7])
-suffix = args[8]
-matrix1 = args[9]
-matrix2 = args[10]
+suffix = args[7]
+matrix1 = args[8]
+matrix2 = args[9]
 
 dir.create(qcdir, recursive = TRUE)
 
@@ -78,7 +77,6 @@ filter_plot = paste(qcdir, '/', group1, '-vs-', group2, '-filter_params-', suffi
 compare_plot = paste(qcdir, '/', group1, '-vs-', group2, '-hicCompare-', suffix, '.png', sep = '')
 out_links = paste(outdir, '/', group1, '-vs-', group2, '-', suffix, '.links', sep = '')
 out_matrix = paste(outdir, '/', group1, '-vs-', group2, '-', suffix, '.homer', sep = '')
-out_sig = paste(outdir, '/', group1, '-vs-', group2, '-sig-', suffix, '.homer', sep = '')
 outIF1 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1-', suffix, '.homer', sep = '')
 outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.homer', sep = '')
 
@@ -111,13 +109,9 @@ writeMatrix(hic.table, outIF1, chr, start, end, binsize, 'adj.IF1')
 # Write adjusted IF2 values
 writeMatrix(hic.table, outIF2, chr, start, end, binsize, 'adj.IF2')
 
-# Write matrix of of significant FDR values
-writeMatrix(hic.table[hic.table$p.adj <= fdr,], out_sig, chr, start, end, binsize, 'adj.M')
-
 hic.table$abs.adj.M = abs(hic.table$adj.M)
 hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 
-# Use absolute M for pyGenomeTracks, add normal M to last column to be read by links2interval script
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
   out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')

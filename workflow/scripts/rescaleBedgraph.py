@@ -31,7 +31,6 @@ def rescaleCount(bedGraph: str, chromSizes: str, out: str, binSize: int,
         bed = bed.loc[bed['score'] >= threshold]
     else:
         bed = readBedgraph(bedGraph, score=False)
-
     rescaledByChrom = []
     for chrom, df in bed.groupby('chrom'):
         # For count mode, region scores are set to the region length
@@ -51,7 +50,11 @@ def rescaleCount(bedGraph: str, chromSizes: str, out: str, binSize: int,
         df['chrom'] = chrom
         rescaledByChrom.append(df)
     # Merge across chromosomes and save
-    rescaledByChrom = pd.concat(rescaledByChrom, axis=0)
+    try:
+        rescaledByChrom = pd.concat(rescaledByChrom, axis=0)
+    except ValueError:
+        names = {'start': int, 'overlap': int, 'count': int, 'chrom': str}
+        rescaledByChrom = pd.DataFrame(columns=names.keys()).astype(names)
     rescaledByChrom['end'] = rescaledByChrom['start'] + binSize
     rescaledByChrom.attrs['name'] = name
     rescaledByChrom.attrs['mode'] = 'count'
@@ -66,7 +69,6 @@ def rescaleSum(bedGraph: str, chromSizes: str, out: str, binSize: int,
         within a bin. Optionally performing distancing correction. """
     chromSizes = readChromSizes(chromSizes)
     bed = readBedgraph(bedGraph, filetype=filetype, score=True)
-
     rescaledByChrom = []
     for chrom, df in bed.groupby('chrom'):
         # Split regions into seperate rows according to their bin
@@ -112,8 +114,8 @@ def readBedgraph(file, filetype='bedgraph', score=True):
         useCols = [0, 1, 2, 3] if filetype == 'bed' else [0, 1, 2, 4]
         dtypes = {'chrom': str, 'start': int, 'end': int, 'score': float}
     return pd.read_csv(
-        file, usecols=useCols, comment='#',
-        names=dtypes.keys(), dtype=dtyes, sep='\t')
+        file, usecols=useCols, comment='#', header=None,
+        names=dtypes.keys(), dtype=dtypes, sep='\t')
 
 
 def IntervGen(st, en, val, binSize):
@@ -194,8 +196,8 @@ def parseArgs():
                     'bin. Interval scores ignored.',
         help='Count number of intervals within each bin.',
         epilog=parser.epilog,
-        parents=[mainParent, infileParser, chromSizeParser,
-                 baseParser, regionsParser, binSizeParser])
+        parents=[mainParent, baseParser, regionsParser,
+                 binSizeParser, chromSizeParser, infileParser])
     count.add_argument(
         '--threshold', type=float, default=False,
         help='Minimum score threshold for determining binary '
@@ -215,8 +217,8 @@ def parseArgs():
         description=rescaleSum.__doc__,
         help='Sum scores across intervals in a bin.',
         epilog=parser.epilog,
-        parents=[mainParent, infileParser, chromSizeParser,
-                 baseParser, regionsParser, binSizeParser, formatParser])
+        parents=[mainParent, baseParser, regionsParser, binSizeParser,
+                 formatParser, chromSizeParser, infileParser])
     sum.set_defaults(function=rescaleSum)
 
     return setDefaults(parser)

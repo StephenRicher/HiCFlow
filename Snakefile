@@ -47,10 +47,7 @@ default_config = {
          'nofill':               False,
          'threads':              4    ,},
     'HiCcompare':
-        {'fdr' :         0.05         ,
-         'logFC' :       1            ,
-         'minZ':         2            ,
-         'multi' :       False        ,},
+        {'minZ':         2            ,},
     'compareMatrices':
         {'vMin'       : -4            ,
          'vMax'       :  4            ,
@@ -147,9 +144,9 @@ wildcard_constraints:
     mode = r'SNP|INDEL',
     norm = r'raw|KR',
     pm = r'ASHIC|SNPsplit' if ALLELE_SPECIFIC else r'full',
-    set = r'logFC|sig|fdr|adjIF1|adjIF2',
+    set = r'logFC|adjIF1|adjIF2',
     adjIF = r'adjIF1|adjIF2',
-    compare = r'HiCcompare|multiHiCcompare',
+    compare = r'HiCcompare',
     group = rf'{"|".join(HiC.groups())}',
     group1 = rf'{"|".join(HiC.groups())}',
     group2 = rf'{"|".join(HiC.groups())}',
@@ -163,10 +160,6 @@ COORDS = load_coords(REGIONS, config['plotParams']['coordinates'], adjust=BASE_B
 # Generate dictionary of plot viewpoints
 VIEWPOINTS =  load_coords(REGIONS, config['plotParams']['viewpoints'], includeRegions=False)
 
-tools = (
-    ['HiCcompare', 'multiHiCcompare'] if config['HiCcompare']['multi']
-    else ['HiCcompare'])
-
 # Set whether to print a plain HiC map in addiion to a custom
 vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
@@ -178,10 +171,9 @@ else:
     phaseMode = 'full'
 
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/{tool}/{set}/{compare}-{region}-{coords}-{bin}-{set}-{pm}.png',
-        region=region, coords=COORDS[region], set=['logFC'], pm=phaseMode,
-        compare=HiC.groupCompares(), bin=regionBin[region],
-        tool=tools) for region in regionBin],
+    [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}.png',
+        region=region, coords=COORDS[region], pm=phaseMode,
+        compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.png',
         region=region, coords=VIEWPOINTS[region], pm=phaseMode,
         compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
@@ -201,8 +193,8 @@ HiC_mode = ([
         region=regionBin.keys(), pm=phaseMode),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
 rescalePKL = ([
-    expand('intervals/{compare}-{dir}-{tool}{mode}-{bin}-{pm}.pkl',
-            tool=tools, dir=['up', 'down', 'all'],  mode=['', '-count'],
+    expand('intervals/{compare}-{dir}-HiCcompare{mode}-{bin}-{pm}.pkl',
+            dir=['up', 'down', 'all'],  mode=['', '-count'],
             pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
@@ -1232,10 +1224,10 @@ rule rescaleTADinsulation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
-        '--regions {params.regions} --name {params.name} '
-        '--filetype bedgraph &> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py sum --name {params.name} '
+        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
+        '--filetype bedgraph {input.chromSizes} <(cat {input.bedgraphs}) '
+        '&> {log}'
 
 
 rule rescaleTADdomains:
@@ -1256,9 +1248,9 @@ rule rescaleTADdomains:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
-        '--regions {params.regions} --name {params.name} &> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py count --name {params.name} '
+        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
+        '{input.chromSizes} <(cat {input.bedgraphs}) &> {log}'
 
 
 rule rescaleTADboundaries:
@@ -1279,9 +1271,9 @@ rule rescaleTADboundaries:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
-        '--regions {params.regions} --name {params.name} &> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py count --name {params.name} '
+        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
+        '{input.chromSizes} <(cat {input.bedgraphs}) &> {log}'
 
 
 rule detectLoops:
@@ -1394,10 +1386,10 @@ rule rescalePCA:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
-        '--regions {params.regions} --name {params.name} '
-        '--filetype bedgraph &> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py sum --name {params.name} '
+        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
+        '--filetype bedgraph {input.chromSizes} <(cat {input.bedgraphs}) '
+        '&> {log}'
 
 
 rule reformatHomer:
@@ -1873,7 +1865,6 @@ rule HiCcompare:
         'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-sutm.txt'
     output:
         all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer',
-        sig = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig-{pm}.homer',
         links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.links',
         adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.homer',
         adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.homer'
@@ -1884,7 +1875,6 @@ rule HiCcompare:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
         suffix = lambda wc: wc.pm,
-        fdr = config['HiCcompare']['fdr']
     group:
         'HiCcompare'
     log:
@@ -1894,40 +1884,7 @@ rule HiCcompare:
     shell:
         'Rscript {SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} '
         '{params.chr} {params.start} {params.end} '
-        '{wildcards.bin} {params.fdr} {params.suffix} {input} &> {log}'
-
-
-rule multiHiCcompare:
-    input:
-        group1 = lambda wc: expand(
-            'dat/matrix/{{region}}/{{bin}}/{group1}-{rep}-{{region}}-{{bin}}-sutm.txt',
-            group1=wc.group1, rep=HiC.groups()[wc.group1]),
-        group2 = lambda wc: expand(
-            'dat/matrix/{{region}}/{{bin}}/{group2}-{rep}-{{region}}-{{bin}}-sutm.txt',
-            group2=wc.group2, rep=HiC.groups()[wc.group2])
-    output:
-        all = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.homer',
-        sig = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-sig.homer',
-        fdr = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}-fdr.homer',
-        links = 'dat/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.links'
-    params:
-        dir = lambda wc: f'dat/multiHiCcompare/{wc.region}/{wc.bin}',
-        qcdir = directory('qc/multiHiCcompare'),
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
-        fdr = config['HiCcompare']['fdr']
-    group:
-        'HiCcompare'
-    log:
-        'logs/multiHiCcompare/{region}/{bin}/{group1}-vs-{group2}.log'
-    conda:
-        f'{ENVS}/multiHiCcompare.yaml'
-    shell:
-        'Rscript {SCRIPTS}/multiHiCcompare.R {params.dir} {params.qcdir} '
-        '{params.chr} {params.start} {params.end} '
-        '{wildcards.bin} {params.fdr} '
-        '{input.group1} {input.group2} &> {log}'
+        '{wildcards.bin} {params.suffix} {input} &> {log}'
 
 
 rule applyMedianFilter:
@@ -1987,10 +1944,10 @@ rule rescaleHiCcompare:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
-        '--regions {params.regions} --name {params.name} '
-        '--filetype bedgraph &> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py sum --name {params.name} '
+        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
+        '--filetype bedgraph {input.chromSizes} <(cat {input.bedgraphs}) '
+        '&> {log}'
 
 
 rule rescaleHiCcompareCount:
@@ -2012,10 +1969,10 @@ rule rescaleHiCcompareCount:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count <(cat {input.bedgraphs}) '
-        '{input.chromSizes} --out {output} --binSize {wildcards.bin} '
-        '--regions {params.regions} --name {params.name} '
-        '--threshold {params.threshold} --filetype bedgraph &> {log}'
+        'python {SCRIPTS}/rescaleBedgraph.py count --name {params.name} '
+        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
+        '--filetype bedgraph --threshold {params.threshold} '
+        '{input.chromSizes} <(cat {input.bedgraphs}) &> {log}'
 
 
 rule homerToH5:
@@ -2032,27 +1989,6 @@ rule homerToH5:
     shell:
         '(hicConvertFormat --matrices {input} --outFileName {output} '
         '--inputFormat homer --outputFormat h5 || touch {output})  &> {log}'
-
-
-rule filterHiCcompare:
-    input:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{pm}.links'
-    output:
-        up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up-{pm}.links',
-        down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down-{pm}.links'
-    params:
-        p_value = config['HiCcompare']['fdr'],
-        log_fc = config['HiCcompare']['logFC'],
-    group:
-        'HiCcompare'
-    log:
-        'logs/filterHiCcompare/{compare}/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/filterHiCcompare.py '
-        '--up {output.up} --down {output.down} '
-        '--p_value {params.p_value} --log_fc {params.log_fc} {input} &> {log}'
 
 
 if config['compareMatrices']['tads'] is not None:
@@ -2157,8 +2093,8 @@ rule createCompareConfig:
         tracks = getTracks,
         threshold = config['HiCcompare']['minZ'],
         sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp) threshold = {config["HiCcompare"]["minZ"]}"',
-        vMin = lambda wc: -1 if wc.set == 'fdr' else config['compareMatrices']['vMin'],
-        vMax = lambda wc: 1 if wc.set == 'fdr' else config['compareMatrices']['vMax'],
+        vMin = config['compareMatrices']['vMin'],
+        vMax = config['compareMatrices']['vMax'],
     group:
         'HiCcompare'
     log:
@@ -2193,15 +2129,8 @@ def setCompareTitle(wc):
         build = f' ({build})'
     else:
         build = ''
-    title = f'"{wc.group1} vs {wc.group2} - {wc.region}{build} at {wc.bin} bin size - '
-    if wc.set == 'sig':
-        threshold = config['HiCcompare']['fdr']
-        title += f'adj. logFC (FDR <= {threshold})'
-    elif wc.set == 'logFC':
-        title += 'adj. logFC'
-    else:
-        title += 'FDR'
-    title += f' - {wc.pm}"'
+    title = (f'"{wc.group1} vs {wc.group2} - {wc.region}{build} at '
+             f'{wc.bin} bin size - adj. logFC - {wc.pm}"')
     return title
 
 
