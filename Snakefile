@@ -46,10 +46,9 @@ default_config = {
          'skipDuplicationCheck': False,
          'nofill':               False,
          'threads':              4    ,},
-    'HiCcompare':
-        {'minZ':         2            ,},
     'compareMatrices':
-        {'vMin'       : -4            ,
+        {'minZ':         2            ,
+         'vMin'       : -4            ,
          'vMax'       :  4            ,
          'size'       :  1            ,
          'maxDistance':  1000000      ,
@@ -80,6 +79,7 @@ default_config = {
     'bed'              : {}           ,
     'fastq_screen':      None,
     'runQC':             True,
+    'runPCA':            True,
     'phase':             True,
     'createValidBam':    False,
     'runHiCRep':         True,
@@ -192,14 +192,18 @@ HiC_mode = ([
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=regionBin.keys(), pm=phaseMode),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
+# Exclude PCA if not set
+if config['runPCA']:
+    methods = ['PCA', 'TADinsulation', 'TADboundaries', 'TADdomains']
+else:
+    methods = ['TADinsulation', 'TADboundaries', 'TADdomains']
 rescalePKL = ([
     expand('intervals/{compare}-{dir}-HiCcompare{mode}-{bin}-{pm}.pkl',
             dir=['up', 'down', 'all'],  mode=['', '-count'],
             pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
-            bin=binRegion.keys(), pm=phaseMode,
-            method=['PCA', 'TADinsulation', 'TADboundaries', 'TADdomains'])])
+            bin=binRegion.keys(), pm=phaseMode, method=methods)])
 
 
 def getChromSizes(wc):
@@ -1559,6 +1563,18 @@ def getMatrix(wc):
     else:
         return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
 
+def getPCAinput(wc):
+    if config['runPCA']:
+        return 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix-{pm}.bedgraph'
+    else:
+        return []
+
+def getPCAparams(wc):
+    if config['runPCA']:
+        pca = f'dat/matrix/{wc.region}/{wc.bin}/PCA/{wc.group}-{wc.region}-{wc.bin}-fix-{wc.pm}.bedgraph'
+        return f'--bigWig PCA1,{pca}'
+    else:
+        return ''
 
 rule createConfig:
     input:
@@ -1566,7 +1582,7 @@ rule createConfig:
         loops = 'dat/matrix/{region}/{bin}/loops/{group}-{region}-{bin}-{pm}.bedgraph',
         insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-{pm}_tad_score.bm',
         tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-{pm}-ontad_domains.bed',
-        pca = 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix-{pm}.bedgraph',
+        pca = getPCAinput,
         #forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
         #reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
     output:
@@ -1578,7 +1594,8 @@ rule createConfig:
         vMin = '--vMin 0' if config['plotParams']['distanceNorm'] else '',
         vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
         log = '' if config['plotParams']['distanceNorm'] else '--log',
-        plain = lambda wc: '--plain' if wc.vis == 'plain' else ''
+        plain = lambda wc: '--plain' if wc.vis == 'plain' else '',
+        pca = getPCAparams
     group:
         'processHiC'
     conda:
@@ -1590,7 +1607,7 @@ rule createConfig:
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
         '--depth {params.depth} {params.vMin} {params.vMax} {params.plain} '
         '--insulations {input.insulations} --loops {input.loops} '
-        '--bigWig PCA1,{input.pca} --tads {input.tads} > {output} 2> {log}'
+        '{params.pca} --tads {input.tads} > {output} 2> {log}'
 
 
 def setRegion(wc):
@@ -1959,7 +1976,7 @@ rule rescaleHiCcompareCount:
     output:
         'intervals/{group1}-vs-{group2}-{dir}-{compare}-count-{bin}-{pm}.pkl'
     params:
-        threshold = config['HiCcompare']['minZ'],
+        threshold = config['compareMatrices']['minZ'],
         regions = config['regions'],
         name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}-peak',
     group:
@@ -2091,8 +2108,8 @@ rule createCompareConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
         tracks = getTracks,
-        threshold = config['HiCcompare']['minZ'],
-        sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp) threshold = {config["HiCcompare"]["minZ"]}"',
+        threshold = config['compareMatrices']['minZ'],
+        sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp) threshold = {config["compareMatrices"]["minZ"]}"',
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax'],
     group:

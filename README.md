@@ -122,8 +122,8 @@ HiCParams:
     threads:              4
 
 plotParams:
-    distanceNorm:   False
-    plain:          True
+    distanceNorm:   False # Plot obs/exp matrix instead of log counts.
+    plain:          True # Plot additional figure without TAD / loop annotations
     colourmap:      Purples
     # BED file for creating plots of additional viewpoints in addition to those
     # defined config['protocol']['regions'].
@@ -141,12 +141,8 @@ bigWig :
 bed :
     Genes : ../genome/BDGP6.28.99.genes.bed
 
-HiCcompare:
-    fdr:   0.1  # FDR threshold for significant differential interactions.
-    logFC: 0    # Fold-change threshold for significant differential interactions.
-    multi: False # Run multiHiCcompare when replicates are available.
-
 compareMatrices:
+    minZ:  2    # Z-score threshold for defining a HiCcompare 'peak'.
     vMin: -1.96 # Mimimum logFC value for colour scale.
     vMax: 1.96  # Maximum logFC value for colour scale.
     size: 3     # Size of median filter to denoise comparison matrix.
@@ -167,6 +163,8 @@ gatk:
 
 # Optional run HiCRep - may take a while for high res datasets.
 runHiCRep: True
+
+runPCA: True
 
 # Treat data as microC - ignore restriction digest.
 microC: False
