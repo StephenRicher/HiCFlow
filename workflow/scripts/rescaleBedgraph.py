@@ -111,7 +111,7 @@ def readBedgraph(file, filetype='bedgraph', score=True):
         useCols = [0, 1, 2]
         dtypes = {'chrom': str, 'start': int, 'end': int}
     else:
-        useCols = [0, 1, 2, 3] if filetype == 'bed' else [0, 1, 2, 4]
+        useCols = [0, 1, 2, 4] if filetype == 'bed' else [0, 1, 2, 3]
         dtypes = {'chrom': str, 'start': int, 'end': int, 'score': float}
     return pd.read_csv(
         file, usecols=useCols, comment='#', header=None,
