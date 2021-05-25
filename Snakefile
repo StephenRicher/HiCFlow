@@ -1134,7 +1134,7 @@ rule normCountsConstant:
     output:
         f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-normConstant.h5'
     params:
-        multiplicativeValue = 1000
+        multiplicativeValue = 10000
     log:
         'logs/normCountsConstant/{all}-{region}-{pm}.log'
     conda:
@@ -1654,10 +1654,8 @@ rule plotHiC:
         THREADS
     shell:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
-        '--region {params.region} '
-        '--outFileName {output} '
-        '--title {params.title} '
-        '--dpi {params.dpi} &> {log}'
+        '--region {params.region} --outFileName {output} '
+        '--title {params.title} --dpi {params.dpi} &> {log}'
 
 
 def makeViewRegion(wc):
