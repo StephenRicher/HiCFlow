@@ -45,7 +45,8 @@ default_config = {
          'keepSelfCircles':      False,
          'skipDuplicationCheck': False,
          'nofill':               False,
-         'threads':              4    ,},
+         'threads':              4    ,
+         'multiplicativeValue':  10000,},
     'compareMatrices':
         {'minZ':         2            ,
          'vMin'       : -4            ,
@@ -1134,7 +1135,7 @@ rule normCountsConstant:
     output:
         f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-normConstant.h5'
     params:
-        multiplicativeValue = 10000
+        multiplicativeValue = config['HiCParams']['multiplicativeValue']
     log:
         'logs/normCountsConstant/{all}-{region}-{pm}.log'
     conda:

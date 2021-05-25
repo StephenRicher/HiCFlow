@@ -120,6 +120,7 @@ HiCParams:
     skipDuplicationCheck: False
     nofill:               False
     threads:              4
+    multiplicativeValue:  10000 # HiC counts are normalised to this value
 
 plotParams:
     distanceNorm:   False # Plot obs/exp matrix instead of log counts.
@@ -143,8 +144,8 @@ bed :
 
 compareMatrices:
     minZ:  2    # Z-score threshold for defining a HiCcompare 'peak'.
-    vMin: -1.96 # Mimimum logFC value for colour scale.
-    vMax: 1.96  # Maximum logFC value for colour scale.
+    vMin: -2 # Mimimum logFC value for colour scale.
+    vMax: 2  # Maximum logFC value for colour scale.
     size: 3     # Size of median filter to denoise comparison matrix.
     maxDistance:  1000000
 

@@ -64,6 +64,7 @@ HiCParams:
     skipDuplicationCheck: False
     nofill:               False
     threads:              4
+    multiplicativeValue:  10000 # HiC counts are normalised to this value
 
 plotParams:
     distanceNorm:   False # Plot obs/exp matrix instead of log counts.
