@@ -76,6 +76,9 @@ def filterRegions(regions, binSizes, nbins=100):
                     regionBin[region].append(bin)
                 except KeyError:
                     regionBin[region] = [bin]
+            else:
+                print(f'{region} at {coords} is too small for binsize {bin} '
+                      f'and minBins {nbins} - skipping.', file=sys.stderr)
     binRegion = invertRegionBin(regionBin)
     return regionBin, binRegion
 
@@ -298,7 +301,7 @@ def load_regions(regions_file, adjust=1):
         regions_file,
         names=['chr', 'start', 'end', 'region'],
         index_col='region',
-        dtype={'start': int, 'end': int}, sep='\s+')
+        dtype={'chr': str, 'start': int, 'end': int}, sep='\s+')
     if adjust is not None:
         regions['start'], regions['end'] = adjustCoordinates(
             regions['start'], regions['end'], adjust)
