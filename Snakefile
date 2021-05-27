@@ -89,7 +89,7 @@ default_config = {
     'rescalePKL':        False,
     'groupJobs':         False,
     'microC':            False,
-    'ASHIC':             True,
+    'ASHIC':             False,
 }
 
 config = set_config(config, default_config)
@@ -3040,7 +3040,7 @@ rule multiqc:
          expand('qc/cutadapt/{sample}.cutadapt.txt',
             sample=HiC.originalSamples()),
          expand('qc/hicup/HiCUP_summary_report-{sample}.txt',
-            sample=HiC.originalSamples()) if not config['microC'] else [],
+            sample=HiC.originalSamples()) if not (config['microC'] or config['localAlignment']) else [],
          expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
             sample=HiC.originalSamples(), read=['R1', 'R2']),
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
