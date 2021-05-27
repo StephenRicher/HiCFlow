@@ -193,7 +193,7 @@ HiC_mode = ([
      expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.png',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=regionBin.keys(), pm=phaseMode),
-    'qc/hicup/.tmp.aggregatehicupTruncate' if not config['microC'] else []])
+    'qc/hicup/.tmp.aggregatehicupTruncate' if not (config['microC'] or config['localAlignment']) else []])
 # Exclude PCA if not set
 if config['runPCA']:
     methods = ['PCA', 'TADinsulation', 'TADboundaries', 'TADdomains']
