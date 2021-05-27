@@ -1907,15 +1907,15 @@ rule HiCcompare:
 
 rule applyMedianFilter:
     input:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer'
     output:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}.homer'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}.homer'
     params:
         size = config['compareMatrices']['size']
     group:
         'HiCcompare'
     log:
-        'logs/applyMedianFilter/{compare}/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
+        'logs/applyMedianFilter/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1927,15 +1927,15 @@ rule hicCompareBedgraph:
     input:
         rules.applyMedianFilter.output
     output:
-        all = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-all-{pm}.bedgraph',
-        up = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-up-{pm}.bedgraph',
-        down = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-down-{pm}.bedgraph'
+        all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-all-{pm}.bedgraph',
+        up = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up-{pm}.bedgraph',
+        down = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down-{pm}.bedgraph'
     params:
         maxDistance = config['compareMatrices']['maxDistance']
     group:
         'HiCcompare'
     log:
-        'logs/hicCompareBedgraph/{compare}/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
+        'logs/hicCompareBedgraph/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1947,18 +1947,18 @@ rule hicCompareBedgraph:
 rule rescaleHiCcompare:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}-{{pm}}.bedgraph',
+            'dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}-{{pm}}.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{group1}-vs-{group2}-{dir}-{compare}-{bin}-{pm}.pkl'
+        'intervals/{group1}-vs-{group2}-{dir}-HiCcompare-{bin}-{pm}.pkl'
     params:
         regions = config['regions'],
-        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}',
+        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-HiCcompare-{wc.bin}',
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleHiCcompare/{group1}-vs-{group2}-{dir}-{compare}-{bin}-{pm}.log'
+        'logs/rescaleHiCcompare/{group1}-vs-{group2}-{dir}-HiCcompare-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1971,19 +1971,19 @@ rule rescaleHiCcompare:
 rule rescaleHiCcompareCount:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/{{compare}}/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}-{{pm}}.bedgraph',
+            'dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}-{{pm}}.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
-        'intervals/{group1}-vs-{group2}-{dir}-{compare}-count-{bin}-{pm}.pkl'
+        'intervals/{group1}-vs-{group2}-{dir}-HiCcompare-count-{bin}-{pm}.pkl'
     params:
         threshold = config['compareMatrices']['minZ'],
         regions = config['regions'],
-        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-{wc.compare}-{wc.bin}-peak',
+        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-HiCcompare-{wc.bin}-peak',
     group:
         'rescaleBedgraphs'
     log:
-        'logs/rescaleHiCcompareBinary/{group1}-vs-{group2}-{dir}-{compare}-{bin}-{pm}.log'
+        'logs/rescaleHiCcompareBinary/{group1}-vs-{group2}-{dir}-HiCcompare-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1995,18 +1995,64 @@ rule rescaleHiCcompareCount:
 
 rule homerToH5:
     input:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.homer'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.homer'
     output:
-        'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
     group:
         'HiCcompare'
     log:
-        'logs/homerToH5/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.log'
+        'logs/homerToH5/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         '(hicConvertFormat --matrices {input} --outFileName {output} '
         '--inputFormat homer --outputFormat h5 || touch {output})  &> {log}'
+
+# Compute TAD insulation of HiCcompare adjIF
+rule TADinsulation2:
+    input:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+    output:
+        expand(
+            'dat/HiCcompare/{{region}}/{{bin}}/tads/{{group1}}-vs-{{group2}}-{{set}}-{{pm}}_{ext}',
+            ext = ['boundaries.bed', 'boundaries.gff', 'domains.bed',
+                   'score.bedgraph', 'zscore_matrix.h5']),
+        score = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{set}-{pm}_tad_score.bm'
+    params:
+        method = 'fdr',
+        min_depth = lambda wc: int(wc.bin) * 3,
+        max_depth = lambda wc: int(wc.bin) * 10,
+        prefix = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{set}-{pm}'
+    group:
+        'HiCcompare'
+    threads:
+        THREADS
+    log:
+        'logs/TADinsulation2/HiCcompare-{region}-{bin}-{group1}-vs-{group2}-{set}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicFindTADs --matrix {input} '
+        '--minDepth {params.min_depth} --maxDepth {params.max_depth} '
+        '--step {wildcards.bin} --outPrefix {params.prefix} '
+        '--correctForMultipleTesting {params.method} '
+        '--numberOfProcessors {threads} &> {log} || touch {output}'
+
+
+rule insulationDifference:
+    input:
+        adjIF1 = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-adjIF1-{pm}_tad_score.bm',
+        adjIF2 = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-adjIF2-{pm}_tad_score.bm'
+    output:
+        'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm'
+    group:
+        'HiCcompare'
+    log:
+        'logs/insulationDifference/HiCcompare-{region}-{bin}-{group1}-vs-{group2}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/subtractInsulation.py {input} > {output} 2> {log}'
 
 
 if config['compareMatrices']['tads'] is not None:
@@ -2098,13 +2144,14 @@ rule reformatDifferentialTAD:
 
 rule createCompareConfig:
     input:
-        mat = 'dat/{compare}/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
+        mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
         upBed = rules.hicCompareBedgraph.output.up,
         downBed = rules.hicCompareBedgraph.output.down,
+        insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed'
     output:
-        'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{compare}-{set}-{pm}.ini',
+        'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
     params:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
@@ -2116,7 +2163,7 @@ rule createCompareConfig:
     group:
         'HiCcompare'
     log:
-        'logs/createCompareConfig/{compare}/{region}/{bin}/{group1}-{group2}-{set}-{pm}.log'
+        'logs/createCompareConfig/HiCcompare/{region}/{bin}/{group1}-{group2}-{set}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -2125,6 +2172,7 @@ rule createCompareConfig:
         '--sumLogFC_title {params.sumLogFC_title} '
         '--sumLogFC_hline {params.threshold} '
         '--tads {input.tads1} {input.tads2} '
+        '--insulations {input.insulations} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
@@ -2156,7 +2204,7 @@ rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'plots/{region}/{bin}/{compare}/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}.png'
+        'plots/{region}/{bin}/HiCcompare/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}.png'
     params:
         title = setCompareTitle,
         region = setRegion,
@@ -2166,7 +2214,7 @@ rule plotCompare:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotAnalysis/{compare}/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}-{pm}.log'
+        'logs/plotAnalysis/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}-{pm}.log'
     threads:
         THREADS
     shell:

@@ -153,7 +153,7 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
     if insulations is not None:
         for i, insulation in enumerate(insulations):
             if not_empty(insulation):
-                write_insulation(insulation = insulation, i = i)
+                write_insulation(insulation=insulation, compare=compare, i=i)
         print('[spacer]')
 
     if stripes is not None:
@@ -235,19 +235,24 @@ def write_tads(tads, i, colours = ['#FF000080', '#0000FF80']):
           f'line_width = 1', sep = '\n')
 
 
-def write_insulation(insulation, i,
+def write_insulation(insulation, compare, i,
         colours = ['#d95f0280', '#1b9e7780', '#d902d980', '#00000080']):
     colour = colours[i]
     overlay = 'share-y' if i > 0 else 'no'
-
+    if compare:
+        title = f'Insulation difference (Z), threshold = 2'
+    else:
+        title = 'Insulation'
     print(f'[Bedgraph matrix]',
           f'file = {insulation}',
-          f'title = Insulation',
+          f'title = {title}',
           f'height = 3',
           f'color = {colour}',
           f'file_type = bedgraph_matrix',
           f'type = lines',
           f'overlay_previous = {overlay}', sep = '\n')
+    if compare:
+        writeHline(2)
 
 
 def writeStripes(stripes):
