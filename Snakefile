@@ -78,6 +78,7 @@ default_config = {
          'plotRep'       : True     ,},
     'bigWig'           : {}           ,
     'bed'              : {}           ,
+    'localAlignment':    False,
     'fastq_screen':      None,
     'runQC':             True,
     'runPCA':            True,
@@ -573,7 +574,7 @@ def bowtie2Basename(wc):
 
 
 def fastqInput(wc):
-    if config['microC']:
+    if config['microC'] or config['localAlignment']:
         return 'dat/fastq/trimmed/{preSample}-{read}.trim.fastq.gz'
     else:
         return 'dat/fastq/truncated/{preSample}-{read}.trunc.fastq.gz'
@@ -589,7 +590,8 @@ rule bowtie2:
     params:
         index = bowtie2Basename,
         cellType = lambda wc: HiC.sample2Cell()[wc.preSample],
-        sensitivity = 'sensitive'
+        sensitivity = 'sensitive',
+        local = '--local' if config['localAlignment'] else ''
     group:
         'bowtie2'
     log:
@@ -599,7 +601,7 @@ rule bowtie2:
     threads:
         THREADS - 2 if THREADS > 1 else 1
     shell:
-        'bowtie2 -x {params.index} -U {input.fastq} '
+        'bowtie2 -x {params.index} -U {input.fastq} {params.local} '
         '--reorder --threads {threads} --{params.sensitivity} '
         '> {output.sam} 2> {log} && cp {log} {output.qc}'
 

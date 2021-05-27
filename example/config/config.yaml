@@ -114,6 +114,9 @@ runPCA: True
 # Treat data as microC - ignore restriction digest.
 microC: False
 
+# Skip FASTQ truncation and perform local alignment instead
+local: False
+
 # Write TAD and HiCcompare status and score to a binned pandas
 rescalePKL: True
 
