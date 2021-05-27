@@ -171,7 +171,7 @@ runPCA: True
 microC: False
 
 # Skip FASTQ truncation and perform local alignment instead
-local: False
+localAlignment: False
 
 # Write TAD and HiCcompare status and score to a binned pandas
 rescalePKL: True
