@@ -97,10 +97,16 @@ def invertRegionBin(regionBin):
 
 class HiCSamples:
 
-    def __init__(self, samplesFile: str, restrictionSeqs: dict, alleleSpecific: bool, sep='\s+'):
+    def __init__(self, samplesFile: str, restrictionSeqs: dict,
+                 alleleSpecific: bool, allPairs: bool = False, sep='\s+'):
         self.alleleSpecific = alleleSpecific
         self.table = self.readSamples(samplesFile, sep=sep)
         self.experimentRestriction = restrictionSeqs
+        if allPairs:
+            self.combinator = itertools.permutations
+        else:
+            self.combinator = itertools.combinations
+
 
     def readSamples(self, samplesFile, sep='\s+'):
         table = pd.read_table(
@@ -182,12 +188,12 @@ class HiCSamples:
 
     def groupCompares(self):
         """ Return list of pairwise group comparison """
-        pairs = itertools.combinations(list(self.groups()), 2)
+        pairs = self.combinator(list(self.groups()), 2)
         return [f'{i[0]}-vs-{i[1]}' for i in pairs]
 
     def sampleCompares(self):
         """ Return list of pairwise sample comparison """
-        pairs = itertools.combinations(self.samples(), 2)
+        pairs = self.combinator(self.samples(), 2)
         return [f'{i[0]}-vs-{i[1]}' for i in pairs]
 
 

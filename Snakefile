@@ -53,7 +53,8 @@ default_config = {
          'vMax'       :  4            ,
          'size'       :  1            ,
          'maxDistance':  1000000      ,
-         'tads'       :  None         ,},
+         'tads'       :  None         ,
+         'allPairs'   :  False        ,},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -99,7 +100,9 @@ THREADS = config['threads']
 BASE_BIN = config['resolution']['base']
 ALLELE_SPECIFIC = True if config['phased_vcf'] else False
 
-HiC = HiCSamples(config['data'], config['restrictionSeqs'], ALLELE_SPECIFIC)
+HiC = HiCSamples(
+    config['data'], config['restrictionSeqs'], ALLELE_SPECIFIC,
+    allPairs=config['compareMatrices']['allPairs'])
 REGIONS = load_regions(config['regions'], adjust=BASE_BIN)
 
 # Remove region-binSize combinations with too few bins
