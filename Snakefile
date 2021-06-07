@@ -76,7 +76,8 @@ default_config = {
          'coordinates'   : None     ,
          'viewpoints'    : None     ,
          'viewpointRange': 500000   ,
-         'plotRep'       : True     ,},
+         'plotRep'       : True     ,
+         'vLines'        : []      ,},
     'bigWig'           : {}           ,
     'bed'              : {}           ,
     'localAlignment':    False,
@@ -1582,6 +1583,14 @@ def getPCAparams(wc):
     else:
         return ''
 
+
+def getVlinesParams(wc):
+    if config['plotParams']['vLines']:
+        return f'--vLines {config["plotParams"]["vLines"]}'
+    else:
+        return []
+
+
 rule createConfig:
     input:
         matrix = getMatrix,
@@ -1589,6 +1598,7 @@ rule createConfig:
         insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-{pm}_tad_score.bm',
         tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-{pm}-ontad_domains.bed',
         pca = getPCAinput,
+        vLines = config['plotParams']['vLines']
         #forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
         #reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
     output:
@@ -1601,6 +1611,7 @@ rule createConfig:
         vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
         log = '' if config['plotParams']['distanceNorm'] else '--log',
         plain = lambda wc: '--plain' if wc.vis == 'plain' else '',
+        vLines = getVlinesParams,
         pca = getPCAparams
     group:
         'processHiC'
@@ -1613,7 +1624,7 @@ rule createConfig:
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
         '--depth {params.depth} {params.vMin} {params.vMax} {params.plain} '
         '--insulations {input.insulations} --loops {input.loops} '
-        '{params.pca} --tads {input.tads} > {output} 2> {log}'
+        '{params.pca} {params.vLines} --tads {input.tads} > {output} 2> {log}'
 
 
 def setRegion(wc):
@@ -2152,7 +2163,8 @@ rule createCompareConfig:
         downBed = rules.hicCompareBedgraph.output.down,
         insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed'
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
+        vLines = config['plotParams']['vLines']
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
     params:
@@ -2163,6 +2175,7 @@ rule createCompareConfig:
         sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp) threshold = {config["compareMatrices"]["minZ"]}"',
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax'],
+        vLines = getVlinesParams
     group:
         'HiCcompare'
     log:
@@ -2175,7 +2188,7 @@ rule createCompareConfig:
         '--sumLogFC_title {params.sumLogFC_title} '
         '--sumLogFC_hline {params.threshold} '
         '--tads {input.tads1} {input.tads2} '
-        '--insulations {input.insulations} '
+        '--insulations {input.insulations} {params.vLines} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 

@@ -83,6 +83,8 @@ def main():
     parser.add_argument(
         '--vMax', type=float,
         help = 'Maximum score value for matrix.')
+    parser.add_argument(
+        '--vLines', help = 'BED file to plot vertical lines.')
 
     args = parser.parse_args()
     func = args.function
@@ -104,7 +106,7 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 bigWig, bed, compare, sumLogFC, sumLogFC_title, sumLogFC_hline,
-                stripes, depth, colourmap, vMin, vMax, flip, plain):
+                stripes, depth, colourmap, vMin, vMax, flip, plain, vLines):
 
     if plain:
         loops = []
@@ -175,6 +177,10 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         print('[spacer]')
 
     print('[x-axis]')
+
+    if (vLines is not None) and not_empty(vLines):
+        writeVlines(vLines)
+
 
 
 def not_empty(path):
@@ -305,6 +311,12 @@ def writeHline(y):
           f'y_values = {y}',
           f'overlay_previous = share-y',
           f'file_type = hlines', sep='\n')
+
+
+def writeVlines(bed):
+    print(f'[vlines]',
+          f'file = {bed}',
+          f'type = vlines', sep='\n')
 
 
 if __name__ == "__main__":

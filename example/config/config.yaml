@@ -76,6 +76,7 @@ plotParams:
     viewpoints:     ../config/viewpoints.bed
     viewpointRange: 150_000
     plotRep:        True
+    vLines:         ../config/vlines.bed
 
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
