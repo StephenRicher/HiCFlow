@@ -2174,6 +2174,7 @@ rule createCompareConfig:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
     params:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
+        nBedgraphBins = lambda wc: 1 + int(REGIONS['length'][wc.region]) // int(wc.bin),
         colourmap = 'bwr',
         tracks = getTracks,
         threshold = config['compareMatrices']['minZ'],
@@ -2195,6 +2196,7 @@ rule createCompareConfig:
         '--sumLogFC {input.upBed} {input.downBed} '
         '--sumLogFC_title {params.sumLogFC_title} '
         '--sumLogFC_hline {params.threshold} '
+        '--nBedgraphBins {params.nBedgraphBins} '
         '--tads {input.tads1} {input.tads2} '
         '--insulations {input.insulations} {params.vLines} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '

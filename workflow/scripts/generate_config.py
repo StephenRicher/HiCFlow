@@ -73,6 +73,9 @@ def main():
         '--sumLogFC_hline', type=int, default=None,
         help='Horizontal line to add to sumLogFC track.')
     parser.add_argument(
+        '--nBedgraphBins', type=int, default=700,
+        help='Number of bins for bedgraph input')
+    parser.add_argument(
         '--bed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
@@ -112,8 +115,8 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 bigWig, bed, compare, sumLogFC_absolute, sumLogFC_absolute_title,
-                sumLogFC, sumLogFC_title, sumLogFC_hline, stripes, depth, colourmap,
-                vMin, vMax, flip, plain, vLines):
+                sumLogFC, sumLogFC_title, sumLogFC_hline, nBedgraphBins,
+                stripes, depth, colourmap, vMin, vMax, flip, plain, vLines):
 
     if plain:
         loops = []
@@ -146,7 +149,8 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
     if notEmpty(sumLogFC_absolute):
         write_bigwig(
             file=sumLogFC_absolute, title=sumLogFC_absolute_title,
-            type='bedgraph', alpha=1, colour='#000000', overlay='no')
+            nBedgraphBins=nBedgraphBins, type='bedgraph', alpha=1,
+            colour='#000000', overlay='no')
         if sumLogFC_hline is not None:
             writeHline(sumLogFC_hline)
         print('[spacer]')
@@ -159,8 +163,9 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
             else:
                 overlay = 'share-y'
                 colour = '#0000FF80'
-            write_bigwig(file=file, title=sumLogFC_title, type='bedgraph',
-                         alpha=0.5, colour=colour, overlay=overlay)
+            write_bigwig(
+                file=file, title=sumLogFC_title, nBedgraphBins=nBedgraphBins,
+                type='bedgraph', alpha=0.5, colour=colour, overlay=overlay)
             if sumLogFC_hline is not None:
                 writeHline(sumLogFC_hline)
         if i == len(sumLogFC) - 1:
@@ -182,7 +187,7 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 type='bedgraph'
             else:
                 type='bigwig'
-            write_bigwig(file=file, title=title, type=type)
+            write_bigwig(file=file, title=title,type=type)
         print('[spacer]')
 
     for title, file in bed:
@@ -295,7 +300,9 @@ def writeStripes(stripes):
           f'[spacer]', sep='\n')
 
 
-def write_bigwig(file, title, alpha=1, colour='#33a02c', type='bigwig', overlay='no'):
+def write_bigwig(
+        file, title, alpha=1, colour='#33a02c',
+        type='bigwig', overlay='no', nBedgraphBins=700):
 
     print(f'[{type} - {title}]',
           f'file = {file}',
@@ -307,6 +314,7 @@ def write_bigwig(file, title, alpha=1, colour='#33a02c', type='bigwig', overlay=
           f'nans_to_zeros = True',
           f'summary_method = mean',
           f'show_data_range = true',
+          f'number_of_bins = {nBedgraphBins} ',
           f'file_type = {type}',
           f'overlay_previous = {overlay}', sep = '\n')
 
