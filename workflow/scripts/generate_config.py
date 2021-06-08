@@ -310,11 +310,9 @@ def write_bigwig(
           f'color = {colour}',
           f'alpha = {alpha}',
           f'height = 3',
-          f'number_of_bins = 500',
+          #f'number_of_bins = {nBedgraphBins}',
           f'nans_to_zeros = True',
-          f'summary_method = mean',
           f'show_data_range = true',
-          f'number_of_bins = {nBedgraphBins} ',
           f'file_type = {type}',
           f'overlay_previous = {overlay}', sep = '\n')
 
