@@ -78,8 +78,8 @@ default_config = {
          'viewpointRange': 500000   ,
          'plotRep'       : True     ,
          'vLines'        : []      ,},
-    'bigWig'           : {}           ,
-    'bed'              : {}           ,
+    'bigWig'           : {}        ,
+    'bed'              : {}        ,
     'localAlignment':    False,
     'fastq_screen':      None,
     'runQC':             True,
@@ -1556,10 +1556,12 @@ rule distanceNormalise:
 def getTracks(wc):
     """ Build track command for generate config """
     command = ''
-    for title, track in config['bigWig'].items():
-        command += f'--bigWig {title},{track} '
-    for title, track in config['bed'].items():
-        command += f'--bed {title},{track} '
+    if isinstance(config['bigWig'], dict):
+        for title, track in config['bigWig'].items():
+            command += f'--bigWig {title},{track} '
+    if isinstance(config['bed'], dict):
+        for title, track in config['bed'].items():
+            command += f'--bed {title},{track} '
     return command
 
 
@@ -2161,6 +2163,7 @@ rule createCompareConfig:
         mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
         upBed = rules.hicCompareBedgraph.output.up,
         downBed = rules.hicCompareBedgraph.output.down,
+        allBed = rules.hicCompareBedgraph.output.all,
         insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
@@ -2172,7 +2175,8 @@ rule createCompareConfig:
         colourmap = 'bwr',
         tracks = getTracks,
         threshold = config['compareMatrices']['minZ'],
-        sumLogFC_title = f'"sum(logFC) ({config["compareMatrices"]["maxDistance"]:.1e}bp) threshold = {config["compareMatrices"]["minZ"]}"',
+        sumLogFC_absolute_title = f'"Difference score (sum(logFC) {config["compareMatrices"]["maxDistance"]:.1e}bp), threshold = {config["compareMatrices"]["minZ"]}"',
+        sumLogFC_title = '"Directional difference score"',
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax'],
         vLines = getVlinesParams
@@ -2184,6 +2188,8 @@ rule createCompareConfig:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
+        '--sumLogFC_absolute {input.allBed} '
+        '--sumLogFC_absolute_title {params.sumLogFC_absolute_title} '
         '--sumLogFC {input.upBed} {input.downBed} '
         '--sumLogFC_title {params.sumLogFC_title} '
         '--sumLogFC_hline {params.threshold} '

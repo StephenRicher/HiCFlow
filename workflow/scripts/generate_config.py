@@ -58,10 +58,16 @@ def main():
         help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
+        '--sumLogFC_absolute',
+        help='Bedgraph file for absolute sumLogFC values')
+    parser.add_argument(
+        '--sumLogFC_absolute_title', default='compare score',
+        help='Bedgraph file for absolute sumLogFC values')
+    parser.add_argument(
         '--sumLogFC', nargs=2,
         help='Pair of bigWig files for sum logFC of UP and DOWN interactions.')
     parser.add_argument(
-        '--sumLogFC_title', default='sum(logFC)',
+        '--sumLogFC_title', default='compare score',
         help='Title for sumLogFC track')
     parser.add_argument(
         '--sumLogFC_hline', type=int, default=None,
@@ -105,8 +111,9 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                bigWig, bed, compare, sumLogFC, sumLogFC_title, sumLogFC_hline,
-                stripes, depth, colourmap, vMin, vMax, flip, plain, vLines):
+                bigWig, bed, compare, sumLogFC_absolute, sumLogFC_absolute_title,
+                sumLogFC, sumLogFC_title, sumLogFC_hline, stripes, depth, colourmap,
+                vMin, vMax, flip, plain, vLines):
 
     if plain:
         loops = []
@@ -115,55 +122,62 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         insulations = None
 
     print('[spacer]')
-    if matrix and not_empty(matrix):
+    if notEmpty(matrix):
         write_matrix(matrix, cmap=colourmap, depth=depth,
             vMin=vMin, vMax=vMax, log=log)
 
     for i, loop in enumerate(loops):
-        if not_empty(loop):
+        if notEmpty(loop):
             write_loops(loop, i=i, compare=compare)
 
     for i, tad in enumerate(tads):
-        if not_empty(tad):
+        if notEmpty(tad):
             write_tads(tad, i = i)
 
     if flip:
         inverted_matrix = matrix2 if matrix2 else matrix
         log_transform = log_matrix2 if matrix2 else log
-        if not_empty(inverted_matrix):
+        if notEmpty(inverted_matrix):
             write_matrix(inverted_matrix, cmap=colourmap, depth=depth,
                 vMin=vMin, vMax=vMax, invert=True, log=log_transform)
 
     print('[spacer]')
 
-    if sumLogFC is not None:
-        for i, file in enumerate(sumLogFC):
-            if not_empty(file):
-                if i == 0:
-                    overlay = 'no'
-                    colour = '#FF000080'
-                else:
-                    overlay = 'share-y'
-                    colour = '#0000FF80'
-                write_bigwig(file=file, title=sumLogFC_title, type='bedgraph',
-                             alpha=0.5, colour=colour, overlay=overlay)
-                if sumLogFC_hline is not None:
-                    writeHline(sumLogFC_hline)
+    if notEmpty(sumLogFC_absolute):
+        write_bigwig(
+            file=sumLogFC_absolute, title=sumLogFC_absolute_title,
+            type='bedgraph', alpha=1, colour='#000000', overlay='no')
+        if sumLogFC_hline is not None:
+            writeHline(sumLogFC_hline)
         print('[spacer]')
 
+    for i, file in enumerate(sumLogFC):
+        if notEmpty(file):
+            if i == 0:
+                overlay = 'no'
+                colour = '#FF000080'
+            else:
+                overlay = 'share-y'
+                colour = '#0000FF80'
+            write_bigwig(file=file, title=sumLogFC_title, type='bedgraph',
+                         alpha=0.5, colour=colour, overlay=overlay)
+            if sumLogFC_hline is not None:
+                writeHline(sumLogFC_hline)
+        if i == len(sumLogFC) - 1:
+            print('[spacer]')
 
-    if insulations is not None:
-        for i, insulation in enumerate(insulations):
-            if not_empty(insulation):
-                write_insulation(insulation=insulation, compare=compare, i=i)
-        print('[spacer]')
+    for i, insulation in enumerate(insulations):
+        if notEmpty(insulation):
+            write_insulation(insulation=insulation, compare=compare, i=i)
+        if i == len(insulations) - 1:
+            print('[spacer]')
 
     if stripes is not None:
         writeStripes(stripes)
 
     print('# End Sample Specific')
     for title, file in bigWig:
-        if not_empty(file):
+        if notEmpty(file):
             if file.endswith('.bedgraph'):
                 type='bedgraph'
             else:
@@ -172,19 +186,22 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         print('[spacer]')
 
     for title, file in bed:
-        if not_empty(file):
+        if notEmpty(file):
             write_bed(file=file, title=title)
         print('[spacer]')
 
     print('[x-axis]')
 
-    if (vLines is not None) and not_empty(vLines):
+    if notEmpty(vLines):
         writeVlines(vLines)
 
 
 
-def not_empty(path):
-    return os.path.exists(path) and os.path.getsize(path) > 0
+def notEmpty(path):
+    if not isinstance(path, str):
+        return False
+    else:
+        return os.path.exists(path) and os.path.getsize(path) > 0
 
 
 def write_matrix(
