@@ -19,7 +19,7 @@ def main():
     parser.set_defaults(function = make_config)
 
     parser.add_argument(
-        '--insulations', nargs = '*', default=None,
+        '--insulations', nargs = '*', default=[],
         help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
     parser.add_argument(
         '--tads', nargs='*', default=[],
