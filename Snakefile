@@ -77,7 +77,8 @@ default_config = {
          'viewpoints'    : None     ,
          'viewpointRange': 500000   ,
          'plotRep'       : True     ,
-         'vLines'        : []      ,},
+         'vLines'        : []       ,
+         'filetype'      : 'svg'    ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
     'localAlignment':    False,
@@ -153,6 +154,7 @@ wildcard_constraints:
     set = r'logFC|adjIF1|adjIF2',
     adjIF = r'adjIF1|adjIF2',
     compare = r'HiCcompare',
+    type = rf'{config["plotParams"]["filetype"]}',
     group = rf'{"|".join(HiC.groups())}',
     group1 = rf'{"|".join(HiC.groups())}',
     group2 = rf'{"|".join(HiC.groups())}',
@@ -177,26 +179,25 @@ else:
     phaseMode = 'full'
 
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}.png',
-        region=region, coords=COORDS[region], pm=phaseMode,
-        compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
-    [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.png',
-        region=region, coords=VIEWPOINTS[region], pm=phaseMode,
-        compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.png',
-        region=region, coords=COORDS[region], norm=norm, pm=phaseMode,
-        vis=vis, group=HiC.groups(),
-        bin=regionBin[region]) for region in regionBin],
-    [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.png',
-        region=region, coords=VIEWPOINTS[region], norm=norm, pm=phaseMode,
-        preGroup=HiC.groups(), bin=regionBin[region]) for region in regionBin],
-    [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.png',
+    [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}.{type}',
+        region=region, coords=COORDS[region], pm=phaseMode, compare=HiC.groupCompares(),
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
+        region=region, coords=VIEWPOINTS[region], pm=phaseMode, compare=HiC.groupCompares(),
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.{type}',
+        region=region, coords=COORDS[region], norm=norm, pm=phaseMode, vis=vis, group=HiC.groups(),
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
+        region=region, coords=VIEWPOINTS[region], norm=norm, pm=phaseMode, preGroup=HiC.groups(),
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=phaseMode,
-        norm=norm) for region in regionBin],
-     expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.png',
+        norm=norm, type=config['plotParams']['filetype']) for region in regionBin],
+     expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
-        region=regionBin.keys(), pm=phaseMode),
+        region=regionBin.keys(), pm=phaseMode, type=config['plotParams']['filetype']),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not (config['microC'] or config['localAlignment']) else []])
 # Exclude PCA if not set
 if config['runPCA']:
@@ -235,10 +236,11 @@ rule all:
         HiC_mode,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
          if config['phase'] else []),
-        (['qc/multiqc', 'qc/filterQC/ditagLength.png',
-          'qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
-        ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.png', region=region,
-            bin=regionBin[region], pm=phaseMode) for region in regionBin]
+        ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
+          'qc/multiqc','qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
+        ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}', region=region,
+            bin=regionBin[region], pm=phaseMode,
+            type=config['plotParams']['filetype']) for region in regionBin]
          if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC-{pm}.bam',
             sample=HiC.samples(), pm=phaseMode)
@@ -1440,14 +1442,14 @@ rule plotCoverage:
         lambda wc: expand('dat/matrix/{{region}}/{bin}/raw/{{all}}-{{region}}-{bin}-{{pm}}.gz',
             bin=regionBin[wc.region])
     output:
-        'qc/matrixCoverage/{region}/{all}-coverage-{pm}.png'
+        'qc/matrixCoverage/{region}/{all}-coverage-{pm}.{type}'
     params:
         dpi = 300,
         nBins = 10000,
         fontSize = 12,
         nonEmpty = nonEmpty
     log:
-        'logs/plotCoverage/{region}/{all}-{pm}.log'
+        'logs/plotCoverage/{region}/{all}-{pm}-{type}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1658,7 +1660,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}.png'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}.{type}'
     params:
         region = setRegion,
         title = setMatrixTitle,
@@ -1668,7 +1670,7 @@ rule plotHiC:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}-{pm}.log'
+        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}-{pm}-{type}.log'
     threads:
         THREADS
     shell:
@@ -1719,7 +1721,7 @@ rule plotViewpoint:
     input:
         rules.runViewpoint.output.bedgraph
     output:
-        'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-viewpoint-{pm}.png'
+        'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-viewpoint-{pm}.{type}'
     params:
         dpi = 600,
         build = f'--build {config["build"]}' if config['build'] else ''
@@ -1728,7 +1730,7 @@ rule plotViewpoint:
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/plotViewpoint/{group}-{coord}-{region}-{bin}-{norm}-{pm}.log'
+        'logs/plotViewpoint/{group}-{coord}-{region}-{bin}-{norm}-{pm}-{type}.log'
     shell:
         'python {SCRIPTS}/plotViewpoint.py {input} --out {output} '
         '--dpi {params.dpi} {params.build} &> {log}'
@@ -1738,7 +1740,7 @@ rule plotMatrix:
     input:
         rules.distanceNormalise.output
     output:
-        'plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.png'
+        'plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1747,7 +1749,7 @@ rule plotMatrix:
         dpi = 600,
         colour = 'YlGn'
     log:
-        'logs/plotMatrix/{all}-{region}-{bin}-{norm}-{pm}.log'
+        'logs/plotMatrix/{all}-{region}-{bin}-{norm}-{pm}-{type}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1801,13 +1803,13 @@ rule plotHiCRep:
         expand('qc/hicrep/data/{compare}-{{region}}-{{bin}}-hicrep-{{pm}}.csv',
             compare=HiC.sampleCompares())
     output:
-        'qc/hicrep/{region}-{bin}-hicrep-{pm}.png'
+        'qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}'
     params:
         dpi = 600,
     group:
         'HiCRep'
     log:
-        'logs/plotHiCRep/{region}-{bin}-{pm}.log'
+        'logs/plotHiCRep/{region}-{bin}-{pm}-{type}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -2226,7 +2228,7 @@ rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'plots/{region}/{bin}/HiCcompare/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}.png'
+        'plots/{region}/{bin}/HiCcompare/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}.{type}'
     params:
         title = setCompareTitle,
         region = setRegion,
@@ -2236,7 +2238,7 @@ rule plotCompare:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotAnalysis/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}-{pm}.log'
+        'logs/plotAnalysis/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}-{pm}-{type}.log'
     threads:
         THREADS
     shell:
@@ -2275,7 +2277,7 @@ rule plotCompareViewpoint:
         IF1 = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-adjIF1-{region}-{coord}-{bin}-{pm}.bedgraph',
         IF2 = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-adjIF2-{region}-{coord}-{bin}-{pm}.bedgraph',
     output:
-        'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-viewpoint-{pm}.png',
+        'plots/{region}/{bin}/viewpoints/HiCcompare/{group1}-vs-{group2}-{region}-{coord}-{bin}-viewpoint-{pm}.{type}',
     params:
         dpi = 600,
         build = f'--build {config["build"]}' if config['build'] else ''
@@ -2284,7 +2286,7 @@ rule plotCompareViewpoint:
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/plotCompareViewpoint/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}.log'
+        'logs/plotCompareViewpoint/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}-{type}.log'
     shell:
         'python {SCRIPTS}/plotViewpoint.py {input} --out {output} '
         '--dpi {params.dpi} {params.build} &> {log}'
@@ -3070,12 +3072,12 @@ rule plotQC:
         expand('dat/mapped/subsampled/{sample}-processed.txt',
             sample=HiC.originalSamples())
     output:
-        ditagOut = 'qc/filterQC/ditagLength.png',
-        insertOut = 'qc/filterQC/insertSizeFrequency.png'
+        ditagOut = 'qc/filterQC/ditagLength.{type}',
+        insertOut = 'qc/filterQC/insertSizeFrequency.{type}'
     group:
         'filterQC' if config['groupJobs'] else 'plotQC'
     log:
-        'logs/plotQC.log'
+        'logs/plotQC-{type}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
