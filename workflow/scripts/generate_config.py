@@ -64,11 +64,17 @@ def main():
         '--sumLogFC_absolute_title', default='compare score',
         help='Bedgraph file for absolute sumLogFC values')
     parser.add_argument(
+        '--sumLogFC_absolute_bed',
+        help='Bed file for absolute difference scores > 0')
+    parser.add_argument(
         '--sumLogFC', nargs=2, default=[],
         help='Pair of bigWig files for sum logFC of UP and DOWN interactions.')
     parser.add_argument(
         '--sumLogFC_title', default='compare score',
         help='Title for sumLogFC track')
+    parser.add_argument(
+        '--sumLogFC_bed',
+        help='Bed file for directional sumLogFC values > 0')
     parser.add_argument(
         '--sumLogFC_hline', type=int, default=None,
         help='Horizontal line to add to sumLogFC track.')
@@ -115,8 +121,9 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 bigWig, bed, compare, sumLogFC_absolute, sumLogFC_absolute_title,
-                sumLogFC, sumLogFC_title, sumLogFC_hline, nBedgraphBins,
-                stripes, depth, colourmap, vMin, vMax, flip, plain, vLines):
+                sumLogFC_absolute_bed, sumLogFC, sumLogFC_title, sumLogFC_bed,
+                sumLogFC_hline, nBedgraphBins, stripes, depth, colourmap,
+                vMin, vMax, flip, plain, vLines):
 
     if plain:
         loops = []
@@ -151,9 +158,11 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         write_bigwig(
             file=sumLogFC_absolute, title=sumLogFC_absolute_title,
             nBedgraphBins=nBedgraphBins, type='bedgraph', alpha=1,
-            colour='#000000', overlay='no')
+            colour='#000000', overlay='no', vmin=-3, vmax=3)
         if sumLogFC_hline is not None:
             writeHline(sumLogFC_hline)
+        if notEmpty(sumLogFC_absolute_bed):
+            writeSumLogFCBed(sumLogFC_absolute_bed, cmap='#000000')
         print('[spacer]')
 
     for i, file in enumerate(sumLogFC):
@@ -166,10 +175,11 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 colour = '#0000FF80'
             write_bigwig(
                 file=file, title=sumLogFC_title, nBedgraphBins=nBedgraphBins,
-                type='bedgraph', alpha=0.5, colour=colour, overlay=overlay)
-            if sumLogFC_hline is not None:
-                writeHline(sumLogFC_hline)
+                type='bedgraph', alpha=0.5, colour=colour, overlay=overlay,
+                vmin=-3, vmax=3)
         if i == len(sumLogFC) - 1:
+            if notEmpty(sumLogFC_bed):
+                writeSumLogFCBed(sumLogFC_bed, cmap=colourmap)
             print('[spacer]')
 
     for i, insulation in enumerate(insulations):
@@ -303,7 +313,8 @@ def writeStripes(stripes):
 
 def write_bigwig(
         file, title, alpha=1, colour='#33a02c',
-        type='bigwig', overlay='no', nBedgraphBins=700):
+        type='bigwig', overlay='no', nBedgraphBins=700,
+        vmin=None, vmax=None):
 
     print(f'[{type} - {title}]',
           f'file = {file}',
@@ -311,11 +322,14 @@ def write_bigwig(
           f'color = {colour}',
           f'alpha = {alpha}',
           f'height = 3',
-          #f'number_of_bins = {nBedgraphBins}',
           f'nans_to_zeros = True',
           f'show_data_range = true',
           f'file_type = {type}',
           f'overlay_previous = {overlay}', sep = '\n')
+    if vmin is not None:
+        print(f'min_value = {vmin}')
+    if vmax is not None:
+        print(f'max_value = {vmax}')
 
 
 def write_bed(file, title):
@@ -342,6 +356,15 @@ def writeVlines(bed):
           f'file = {bed}',
           f'type = vlines', sep='\n')
 
+
+def writeSumLogFCBed(bed, cmap):
+    print(f'[sumLogFCBed]',
+          f'file = {bed}',
+          f'labels = false',
+          f'color = {cmap}',
+          f'line_width = 0',
+          f'fontsize = 0',
+          f'display = collapsed', sep='\n')
 
 if __name__ == "__main__":
     main()

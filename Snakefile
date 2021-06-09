@@ -1962,6 +1962,22 @@ rule hicCompareBedgraph:
         '--upOut {output.up} --downOut {output.down} {input} &> {log}'
 
 
+rule subtract2BedDifference:
+    input:
+        up = rules.hicCompareBedgraph.output.up,
+        down = rules.hicCompareBedgraph.output.down
+    output:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-difference-{pm}.bed'
+    group:
+        'HiCcompare'
+    log:
+        'logs/subtract2BedDifference/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/subtraction2Bed.py {input} > {output} 2> {log}'
+
+
 rule rescaleHiCcompare:
     input:
         bedgraphs = lambda wc: expand(
@@ -2169,7 +2185,8 @@ rule createCompareConfig:
         insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
-        vLines = config['plotParams']['vLines']
+        vLines = config['plotParams']['vLines'],
+        sumLogFCBedDifference = rules.subtract2BedDifference.output
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
     params:
@@ -2199,6 +2216,7 @@ rule createCompareConfig:
         '--nBedgraphBins {params.nBedgraphBins} '
         '--tads {input.tads1} {input.tads2} '
         '--insulations {input.insulations} {params.vLines} '
+        '--sumLogFC_bed {input.sumLogFCBedDifference} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
