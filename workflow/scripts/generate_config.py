@@ -64,7 +64,7 @@ def main():
         '--sumLogFC_absolute_title', default='compare score',
         help='Bedgraph file for absolute sumLogFC values')
     parser.add_argument(
-        '--sumLogFC', nargs=2,
+        '--sumLogFC', nargs=2, default=[],
         help='Pair of bigWig files for sum logFC of UP and DOWN interactions.')
     parser.add_argument(
         '--sumLogFC_title', default='compare score',
@@ -122,7 +122,8 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         loops = []
         stripes = None
         tads = []
-        insulations = None
+        insulations = []
+        vLines = None
 
     print('[spacer]')
     if notEmpty(matrix):
@@ -177,7 +178,7 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         if i == len(insulations) - 1:
             print('[spacer]')
 
-    if stripes is not None:
+    if notEmpty(stripes):
         writeStripes(stripes)
 
     print('# End Sample Specific')
