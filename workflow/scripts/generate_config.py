@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import os
-import numpy as np
 import argparse
+import numpy as np
+
 
 def main():
 
@@ -58,26 +59,19 @@ def main():
         help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--sumLogFC_absolute',
+        '--absChange',
         help='Bedgraph file for absolute sumLogFC values')
     parser.add_argument(
-        '--sumLogFC_absolute_title', default='compare score',
-        help='Bedgraph file for absolute sumLogFC values')
-    parser.add_argument(
-        '--sumLogFC_absolute_bed',
-        help='Bed file for absolute difference scores > 0')
-    parser.add_argument(
-        '--sumLogFC', nargs=2, default=[],
-        help='Pair of bigWig files for sum logFC of UP and DOWN interactions.')
-    parser.add_argument(
-        '--sumLogFC_title', default='compare score',
+        '--absChange_title', default='compare score',
         help='Title for sumLogFC track')
     parser.add_argument(
-        '--sumLogFC_bed',
-        help='Bed file for directional sumLogFC values > 0')
+        '--absChange_p', type=float, default=0.05,
+        help='P-value threshold to constain axis limits of '
+             'absChange plot to only show significant interactions '
+             '(default: %(default)s)')
     parser.add_argument(
-        '--sumLogFC_hline', type=int, default=None,
-        help='Horizontal line to add to sumLogFC track.')
+        '--directionScore',
+        help='Bed file of bins with directional preference.')
     parser.add_argument(
         '--nBedgraphBins', type=int, default=700,
         help='Number of bins for bedgraph input')
@@ -120,10 +114,9 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                bigWig, bed, compare, sumLogFC_absolute, sumLogFC_absolute_title,
-                sumLogFC_absolute_bed, sumLogFC, sumLogFC_title, sumLogFC_bed,
-                sumLogFC_hline, nBedgraphBins, stripes, depth, colourmap,
-                vMin, vMax, flip, plain, vLines):
+                bigWig, bed, compare, absChange, absChange_title,
+                directionScore, absChange_p, nBedgraphBins,
+                stripes, depth, colourmap, vMin, vMax, flip, plain, vLines):
 
     if plain:
         loops = []
@@ -154,33 +147,18 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
 
     print('[spacer]')
 
-    if notEmpty(sumLogFC_absolute):
+    if notEmpty(absChange):
+        # Limit vmin to ensure only scores above significance are plotted
+        vMin = -np.log10(absChange_p)
         write_bigwig(
-            file=sumLogFC_absolute, title=sumLogFC_absolute_title,
+            file=absChange, title=absChange_title,
             nBedgraphBins=nBedgraphBins, type='bedgraph', alpha=1,
-            colour='#000000', overlay='no', vmin=-3, vmax=3)
-        if sumLogFC_hline is not None:
-            writeHline(sumLogFC_hline)
-        if notEmpty(sumLogFC_absolute_bed):
-            writeSumLogFCBed(sumLogFC_absolute_bed, cmap='#000000')
+            colour='#000000', overlay='no', vmin=vMin, vmax=20)
         print('[spacer]')
 
-    for i, file in enumerate(sumLogFC):
-        if notEmpty(file):
-            if i == 0:
-                overlay = 'no'
-                colour = '#FF000080'
-            else:
-                overlay = 'share-y'
-                colour = '#0000FF80'
-            write_bigwig(
-                file=file, title=sumLogFC_title, nBedgraphBins=nBedgraphBins,
-                type='bedgraph', alpha=0.5, colour=colour, overlay=overlay,
-                vmin=-3, vmax=3)
-        if i == len(sumLogFC) - 1:
-            if notEmpty(sumLogFC_bed):
-                writeSumLogFCBed(sumLogFC_bed, cmap=colourmap)
-            print('[spacer]')
+    if notEmpty(directionScore):
+        writeDirectionScore(directionScore, cmap=colourmap)
+    print('[spacer]')
 
     for i, insulation in enumerate(insulations):
         if notEmpty(insulation):
@@ -357,7 +335,7 @@ def writeVlines(bed):
           f'type = vlines', sep='\n')
 
 
-def writeSumLogFCBed(bed, cmap):
+def writeDirectionScore(bed, cmap):
     print(f'[sumLogFCBed]',
           f'file = {bed}',
           f'labels = false',

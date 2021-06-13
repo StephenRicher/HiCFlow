@@ -48,13 +48,14 @@ default_config = {
          'threads':              4    ,
          'multiplicativeValue':  10000,},
     'compareMatrices':
-        {'minZ':         2            ,
-         'vMin'       : -4            ,
-         'vMax'       :  4            ,
-         'size'       :  1            ,
-         'maxDistance':  1000000      ,
-         'tads'       :  None         ,
-         'allPairs'   :  False        ,},
+        {'p'          :     0.05         ,
+         'vMin'       :    -4            ,
+         'vMax'       :     4            ,
+         'size'       :     1            ,
+         'maxDistance':     1000000      ,
+         'tads'       :     None         ,
+         'allPairs'   :     False        ,
+         'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -205,9 +206,6 @@ if config['runPCA']:
 else:
     methods = ['TADinsulation', 'TADboundaries', 'TADdomains']
 rescalePKL = ([
-    expand('intervals/{compare}-{dir}-HiCcompare{mode}-{bin}-{pm}.pkl',
-            dir=['up', 'down', 'all'],  mode=['', '-count'],
-            pm=phaseMode, compare=HiC.groupCompares(), bin=binRegion.keys()),
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
             bin=binRegion.keys(), pm=phaseMode, method=methods)])
@@ -1941,90 +1939,41 @@ rule applyMedianFilter:
         '> {output} 2> {log}'
 
 
-rule hicCompareBedgraph:
+rule shadowCompareHiC:
     input:
         rules.applyMedianFilter.output
     output:
-        all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-all-{pm}.bedgraph',
-        up = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-up-{pm}.bedgraph',
-        down = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-down-{pm}.bedgraph'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-shadowP-{pm}.bedgraph'
     params:
-        maxDistance = config['compareMatrices']['maxDistance']
+        nShadow = 100,
+        seed = 42
     group:
         'HiCcompare'
     log:
-        'logs/hicCompareBedgraph/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
+        'logs/shadowCompareHiC/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/hicCompareBedgraph.py --Z '
-        '--maxDistance {params.maxDistance} --allOut {output.all} '
-        '--upOut {output.up} --downOut {output.down} {input} &> {log}'
+        'python {SCRIPTS}/shadowCompareHiC.py --seed {params.seed} '
+        '--nShadow {params.nShadow} {input} > {output} 2> {log}'
 
 
-rule subtract2BedDifference:
+rule directionPreference:
     input:
-        up = rules.hicCompareBedgraph.output.up,
-        down = rules.hicCompareBedgraph.output.down
+        rules.applyMedianFilter.output
     output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-difference-{pm}.bed'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-direction-{pm}.bed'
+    params:
+        threshold = 0.1
     group:
         'HiCcompare'
     log:
-        'logs/subtract2BedDifference/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
+        'logs/directionPreference/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/subtraction2Bed.py {input} > {output} 2> {log}'
-
-
-rule rescaleHiCcompare:
-    input:
-        bedgraphs = lambda wc: expand(
-            'dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}-{{pm}}.bedgraph',
-            region=binRegion[wc.bin]),
-        chromSizes = getChromSizes
-    output:
-        'intervals/{group1}-vs-{group2}-{dir}-HiCcompare-{bin}-{pm}.pkl'
-    params:
-        regions = config['regions'],
-        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-HiCcompare-{wc.bin}',
-    group:
-        'rescaleBedgraphs'
-    log:
-        'logs/rescaleHiCcompare/{group1}-vs-{group2}-{dir}-HiCcompare-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum --name {params.name} '
-        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
-        '--filetype bedgraph {input.chromSizes} <(cat {input.bedgraphs}) '
-        '&> {log}'
-
-
-rule rescaleHiCcompareCount:
-    input:
-        bedgraphs = lambda wc: expand(
-            'dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{dir}}-{{pm}}.bedgraph',
-            region=binRegion[wc.bin]),
-        chromSizes = getChromSizes
-    output:
-        'intervals/{group1}-vs-{group2}-{dir}-HiCcompare-count-{bin}-{pm}.pkl'
-    params:
-        threshold = config['compareMatrices']['minZ'],
-        regions = config['regions'],
-        name = lambda wc: f'{wc.group1}-vs-{wc.group2}-{wc.dir}-HiCcompare-{wc.bin}-peak',
-    group:
-        'rescaleBedgraphs'
-    log:
-        'logs/rescaleHiCcompareBinary/{group1}-vs-{group2}-{dir}-HiCcompare-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count --name {params.name} '
-        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
-        '--filetype bedgraph --threshold {params.threshold} '
-        '{input.chromSizes} <(cat {input.bedgraphs}) &> {log}'
+        'python {SCRIPTS}/directionPreferenceHiC.py '
+        '--threshold {params.threshold} {input} > {output} 2> {log}'
 
 
 rule homerToH5:
@@ -2179,14 +2128,12 @@ rule reformatDifferentialTAD:
 rule createCompareConfig:
     input:
         mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
-        upBed = rules.hicCompareBedgraph.output.up,
-        downBed = rules.hicCompareBedgraph.output.down,
-        allBed = rules.hicCompareBedgraph.output.all,
+        absChange = rules.shadowCompareHiC.output,
         insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        sumLogFCBedDifference = rules.subtract2BedDifference.output
+        directionPreference = rules.directionPreference.output
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
     params:
@@ -2194,9 +2141,8 @@ rule createCompareConfig:
         nBedgraphBins = lambda wc: 1 + int(REGIONS['length'][wc.region]) // int(wc.bin),
         colourmap = 'bwr',
         tracks = getTracks,
-        threshold = config['compareMatrices']['minZ'],
-        sumLogFC_absolute_title = f'"Difference score (sum(logFC) {config["compareMatrices"]["maxDistance"]:.1e}bp), threshold = {config["compareMatrices"]["minZ"]}"',
-        sumLogFC_title = '"Directional difference score"',
+        absChange_p = config['compareMatrices']['p'],
+        absChange_title = f'"{config["compareMatrices"]["absChangeTitle"]}"',
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax'],
         vLines = getVlinesParams
@@ -2207,16 +2153,14 @@ rule createCompareConfig:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/generate_config.py --matrix {input.mat} --compare '
-        '--sumLogFC_absolute {input.allBed} '
-        '--sumLogFC_absolute_title {params.sumLogFC_absolute_title} '
-        '--sumLogFC {input.upBed} {input.downBed} '
-        '--sumLogFC_title {params.sumLogFC_title} '
-        '--sumLogFC_hline {params.threshold} '
+        'python {SCRIPTS}/generate_config.py --compare '
+        '--matrix {input.mat} '
+        #'--insulations {input.insulations} '
+        '--absChange {input.absChange} --absChange_p {params.absChange_p} '
+        '--absChange_title {params.absChange_title} '
         '--nBedgraphBins {params.nBedgraphBins} '
         '--tads {input.tads1} {input.tads2} '
-        '--insulations {input.insulations} {params.vLines} '
-        '--sumLogFC_bed {input.sumLogFCBedDifference} '
+        '--directionScore {input.directionPreference} {params.vLines} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
