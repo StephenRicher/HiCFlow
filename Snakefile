@@ -2138,7 +2138,6 @@ rule createCompareConfig:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
     params:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
-        nBedgraphBins = lambda wc: 1 + int(REGIONS['length'][wc.region]) // int(wc.bin),
         colourmap = 'bwr',
         tracks = getTracks,
         absChange_p = config['compareMatrices']['p'],
@@ -2154,12 +2153,10 @@ rule createCompareConfig:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
-        '--matrix {input.mat} '
-        #'--insulations {input.insulations} '
+        '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
+        #'--insulations {input.insulations}  '
         '--absChange {input.absChange} --absChange_p {params.absChange_p} '
         '--absChange_title {params.absChange_title} '
-        '--nBedgraphBins {params.nBedgraphBins} '
-        '--tads {input.tads1} {input.tads2} '
         '--directionScore {input.directionPreference} {params.vLines} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
