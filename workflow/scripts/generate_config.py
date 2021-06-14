@@ -26,14 +26,8 @@ def main():
         '--tads', nargs='*', default=[],
         help = 'TAD scores in ".links" format.')
     parser.add_argument(
-        '--flip',  action='store_true',
-        help='Plot a copy of the HiC map inverted.')
-    parser.add_argument(
         '--loops', nargs='*', default=[],
         help = 'Loop output.')
-    parser.add_argument(
-        '--stripes', nargs=2,
-        help = 'Forward and Reverse stripe score in bedGraph.')
     parser.add_argument(
         '--matrix',
         help = 'HiC matrix.')
@@ -45,14 +39,7 @@ def main():
         help='Generate .ini file for HiC compare.')
     parser.add_argument(
         '--plain', default=False, action='store_true',
-        help='If set ignore PCA, insulation, loops, stripes and TAD.')
-    parser.add_argument(
-        '--matrix2',
-        help = 'If --flip argumnet is called, use to plot a different HiC'
-        'matrix as inverted.')
-    parser.add_argument(
-        '--log_matrix2', default=False, action='store_true',
-        help='Log transform counts of matrix 2.')
+        help='If set ignore PCA, insulation, loops and TAD.')
     parser.add_argument(
         '--bigWig', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
@@ -110,14 +97,13 @@ def commaPair(value):
     return (title, track)
 
 
-def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
+def make_config(insulations, matrix, log, tads, loops,
                 bigWig, bed, compare, absChange, absChange_title,
                 directionScore, absChange_p,
-                stripes, depth, colourmap, vMin, vMax, flip, plain, vLines):
+                depth, colourmap, vMin, vMax, plain, vLines):
 
     if plain:
         loops = []
-        stripes = None
         tads = []
         insulations = []
         vLines = None
@@ -135,12 +121,6 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         if notEmpty(tad):
             write_tads(tad, i = i)
 
-    if flip:
-        inverted_matrix = matrix2 if matrix2 else matrix
-        log_transform = log_matrix2 if matrix2 else log
-        if notEmpty(inverted_matrix):
-            write_matrix(inverted_matrix, cmap=colourmap, depth=depth,
-                vMin=vMin, vMax=vMax, invert=True, log=log_transform)
     print('[spacer]')
 
     if notEmpty(absChange):
@@ -158,9 +138,6 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
             write_insulation(insulation=insulation, compare=compare, i=i)
         if i == len(insulations) - 1:
             print('[spacer]')
-
-    if notEmpty(stripes):
-        writeStripes(stripes)
 
     print('# End Sample Specific')
     for title, file in bigWig:
@@ -193,11 +170,8 @@ def notEmpty(path):
 
 def write_matrix(
         matrix, cmap='Purples',
-        depth=1000000, vMin=None, vMax=None,
-        invert=False, log=False):
+        depth=1000000, vMin=None, vMax=None, log=False):
 
-    if invert:
-        depth = int(depth / 2)
     config = ['[Matrix]',
               f'file = {matrix}',
               f'depth = {depth}',
@@ -212,8 +186,6 @@ def write_matrix(
         config.append(f'min_value = {vMin}')
     if vMax is not None:
         config.append(f'max_value = {vMax}')
-    if invert:
-        config.append('orientation = inverted')
 
     print(*config, sep='\n')
 
@@ -263,23 +235,6 @@ def write_insulation(insulation, compare, i,
           f'overlay_previous = {overlay}', sep = '\n')
     if compare:
         writeHline(2)
-
-
-def writeStripes(stripes):
-    print(f'[Forward Stripes]',
-          f'file = {stripes[0]}',
-          r'title = Stripe score (+:blue, -:yellow)',
-          f'color = #FFC20A80',
-          f'height = 3',
-          f'file_type = bedgraph',
-          f'overlay_previous = no',
-          f'[Reverse Stripes]',
-          f'file = {stripes[1]}',
-          f'color = #0C7BDC80',
-          f'height = 3',
-          f'file_type = bedgraph',
-          f'overlay_previous = share-y',
-          f'[spacer]', sep='\n')
 
 
 def write_bigwig(

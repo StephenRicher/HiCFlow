@@ -1518,23 +1518,6 @@ rule domain2boundaries:
         '> {output} 2> {log}'
 
 
-rule computeStripeScore:
-    input:
-        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}-{pm}.gz'
-    output:
-        forward = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-forwardStripe-{pm}.bedgraph',
-        rev = 'dat/matrix/{region}/{bin}/stripes/{all}-{region}-{bin}-reverseStripe-{pm}.bedgraph'
-    group:
-        'processHiC'
-    conda:
-        f'{ENVS}/python3.yaml'
-    log:
-        'logs/computeStripeScore/{all}-{region}-{bin}-{pm}.log'
-    shell:
-        'python {SCRIPTS}/computeStripeScore.py {input} '
-        '{output.forward} {output.rev} &> {log} '
-
-
 rule distanceNormalise:
     input:
         'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}.h5'
@@ -1601,8 +1584,6 @@ rule createConfig:
         tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-{pm}-ontad_domains.bed',
         pca = getPCAinput,
         vLines = config['plotParams']['vLines']
-        #forwardStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-forwardStripe.bedgraph',
-        #reverseStripe = 'dat/matrix/{region}/{bin}/stripes/{group}-{region}-{bin}-reverseStripe.bedgraph'
     output:
         'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{bin}-{vis}-{pm}.ini'
     params:
