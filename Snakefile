@@ -49,6 +49,7 @@ default_config = {
          'multiplicativeValue':  10000,},
     'compareMatrices':
         {'fdr'           : 0.05         ,
+         'differenceThreshold': 0.8     ,
          'vMin'          : -4           ,
          'vMax'          : 4            ,
          'size'          : 1            ,
@@ -1920,25 +1921,22 @@ rule applyMedianFilter:
         '> {output} 2> {log}'
 
 
-rule shadowCompareHiC:
+rule discretiseAbsChange:
     input:
         rules.applyMedianFilter.output
     output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-shadowP-{pm}.bedgraph'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-discrete-{pm}.bedgraph'
     params:
         maxDistance = config['compareMatrices']['maxDistance'],
         threshold = 0.8,
-        nShadow = 100,
-        seed = 42
     group:
         'HiCcompare'
     log:
-        'logs/shadowCompareHiC/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
+        'logs/discretiseAbsChange/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/shadowCompareHiC.py --seed {params.seed} '
-        '--nShadow {params.nShadow} --threshold {params.threshold} '
+        'python {SCRIPTS}/discretiseAbsChange.py --threshold {params.threshold} '
         '--maxDistance {params.maxDistance} {input} > {output} 2> {log}'
 
 
@@ -2112,7 +2110,7 @@ rule reformatDifferentialTAD:
 rule createCompareConfig:
     input:
         mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
-        absChange = rules.shadowCompareHiC.output,
+        absChange = rules.discretiseAbsChange.output,
         insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
@@ -2124,7 +2122,7 @@ rule createCompareConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
         tracks = getTracks,
-        absChange_p = config['compareMatrices']['fdr'],
+        absChange_vmin = config['compareMatrices']['differenceThreshold'],
         absChange_title = f'"{config["compareMatrices"]["absChangeTitle"]}"',
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax'],
@@ -2139,7 +2137,7 @@ rule createCompareConfig:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
         #'--insulations {input.insulations}  '
-        '--absChange {input.absChange} --absChange_p {params.absChange_p} '
+        '--absChange {input.absChange} --absChange_vmin {params.absChange_vmin} '
         '--absChange_title {params.absChange_title} '
         '--directionScore {input.directionPreference} {params.vLines} '
         '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '

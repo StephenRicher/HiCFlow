@@ -52,9 +52,8 @@ def main():
         '--absChange_title', default='compare score',
         help='Title for sumLogFC track')
     parser.add_argument(
-        '--absChange_p', type=float, default=0.05,
-        help='P-value threshold to constain axis limits of '
-             'absChange plot to only show significant interactions '
+        '--absChange_vmin', type=float, default=50,
+        help='Minimum quantile to plot absolute change score '
              '(default: %(default)s)')
     parser.add_argument(
         '--directionScore',
@@ -99,7 +98,7 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, tads, loops,
                 bigWig, bed, compare, absChange, absChange_title,
-                directionScore, absChange_p,
+                directionScore, absChange_vmin,
                 depth, colourmap, vMin, vMax, plain, vLines):
 
     if plain:
@@ -124,9 +123,7 @@ def make_config(insulations, matrix, log, tads, loops,
     print('[spacer]')
 
     if notEmpty(absChange):
-        # Limit vmin to ensure only scores above significance are plotted
-        vMin = -10 * np.log10(absChange_p)
-        writeAbsChange(file=absChange, title=absChange_title, vmin=vMin)
+        writeAbsChange(file=absChange, title=absChange_title, vmin=absChange_vmin)
         print('[spacer]')
 
     if notEmpty(directionScore):
@@ -259,18 +256,15 @@ def writeAbsChange(file, title, colour='#000000', vmin=None, vmax=None):
           f'file = {file}',
           f'title = {title}',
           f'color = {colour}',
+          f'max_value = 1',
           f'alpha = 1',
           f'height = 3',
-          f'transform = log1p',
-          f'y_axis_values = original',
           f'nans_to_zeros = True',
           f'show_data_range = true',
           f'file_type = bedgraph',
           f'overlay_previous = no', sep = '\n')
     if vmin is not None:
         print(f'min_value = {vmin}')
-    if vmax is not None:
-        print(f'max_value = {vmax}')
 
 
 def write_bed(file, title):
