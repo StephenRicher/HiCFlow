@@ -46,7 +46,7 @@ def shadowCompareHiC(matrices: List, prefix: str, fdr: float, maxDistance: int):
         allRegions.append(summed)
 
     allRegions = pd.concat(allRegions).set_index(['chrom', 'start'])
-    allRegions['score'] = pd.qcut(
+    allRegions['quantScore'] = pd.qcut(
         allRegions['abs(score)'], 20, labels=np.linspace(0, 1, 20))
     allDirection = pd.concat(allDirection).set_index(['chrom', 'start'])
 
@@ -56,11 +56,19 @@ def shadowCompareHiC(matrices: List, prefix: str, fdr: float, maxDistance: int):
     allRegions['p(adj)'] = fdrcorrection(allRegions['p'])[1]
 
     allRegions['bias'] = allRegions.apply(setDirectionBias, args=(fdr,), axis=1)
-    columns = ['chrom', 'start', 'end', 'score']
+    columns = ['chrom', 'start', 'end', 'quantScore']
     for bias in allRegions['bias'].unique():
         out = f'{prefix}-{bias}.bedgraph'
         allRegions.loc[allRegions['bias'] == bias, columns].to_csv(
             out, index=False, header=False, sep='\t')
+
+    # Write direction score as a BED file
+    allRegions['name'] = '.'
+    allRegions['directionalScore'] = (
+        allRegions['abs(score)'] * allRegions['direction'])
+    columns = ['chrom', 'start', 'end', 'name', 'directionalScore']
+    allRegions.loc[allRegions['bias'] != 'none', columns].to_csv(
+        sys.stdout, index=False, header=False, sep='\t')
 
 
 def directionPreference(matrix, chrom: str, binSize: int):

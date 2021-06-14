@@ -56,6 +56,9 @@ def main():
         help='Minimum quantile to plot absolute change score '
              '(default: %(default)s)')
     parser.add_argument(
+        '--directionScore',
+        help='Bed file of bins with directional preference.')
+    parser.add_argument(
         '--bed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
@@ -95,7 +98,8 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, tads, loops,
                 bigWig, bed, compare, absChange, absChange_title,
-                absChange_vmin, depth, colourmap, vMin, vMax, plain, vLines):
+                directionScore, absChange_vmin,
+                depth, colourmap, vMin, vMax, plain, vLines):
 
     if plain:
         loops = []
@@ -122,6 +126,9 @@ def make_config(insulations, matrix, log, tads, loops,
         if notEmpty(file):
             writeAbsChange(
                 file=file, title=absChange_title, i=i, vmin=absChange_vmin)
+
+    if notEmpty(directionScore):
+        writeDirectionScore(directionScore, cmap=colourmap)
     print('[spacer]')
 
     for i, insulation in enumerate(insulations):
@@ -286,6 +293,15 @@ def writeVlines(bed):
           f'file = {bed}',
           f'type = vlines', sep='\n')
 
+
+def writeDirectionScore(bed, cmap):
+    print(f'[sumLogFCBed]',
+          f'file = {bed}',
+          f'labels = false',
+          f'color = {cmap}',
+          f'line_width = 0',
+          f'fontsize = 0',
+          f'display = collapsed', sep='\n')
 
 if __name__ == "__main__":
     main()

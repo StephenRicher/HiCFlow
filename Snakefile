@@ -49,7 +49,7 @@ default_config = {
          'multiplicativeValue':  10000,},
     'compareMatrices':
         {'fdr'           : 0.05         ,
-         'differenceThreshold': 0       ,
+         'differenceThreshold': 0.90    ,
          'vMin'          : -4           ,
          'vMax'          : 4            ,
          'size'          : 1            ,
@@ -2095,7 +2095,8 @@ rule discretiseAbsChange:
     output:
         none = 'dat/HiCcompare/discretised/{bin}/{group1}-vs-{group2}-discrete-{pm}-none.bedgraph',
         up = 'dat/HiCcompare/discretised/{bin}/{group1}-vs-{group2}-discrete-{pm}-up.bedgraph',
-        down = 'dat/HiCcompare/discretised/{bin}/{group1}-vs-{group2}-discrete-{pm}-down.bedgraph'
+        down = 'dat/HiCcompare/discretised/{bin}/{group1}-vs-{group2}-discrete-{pm}-down.bedgraph',
+        directionBed = 'dat/HiCcompare/discretised/{bin}/{group1}-vs-{group2}-{pm}.bed'
     params:
         prefix = lambda wc: f'dat/HiCcompare/discretised/{wc.bin}/{wc.group1}-vs-{wc.group2}-discrete-{wc.pm}',
         maxDistance = config['compareMatrices']['maxDistance'],
@@ -2106,17 +2107,21 @@ rule discretiseAbsChange:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/discretiseAbsChange.py --prefix {params.prefix} '
-        '--fdr {params.fdr} --maxDistance {params.maxDistance} {input} &> {log}'
+        '--fdr {params.fdr} --maxDistance {params.maxDistance} {input} '
+        '> {output.directionBed} 2> {log}'
 
 
 rule createCompareConfig:
     input:
         mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
-        absChange = rules.discretiseAbsChange.output,
         insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
+        absChangeNone = rules.discretiseAbsChange.output.none,
+        absChangeUp = rules.discretiseAbsChange.output.up,
+        absChangeDown = rules.discretiseAbsChange.output.down,
+        directionPreference = rules.discretiseAbsChange.output.directionBed
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
     params:
@@ -2138,10 +2143,12 @@ rule createCompareConfig:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
         #'--insulations {input.insulations}  '
-        '--absChange {input.absChange} --absChange_vmin {params.absChange_vmin} '
+        '--absChange {input.absChangeNone} {input.absChangeUp} '
+        '{input.absChangeDown} --absChange_vmin {params.absChange_vmin} '
         '--absChange_title {params.absChange_title} '
-        '{params.vLines} '
-        '{params.tracks} --depth {params.depth} --colourmap {params.colourmap} '
+        '--directionScore {input.directionPreference} '
+        '{params.vLines} {params.tracks} '
+        '--depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
 
 
