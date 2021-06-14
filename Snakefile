@@ -48,7 +48,7 @@ default_config = {
          'threads':              4    ,
          'multiplicativeValue':  10000,},
     'compareMatrices':
-        {'p'          :     0.05         ,
+        {'fdr'        :     0.05         ,
          'vMin'       :    -4            ,
          'vMax'       :     4            ,
          'size'       :     1            ,
@@ -1945,7 +1945,7 @@ rule directionPreference:
     output:
         'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-direction-{pm}.bed'
     params:
-        threshold = 0.1
+        threshold = config['compareMatrices']['fdr']
     group:
         'HiCcompare'
     log:
@@ -2121,7 +2121,7 @@ rule createCompareConfig:
         depth = lambda wc: int(REGIONS['length'][wc.region]),
         colourmap = 'bwr',
         tracks = getTracks,
-        absChange_p = config['compareMatrices']['p'],
+        absChange_p = config['compareMatrices']['fdr'],
         absChange_title = f'"{config["compareMatrices"]["absChangeTitle"]}"',
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax'],
