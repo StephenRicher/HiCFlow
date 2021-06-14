@@ -73,9 +73,6 @@ def main():
         '--directionScore',
         help='Bed file of bins with directional preference.')
     parser.add_argument(
-        '--nBedgraphBins', type=int, default=700,
-        help='Number of bins for bedgraph input')
-    parser.add_argument(
         '--bed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
@@ -115,7 +112,7 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 bigWig, bed, compare, absChange, absChange_title,
-                directionScore, absChange_p, nBedgraphBins,
+                directionScore, absChange_p,
                 stripes, depth, colourmap, vMin, vMax, flip, plain, vLines):
 
     if plain:
@@ -144,16 +141,12 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
         if notEmpty(inverted_matrix):
             write_matrix(inverted_matrix, cmap=colourmap, depth=depth,
                 vMin=vMin, vMax=vMax, invert=True, log=log_transform)
-
     print('[spacer]')
 
     if notEmpty(absChange):
         # Limit vmin to ensure only scores above significance are plotted
-        vMin = -np.log10(absChange_p)
-        write_bigwig(
-            file=absChange, title=absChange_title,
-            nBedgraphBins=nBedgraphBins, type='bedgraph', alpha=1,
-            colour='#000000', overlay='no', vmin=vMin, vmax=20)
+        vMin = -10 * np.log10(absChange_p)
+        writeAbsChange(file=absChange, title=absChange_title, vmin=vMin)
         print('[spacer]')
 
     if notEmpty(directionScore):
@@ -176,7 +169,7 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 type='bedgraph'
             else:
                 type='bigwig'
-            write_bigwig(file=file, title=title,type=type)
+            write_bigwig(file=file, title=title, type=type)
         print('[spacer]')
 
     for title, file in bed:
@@ -291,8 +284,7 @@ def writeStripes(stripes):
 
 def write_bigwig(
         file, title, alpha=1, colour='#33a02c',
-        type='bigwig', overlay='no', nBedgraphBins=700,
-        vmin=None, vmax=None):
+        type='bigwig', overlay='no'):
 
     print(f'[{type} - {title}]',
           f'file = {file}',
@@ -304,6 +296,22 @@ def write_bigwig(
           f'show_data_range = true',
           f'file_type = {type}',
           f'overlay_previous = {overlay}', sep = '\n')
+
+
+def writeAbsChange(file, title, colour='#000000', vmin=None, vmax=None):
+
+    print(f'[{type} - {title}]',
+          f'file = {file}',
+          f'title = {title}',
+          f'color = {colour}',
+          f'alpha = 1',
+          f'height = 3',
+          f'transform = log1p',
+          f'y_axis_values = original',
+          f'nans_to_zeros = True',
+          f'show_data_range = true',
+          f'file_type = bedgraph',
+          f'overlay_previous = no', sep = '\n')
     if vmin is not None:
         print(f'min_value = {vmin}')
     if vmax is not None:
