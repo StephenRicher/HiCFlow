@@ -16,7 +16,9 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def shadowCompareHiC(file: str, nShadow: int, seed: int):
+def shadowCompareHiC(
+        file: str, nShadow: int, threshold: float,
+        maxDistance: int, seed: int):
 
     random.seed(seed)
 
@@ -24,7 +26,17 @@ def shadowCompareHiC(file: str, nShadow: int, seed: int):
     chrom = mat.attrs['chrom']
     binSize = mat.attrs['binSize']
 
+    # Remove interactions above a certain distance
     mat['seperation'] = (mat['start'] - mat['start2']).abs()
+    mat = mat.loc[abs(mat['seperation']) < maxDistance]
+
+    # Find and drop bins with a high proportion of missing values
+    binZeros = mat.groupby('start')['score'].apply(
+        lambda x: sum(x==0) / len(x))
+    dropBins = binZeros[binZeros > threshold].index
+    dropRows = mat['start'].isin(dropBins) | mat['start2'].isin(dropBins)
+    mat = mat.loc[~dropRows]
+
     mat['abs(score)'] = abs(mat['score'])
     summed = mat.groupby('start')[['abs(score)']].sum()
 
@@ -66,6 +78,14 @@ def parseArgs():
         '--nShadow', type=int, default=100,
         help='Number of shuffled matrices to generate '
              'Z distribution (default: %(default)s)')
+    parser.add_argument(
+        '--threshold', type=float, default=0.8,
+        help='Mask bins with with a high proportion of zeros '
+             '(default: %(default)s)')
+    parser.add_argument(
+        '--maxDistance', type=int, default=1000000,
+        help='Remove interactions greater than this distance '
+             '(default: %(default)s)')
     parser.add_argument(
         '--seed', type=int, default=None,
         help='Seed for random number generator (default: %(default)s)')

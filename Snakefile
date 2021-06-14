@@ -48,13 +48,13 @@ default_config = {
          'threads':              4    ,
          'multiplicativeValue':  10000,},
     'compareMatrices':
-        {'fdr'        :     0.05         ,
-         'vMin'       :    -4            ,
-         'vMax'       :     4            ,
-         'size'       :     1            ,
-         'maxDistance':     1000000      ,
-         'tads'       :     None         ,
-         'allPairs'   :     False        ,
+        {'fdr'           : 0.05         ,
+         'vMin'          : -4           ,
+         'vMax'          : 4            ,
+         'size'          : 1            ,
+         'tads'          : None         ,
+         'allPairs'      : False        ,
+         'maxDistance'   : 1000000      ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -1926,6 +1926,8 @@ rule shadowCompareHiC:
     output:
         'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-shadowP-{pm}.bedgraph'
     params:
+        maxDistance = config['compareMatrices']['maxDistance'],
+        threshold = 0.8,
         nShadow = 100,
         seed = 42
     group:
@@ -1936,7 +1938,8 @@ rule shadowCompareHiC:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/shadowCompareHiC.py --seed {params.seed} '
-        '--nShadow {params.nShadow} {input} > {output} 2> {log}'
+        '--nShadow {params.nShadow} --threshold {params.threshold} '
+        '--maxDistance {params.maxDistance} {input} > {output} 2> {log}'
 
 
 rule directionPreference:
