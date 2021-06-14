@@ -46,7 +46,7 @@ def shadowCompareHiC(file: str, nShadow: int, seed: int):
     summed['Z'] = (summed['abs(score)'] - summed['shadowMean']) / summed['shadowStd']
     summed['p'] = stats.norm.sf(summed['Z'])
     summed['p(adj)'] = fdrcorrection(summed['p'])[1]
-    summed['pScore'] = -np.log10(summed['p(adj)'])
+    summed['pScore'] = -10 * np.log10(summed['p(adj)'])
     summed['chrom'] = chrom
     summed['end'] = summed['start'] + binSize
 
