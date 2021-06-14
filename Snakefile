@@ -1921,25 +1921,6 @@ rule applyMedianFilter:
         '> {output} 2> {log}'
 
 
-rule discretiseAbsChange:
-    input:
-        rules.applyMedianFilter.output
-    output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-discrete-{pm}.bedgraph'
-    params:
-        maxDistance = config['compareMatrices']['maxDistance'],
-        threshold = 0.8,
-    group:
-        'HiCcompare'
-    log:
-        'logs/discretiseAbsChange/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/discretiseAbsChange.py --threshold {params.threshold} '
-        '--maxDistance {params.maxDistance} {input} > {output} 2> {log}'
-
-
 rule directionPreference:
     input:
         rules.applyMedianFilter.output
@@ -2107,6 +2088,24 @@ rule reformatDifferentialTAD:
         '> {output} 2> {log}'
 
 
+rule discretiseAbsChange:
+    input:
+        expand('dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}.homer',
+            region=REGIONS.index),
+    output:
+        'dat/HiCcompare/discretised/{bin}/{group1}-vs-{group2}-discrete-{pm}.bedgraph'
+    params:
+        maxDistance = config['compareMatrices']['maxDistance'],
+        threshold = 0.8,
+    log:
+        'logs/discretiseAbsChange/{group1}-vs-{group2}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/discretiseAbsChange.py --threshold {params.threshold} '
+        '--maxDistance {params.maxDistance} {input} > {output} 2> {log}'
+        
+
 rule createCompareConfig:
     input:
         mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
@@ -2128,7 +2127,7 @@ rule createCompareConfig:
         vMax = config['compareMatrices']['vMax'],
         vLines = getVlinesParams
     group:
-        'HiCcompare'
+        'plotHiCcompare'
     log:
         'logs/createCompareConfig/HiCcompare/{region}/{bin}/{group1}-{group2}-{set}-{pm}.log'
     conda:
@@ -2177,7 +2176,7 @@ rule plotCompare:
         region = setRegion,
         dpi = 600
     group:
-        'HiCcompare'
+        'plotHiCcompare'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
