@@ -46,7 +46,7 @@ def main():
         help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--absChange',
+        '--absChange', nargs=3,
         help='Bedgraph file for absolute sumLogFC values')
     parser.add_argument(
         '--absChange_title', default='compare score',
@@ -55,9 +55,6 @@ def main():
         '--absChange_vmin', type=float, default=50,
         help='Minimum quantile to plot absolute change score '
              '(default: %(default)s)')
-    parser.add_argument(
-        '--directionScore',
-        help='Bed file of bins with directional preference.')
     parser.add_argument(
         '--bed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
@@ -98,8 +95,7 @@ def commaPair(value):
 
 def make_config(insulations, matrix, log, tads, loops,
                 bigWig, bed, compare, absChange, absChange_title,
-                directionScore, absChange_vmin,
-                depth, colourmap, vMin, vMax, plain, vLines):
+                absChange_vmin, depth, colourmap, vMin, vMax, plain, vLines):
 
     if plain:
         loops = []
@@ -122,12 +118,10 @@ def make_config(insulations, matrix, log, tads, loops,
 
     print('[spacer]')
 
-    if notEmpty(absChange):
-        writeAbsChange(file=absChange, title=absChange_title, vmin=absChange_vmin)
-        print('[spacer]')
-
-    if notEmpty(directionScore):
-        writeDirectionScore(directionScore, cmap=colourmap)
+    for i, file in enumerate(absChange):
+        if notEmpty(file):
+            writeAbsChange(
+                file=file, title=absChange_title, i=i, vmin=absChange_vmin)
     print('[spacer]')
 
     for i, insulation in enumerate(insulations):
@@ -250,21 +244,22 @@ def write_bigwig(
           f'overlay_previous = {overlay}', sep = '\n')
 
 
-def writeAbsChange(file, title, colour='#000000', vmin=None, vmax=None):
-
+def writeAbsChange(file, title, i, vmin=0):
+    colours = ['#000000', '#FF0000', '#0000FF']
+    colour = colours[i]
+    overlay = 'share-y' if i > 0 else 'no'
     print(f'[{type} - {title}]',
           f'file = {file}',
           f'title = {title}',
           f'color = {colour}',
+          f'min_value = {vmin}',
           f'max_value = 1',
           f'alpha = 1',
           f'height = 3',
           f'nans_to_zeros = True',
           f'show_data_range = true',
           f'file_type = bedgraph',
-          f'overlay_previous = no', sep = '\n')
-    if vmin is not None:
-        print(f'min_value = {vmin}')
+          f'overlay_previous = {overlay}', sep = '\n')
 
 
 def write_bed(file, title):
@@ -291,15 +286,6 @@ def writeVlines(bed):
           f'file = {bed}',
           f'type = vlines', sep='\n')
 
-
-def writeDirectionScore(bed, cmap):
-    print(f'[sumLogFCBed]',
-          f'file = {bed}',
-          f'labels = false',
-          f'color = {cmap}',
-          f'line_width = 0',
-          f'fontsize = 0',
-          f'display = collapsed', sep='\n')
 
 if __name__ == "__main__":
     main()
