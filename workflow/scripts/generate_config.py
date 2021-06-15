@@ -57,7 +57,7 @@ def main():
         help='Add title and bed files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--depth', type = int, default = 1000000,
+        '--depth', type=int, default = 1000000,
         help = 'HiC matrix depth.')
     parser.add_argument(
         '--colourmap', default='Purples',

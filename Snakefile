@@ -80,6 +80,7 @@ default_config = {
          'viewpointRange': 500000   ,
          'plotRep'       : True     ,
          'vLines'        : []       ,
+         'miniMatrix'    : False    ,
          'filetype'      : 'svg'    ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
@@ -174,6 +175,8 @@ VIEWPOINTS =  load_coords(REGIONS, config['plotParams']['viewpoints'], includeRe
 vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
 norm = ['raw', 'KR'] if config['plotParams']['plain'] else ['KR']
+# Set addition suffic if mini matrix
+mini = 'mm' if config['plotParams']['miniMatrix'] else 'fm'
 # Set plot suffix for allele specific mode
 if ALLELE_SPECIFIC:
     phaseMode = 'ASHIC' if config['ASHIC'] else 'SNPsplit'
@@ -181,14 +184,14 @@ else:
     phaseMode = 'full'
 
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}.{type}',
+    [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=phaseMode, compare=HiC.groupCompares(),
-        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
+        region=region, coords=COORDS[region], norm=norm, pm=phaseMode, vis=vis, group=HiC.groups(),
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], pm=phaseMode, compare=HiC.groupCompares(),
-        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.{type}',
-        region=region, coords=COORDS[region], norm=norm, pm=phaseMode, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=phaseMode, preGroup=HiC.groups(),
@@ -1577,6 +1580,16 @@ def getVlinesParams(wc):
         return []
 
 
+def getDepth(wc):
+    chrom, start, end = wc.coord.split('_')
+    if config['plotParams']['miniMatrix']:
+        scale = 6 / 32.8896465805521
+    else:
+        scale = 1
+    regionLength = int(end) - int(start)
+    return int(scale * regionLength)
+
+
 rule createConfig:
     input:
         matrix = getMatrix,
@@ -1586,10 +1599,10 @@ rule createConfig:
         pca = getPCAinput,
         vLines = config['plotParams']['vLines']
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{bin}-{vis}-{pm}.ini'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coord}-{bin}-{vis}-{pm}-{mini}.ini'
     params:
         tracks = getTracks,
-        depth = lambda wc: int(REGIONS['length'][wc.region]),
+        depth = getDepth,
         colourmap = config['plotParams']['colourmap'],
         vMin = '--vMin 0' if config['plotParams']['distanceNorm'] else '',
         vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
@@ -1602,7 +1615,7 @@ rule createConfig:
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/createConfig/{group}-{region}-{bin}-{norm}-{vis}-{pm}.log'
+        'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{vis}-{pm}-{mini}.log'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
@@ -1640,7 +1653,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}.{type}'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}-{mini}.{type}'
     params:
         region = setRegion,
         title = setMatrixTitle,
@@ -1650,7 +1663,7 @@ rule plotHiC:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}-{pm}-{type}.log'
+        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}-{pm}-{mini}-{type}.log'
     threads:
         THREADS
     shell:
@@ -2093,7 +2106,8 @@ rule discretiseAbsChange:
         expand('dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}.homer',
             region=REGIONS.index),
     output:
-        'dat/HiCcompare/discretised/{bin}/{group1}-vs-{group2}-{pm}-changeScore.bed'
+        bed = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-changeScore.bed',
+        all = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-changeScore.tsv'
     params:
         maxDistance = config['compareMatrices']['maxDistance'],
         fdr = config['compareMatrices']['fdr'],
@@ -2102,8 +2116,9 @@ rule discretiseAbsChange:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/discretiseAbsChange.py  --fdr {params.fdr} '
-        '--maxDistance {params.maxDistance} {input} > {output} 2> {log}'
+        'python {SCRIPTS}/discretiseAbsChange.py  --outData {output.all} '
+        '--fdr {params.fdr} --maxDistance {params.maxDistance} {input} '
+        '> {output.bed} 2> {log}'
 
 
 rule createCompareConfig:
@@ -2113,11 +2128,11 @@ rule createCompareConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        changeScore = rules.discretiseAbsChange.output
+        changeScore = rules.discretiseAbsChange.output.bed
     output:
-        'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-HiCcompare-{set}-{pm}.ini',
+        'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
-        depth = lambda wc: int(REGIONS['length'][wc.region]),
+        depth = getDepth,
         colourmap = 'bwr',
         tracks = getTracks,
         absChange_title = f'"{config["compareMatrices"]["absChangeTitle"]}"',
@@ -2127,7 +2142,7 @@ rule createCompareConfig:
     group:
         'plotHiCcompare'
     log:
-        'logs/createCompareConfig/HiCcompare/{region}/{bin}/{group1}-{group2}-{set}-{pm}.log'
+        'logs/createCompareConfig/HiCcompare/{region}/{bin}/{group1}-{group2}-{coord}-{set}-{pm}-{mini}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -2168,7 +2183,7 @@ rule plotCompare:
     input:
         rules.createCompareConfig.output
     output:
-        'plots/{region}/{bin}/HiCcompare/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}.{type}'
+        'plots/{region}/{bin}/HiCcompare/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}-{mini}.{type}'
     params:
         title = setCompareTitle,
         region = setRegion,
@@ -2178,7 +2193,7 @@ rule plotCompare:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotAnalysis/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}-{pm}-{type}.log'
+        'logs/plotAnalysis/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}-{pm}-{mini}-{type}.log'
     threads:
         THREADS
     shell:

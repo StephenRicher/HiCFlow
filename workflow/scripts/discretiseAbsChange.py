@@ -19,7 +19,7 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def shadowCompareHiC(matrices: List, fdr: float, maxDistance: int):
+def shadowCompareHiC(matrices: List, outData: str, fdr: float, maxDistance: int):
 
     allRegions = []
     allDirection = []
@@ -56,14 +56,17 @@ def shadowCompareHiC(matrices: List, fdr: float, maxDistance: int):
         allDirection, left_index=True, right_index=True).reset_index()
     allRegions['end'] = allRegions['start'] + binSize
     allRegions['p(adj)'] = fdrcorrection(allRegions['p'])[1]
+    allRegions['colour'] = allRegions.apply(getColour, args=(fdr,), axis=1)
+
+    if outData is not None:
+        allRegions.to_csv(
+            outData, index=False, header=True, sep='\t')
 
     # Write direction score as a BED file
     allRegions['name'] = '.'
     allRegions['strand'] = '.'
     allRegions['thickStart'] = allRegions['start']
     allRegions['thickEnd'] = allRegions['end']
-    allRegions['colour'] = allRegions.apply(getColour, args=(fdr,), axis=1)
-
     columns = ([
         'chrom', 'start', 'end', 'name', 'abs(score)', 'strand',
         'thickStart', 'thickEnd', 'colour'])
@@ -78,7 +81,6 @@ def getColour(x, fdr):
             i = (x['quantScore'] * 0.5)  + 0.5
         else:
             i = (1 - x['quantScore']) * 0.5
-        print(i, file=sys.stderr)
         colour = to_hex(cm.get_cmap('bwr', 40)(i))[1:]
     else:
         i = x['quantScore']
@@ -112,6 +114,10 @@ def parseArgs():
     parser.set_defaults(function=shadowCompareHiC)
     parser.add_argument(
         'matrices', nargs='*', help='HiC matrix in homer format.')
+    parser.add_argument(
+        '--outData', default=None,
+        help='File to write all relevant difference score information '
+             '(default: %(default)s)')
     parser.add_argument(
         '--fdr', type=float, default=0.05,
         help='False discovery rate threshold for directional '
