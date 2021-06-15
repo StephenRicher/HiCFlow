@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from typing import List
+from matplotlib import cm
+from matplotlib.colors import to_hex
 from collections import defaultdict
 from statsmodels.stats.multitest import fdrcorrection
 from utilities import setDefaults, createMainParent, readHomer
@@ -17,7 +19,7 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def shadowCompareHiC(matrices: List, prefix: str, fdr: float, maxDistance: int):
+def shadowCompareHiC(matrices: List, fdr: float, maxDistance: int):
 
     allRegions = []
     allDirection = []
@@ -55,20 +57,34 @@ def shadowCompareHiC(matrices: List, prefix: str, fdr: float, maxDistance: int):
     allRegions['end'] = allRegions['start'] + binSize
     allRegions['p(adj)'] = fdrcorrection(allRegions['p'])[1]
 
-    allRegions['bias'] = allRegions.apply(setDirectionBias, args=(fdr,), axis=1)
-    columns = ['chrom', 'start', 'end', 'quantScore']
-    for bias in allRegions['bias'].unique():
-        out = f'{prefix}-{bias}.bedgraph'
-        allRegions.loc[allRegions['bias'] == bias, columns].to_csv(
-            out, index=False, header=False, sep='\t')
-
     # Write direction score as a BED file
     allRegions['name'] = '.'
-    allRegions['directionalScore'] = (
-        allRegions['abs(score)'] * allRegions['direction'])
-    columns = ['chrom', 'start', 'end', 'name', 'directionalScore']
-    allRegions.loc[allRegions['bias'] != 'none', columns].to_csv(
+    allRegions['strand'] = '.'
+    allRegions['thickStart'] = allRegions['start']
+    allRegions['thickEnd'] = allRegions['end']
+    allRegions['colour'] = allRegions.apply(getColour, args=(fdr,), axis=1)
+
+    columns = ([
+        'chrom', 'start', 'end', 'name', 'abs(score)', 'strand',
+        'thickStart', 'thickEnd', 'colour'])
+    allRegions[columns].to_csv(
         sys.stdout, index=False, header=False, sep='\t')
+
+
+
+def getColour(x, fdr):
+    if x['p(adj)'] <= fdr:
+        if x['direction'] == 1:
+            i = (x['quantScore'] * 0.5)  + 0.5
+        else:
+            i = (1 - x['quantScore']) * 0.5
+        print(i, file=sys.stderr)
+        colour = to_hex(cm.get_cmap('bwr', 40)(i))[1:]
+    else:
+        i = x['quantScore']
+        colour = to_hex(cm.get_cmap('binary', 20)(i))[1:]
+    colour = f'{int(colour[:2], 16)},{int(colour[2:4], 16)},{int(colour[4:], 16)}'
+    return colour
 
 
 def directionPreference(matrix, chrom: str, binSize: int):
@@ -87,16 +103,6 @@ def directionPreference(matrix, chrom: str, binSize: int):
     return diffChange
 
 
-def setDirectionBias(x, fdr):
-    if x['p(adj)'] < fdr:
-        if x['direction'] == 1:
-            return 'up'
-        else:
-            return 'down'
-    else:
-        return 'none'
-
-
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
@@ -106,10 +112,6 @@ def parseArgs():
     parser.set_defaults(function=shadowCompareHiC)
     parser.add_argument(
         'matrices', nargs='*', help='HiC matrix in homer format.')
-    parser.add_argument(
-        '--prefix', default='absChange',
-        help='File path prefix for output bedgraphs '
-             '(default: %(default)s)')
     parser.add_argument(
         '--fdr', type=float, default=0.05,
         help='False discovery rate threshold for directional '
