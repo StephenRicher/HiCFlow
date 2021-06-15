@@ -48,7 +48,8 @@ default_config = {
          'threads':              4    ,
          'multiplicativeValue':  10000,},
     'compareMatrices':
-        {'fdr'           : 0.05         ,
+        {'colourmap'    : 'bwr'         ,
+        'fdr'           : 0.05          ,
          'differenceThreshold': 0.90    ,
          'vMin'          : -4           ,
          'vMax'          : 4            ,
@@ -80,7 +81,8 @@ default_config = {
          'viewpointRange': 500000   ,
          'plotRep'       : True     ,
          'vLines'        : []       ,
-         'miniMatrix'    : False    ,
+         'miniMatrix'    : True     ,
+         'miniHeight'    : 6        ,
          'filetype'      : 'svg'    ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
@@ -176,7 +178,7 @@ vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
 norm = ['raw', 'KR'] if config['plotParams']['plain'] else ['KR']
 # Set addition suffic if mini matrix
-mini = 'mm' if config['plotParams']['miniMatrix'] else 'fm'
+mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 if ALLELE_SPECIFIC:
     phaseMode = 'ASHIC' if config['ASHIC'] else 'SNPsplit'
@@ -1582,8 +1584,9 @@ def getVlinesParams(wc):
 
 def getDepth(wc):
     chrom, start, end = wc.coord.split('_')
-    if config['plotParams']['miniMatrix']:
-        scale = 6 / 32.8896465805521
+    height = config['plotParams']['miniHeight']
+    if wc.mini == 'mm':
+        scale = (height * 2) / 32.8896465805521
     else:
         scale = 1
     regionLength = int(end) - int(start)
@@ -2111,6 +2114,7 @@ rule discretiseAbsChange:
     params:
         maxDistance = config['compareMatrices']['maxDistance'],
         fdr = config['compareMatrices']['fdr'],
+        colourmap = config['compareMatrices']['colourmap']
     log:
         'logs/discretiseAbsChange/{group1}-vs-{group2}-{bin}-{pm}.log'
     conda:
@@ -2118,7 +2122,7 @@ rule discretiseAbsChange:
     shell:
         'python {SCRIPTS}/discretiseAbsChange.py  --outData {output.all} '
         '--fdr {params.fdr} --maxDistance {params.maxDistance} {input} '
-        '> {output.bed} 2> {log}'
+        '--colourmap {params.colourmap} > {output.bed} 2> {log}'
 
 
 rule createCompareConfig:
@@ -2133,9 +2137,9 @@ rule createCompareConfig:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
         depth = getDepth,
-        colourmap = 'bwr',
+        colourmap = config['compareMatrices']['colourmap'],
         tracks = getTracks,
-        absChange_title = f'"{config["compareMatrices"]["absChangeTitle"]}"',
+        changeScore_title = f'"{config["compareMatrices"]["absChangeTitle"]}"',
         vMin = config['compareMatrices']['vMin'],
         vMax = config['compareMatrices']['vMax'],
         vLines = getVlinesParams
@@ -2149,7 +2153,7 @@ rule createCompareConfig:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
         #'--insulations {input.insulations}  '
-        '--absChange_title {params.absChange_title} '
+        '--changeScore_title {params.changeScore_title} '
         '--changeScore {input.changeScore} '
         '{params.vLines} {params.tracks} '
         '--depth {params.depth} --colourmap {params.colourmap} '

@@ -46,7 +46,7 @@ def main():
         help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--absChange_title', default='compare score',
+        '--changeScore_title', default='compare score',
         help='Title for sumLogFC track')
     parser.add_argument(
         '--changeScore',
@@ -57,8 +57,8 @@ def main():
         help='Add title and bed files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--depth', type=int, default = 1000000,
-        help = 'HiC matrix depth.')
+        '--depth', type=int, default=1000000,
+        help='HiC matrix depth.')
     parser.add_argument(
         '--colourmap', default='Purples',
         help = 'Matplotlib colour map to use for the heatmap.')
@@ -90,7 +90,7 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, tads, loops,
-                bigWig, bed, compare, absChange_title,
+                bigWig, bed, compare, changeScore_title,
                 changeScore, depth, colourmap, vMin, vMax, plain, vLines):
 
     if plain:
@@ -115,7 +115,7 @@ def make_config(insulations, matrix, log, tads, loops,
     print('[spacer]')
 
     if notEmpty(changeScore):
-        writeChangeScore(changeScore)
+        writeChangeScore(changeScore, title=changeScore_title)
     print('[spacer]')
 
     for i, insulation in enumerate(insulations):
@@ -154,8 +154,8 @@ def notEmpty(path):
 
 
 def write_matrix(
-        matrix, cmap='Purples',
-        depth=1000000, vMin=None, vMax=None, log=False):
+        matrix, cmap='Purples', depth=1000000, vMin=None,
+        vMax=None, log=False, height=None):
 
     config = ['[Matrix]',
               f'file = {matrix}',
@@ -263,15 +263,16 @@ def writeVlines(bed):
           f'type = vlines', sep='\n')
 
 
-def writeChangeScore(bed):
+def writeChangeScore(bed, title):
     print(f'[sumLogFCBed]',
           f'file = {bed}',
+          f'title = {title}',
           f'labels = false',
           f'color = bed_rgb',
           f'border_color = none',
           f'line_width = 0',
           f'fontsize = 0',
-          f'height = 3',
+          f'height = 1.5',
           f'display = collapsed', sep='\n')
 
 

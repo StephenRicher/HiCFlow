@@ -19,7 +19,9 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def shadowCompareHiC(matrices: List, outData: str, fdr: float, maxDistance: int):
+def shadowCompareHiC(
+        matrices: List, outData: str, colourmap: str,
+        fdr: float, maxDistance: int):
 
     allRegions = []
     allDirection = []
@@ -56,7 +58,7 @@ def shadowCompareHiC(matrices: List, outData: str, fdr: float, maxDistance: int)
         allDirection, left_index=True, right_index=True).reset_index()
     allRegions['end'] = allRegions['start'] + binSize
     allRegions['p(adj)'] = fdrcorrection(allRegions['p'])[1]
-    allRegions['colour'] = allRegions.apply(getColour, args=(fdr,), axis=1)
+    allRegions['colour'] = allRegions.apply(getColour, args=(fdr, colourmap), axis=1)
 
     if outData is not None:
         allRegions.to_csv(
@@ -75,13 +77,13 @@ def shadowCompareHiC(matrices: List, outData: str, fdr: float, maxDistance: int)
 
 
 
-def getColour(x, fdr):
+def getColour(x, fdr, colourmap):
     if x['p(adj)'] <= fdr:
         if x['direction'] == 1:
             i = (x['quantScore'] * 0.5)  + 0.5
         else:
             i = (1 - x['quantScore']) * 0.5
-        colour = to_hex(cm.get_cmap('bwr', 40)(i))[1:]
+        colour = to_hex(cm.get_cmap(colourmap, 40)(i))[1:]
     else:
         i = x['quantScore']
         colour = to_hex(cm.get_cmap('binary', 20)(i))[1:]
@@ -122,6 +124,9 @@ def parseArgs():
         '--fdr', type=float, default=0.05,
         help='False discovery rate threshold for directional '
              'bias sigificance (default: %(default)s)')
+    parser.add_argument(
+        '--colourmap', default='bwr',
+        help='Colour map for directional change (default: %(default)s)')
     parser.add_argument(
         '--maxDistance', type=int, default=1000000,
         help='Remove interactions greater than this distance '
