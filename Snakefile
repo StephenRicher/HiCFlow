@@ -49,8 +49,7 @@ default_config = {
          'multiplicativeValue':  10000,},
     'compareMatrices':
         {'colourmap'    : 'bwr'         ,
-        'fdr'           : 0.05          ,
-         'differenceThreshold': 0.90    ,
+         'fdr'           : 0.05         ,
          'vMin'          : -4           ,
          'vMax'          : 4            ,
          'size'          : 1            ,
@@ -75,13 +74,14 @@ default_config = {
     'plotParams':
         {'distanceNorm'  : False    ,
          'plain'         : True     ,
+         'raw'           : False    ,
          'colourmap'     : 'Purples',
          'coordinates'   : None     ,
          'viewpoints'    : None     ,
          'viewpointRange': 500000   ,
          'plotRep'       : True     ,
          'vLines'        : []       ,
-         'miniMatrix'    : True     ,
+         'miniMatrix'    : False    ,
          'miniHeight'    : 6        ,
          'filetype'      : 'svg'    ,},
     'bigWig'           : {}        ,
@@ -176,7 +176,7 @@ VIEWPOINTS =  load_coords(REGIONS, config['plotParams']['viewpoints'], includeRe
 # Set whether to print a plain HiC map in addiion to a custom
 vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
-norm = ['raw', 'KR'] if config['plotParams']['plain'] else ['KR']
+norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 # Set addition suffic if mini matrix
 mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
