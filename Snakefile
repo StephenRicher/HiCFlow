@@ -2108,8 +2108,8 @@ rule computeChangeScore:
         expand('dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}.homer',
             region=REGIONS.index),
     output:
-        bed = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-changeScore.bed',
-        all = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-changeScore.tsv'
+        bed = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.bed',
+        all = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.tsv'
     params:
         fdr = config['compareMatrices']['fdr'],
         colourmap = config['compareMatrices']['colourmap']
