@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-""" Compute absolute logFC and discretise """
+""" Compute change score and estimate directional preference """
 
 import os
 import sys
@@ -19,45 +19,39 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def shadowCompareHiC(
-        matrices: List, outData: str, colourmap: str,
-        fdr: float, maxDistance: int):
+def computeASAP(matrices: List, outData: str, colourmap: str, fdr: float):
 
+    scalingFactor = computeScalingFactor(matrices)
     allRegions = []
     allDirection = []
     for matrix in matrices:
-        mat = readHomer(matrix, diagonal=True, sparse=True)
+        mat = readHomer(matrix, diagonal=True, sparse=False)
         chrom = mat.attrs['chrom']
         binSize = mat.attrs['binSize']
-
         binDirection = directionPreference(mat, chrom, binSize)
         allDirection.append(binDirection)
-
-        # Find and drop bins with a few non-missing values
-        binZeros = mat.groupby('start')['score'].count()
-        dropBins = binZeros[binZeros < 10].index
-        dropRows = mat['start'].isin(dropBins)
-        mat = mat.loc[~dropRows]
-
-        # Remove interactions above a certain distance
         mat['seperation'] = (mat['start'] - mat['start2']).abs()
-        mat = mat.loc[abs(mat['seperation']) < maxDistance]
-
+        mat = pd.merge(mat, scalingFactor, left_on='seperation', right_on='seperation')
+        mat['score'] = mat['score'] * mat['scale']
         mat['abs(score)'] = abs(mat['score'])
-        summed = mat.groupby('start')[['abs(score)']].mean().reset_index()
-
+        summed = mat.groupby('start')[['abs(score)']].sum().reset_index()
         summed['chrom'] = chrom
         allRegions.append(summed)
 
-    allRegions = pd.concat(allRegions).set_index(['chrom', 'start'])
+    # Combine and shuffle rows to avoid bias in ranking
+    allRegions = pd.concat(allRegions).set_index(['chrom', 'start']).sample(frac=1)
     allRegions['quantScore'] = pd.qcut(
-        allRegions['abs(score)'], 20, labels=np.linspace(0, 1, 20))
+        allRegions['abs(score)'].rank(method='first'), 20, labels=np.linspace(0, 1, 20))
     allDirection = pd.concat(allDirection).set_index(['chrom', 'start'])
 
     allRegions = allRegions.merge(
         allDirection, left_index=True, right_index=True).reset_index()
     allRegions['end'] = allRegions['start'] + binSize
-    allRegions['p(adj)'] = fdrcorrection(allRegions['p'])[1]
+    validP = allRegions['p'].notna()
+    allRegions['p(adj)'] = np.nan
+    allRegions.loc[validP, 'p(adj)'] = fdrcorrection(allRegions.loc[validP, 'p'])[1]
+
+    #allRegions['p(adj)'] = fdrcorrection(allRegions['p'])[1]
     allRegions['colour'] = allRegions.apply(getColour, args=(fdr, colourmap), axis=1)
 
     if outData is not None:
@@ -75,6 +69,32 @@ def shadowCompareHiC(
     allRegions[columns].to_csv(
         sys.stdout, index=False, header=False, sep='\t')
 
+
+def computeScalingFactor(matrices: List):
+    """ Read all matrices to obtain for range of bin seperations.
+        Apply a power law scaling factor between 0 and 1 to downweight
+        more distant interactions """
+
+    allBinSizes = set()
+    allSeperations = set()
+    for matrix in matrices:
+        with open(matrix) as fh:
+            header = fh.readline().strip().split('\t')[2:]
+            header = pd.Series([int(pos.split('-')[1]) for pos in header])
+            try:
+                binSize = int(header.diff().dropna().unique())
+            except TypeError:
+                sys.exit(f'Bin sizes in {matrix} are not all equal.')
+            allBinSizes.add(binSize)
+            binRange = header.iloc[-1] - header.iloc[0]
+            allSeperations.update(list(range(0, binRange + 1, binSize)))
+    assert len(allBinSizes) == 1, 'Binsizes must be equal across matrices'
+    allSeperations = list(sorted(allSeperations))
+    scalingFactor = np.power(np.linspace(1.0, 0.0, num=len(allSeperations)), 1)
+    scalingFactor = pd.DataFrame(
+        {'seperation': allSeperations, 'scale': scalingFactor})
+
+    return scalingFactor
 
 
 def getColour(x, fdr, colourmap):
@@ -96,9 +116,17 @@ def directionPreference(matrix, chrom: str, binSize: int):
     diffChange = defaultdict(list)
     for start, df in matrix.groupby('start'):
         diffChange['start'].append(start)
-        _, p = stats.wilcoxon(df['score'], alternative='two-sided')
+        try:
+            _, p = stats.wilcoxon(df['score'], alternative='two-sided')
+        except ValueError:
+            p = np.nan
+
         diffChange['p'].append(p)
-        direction = 1 if df['score'].median() > 0 else -1
+        nonZeroScores = df.loc[df['score'] != 0, 'score']
+        if not nonZeroScores.empty:
+            direction = 1 if nonZeroScores.median() > 0 else -1
+        else:
+            direction = np.nan
         diffChange['direction'].append(direction)
     diffChange = pd.DataFrame(diffChange)
     diffChange['chrom'] = chrom
@@ -113,7 +141,7 @@ def parseArgs():
     mainParent = createMainParent(verbose=False, version=__version__)
     parser = argparse.ArgumentParser(
         epilog=epilog, description=__doc__, parents=[mainParent])
-    parser.set_defaults(function=shadowCompareHiC)
+    parser.set_defaults(function=computeASAP)
     parser.add_argument(
         'matrices', nargs='*', help='HiC matrix in homer format.')
     parser.add_argument(
@@ -127,10 +155,6 @@ def parseArgs():
     parser.add_argument(
         '--colourmap', default='bwr',
         help='Colour map for directional change (default: %(default)s)')
-    parser.add_argument(
-        '--maxDistance', type=int, default=1000000,
-        help='Remove interactions greater than this distance '
-             '(default: %(default)s)')
 
 
     return setDefaults(parser)

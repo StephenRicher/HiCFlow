@@ -147,7 +147,6 @@ compareMatrices:
     vMin: -2 # Mimimum logFC value for colour scale.
     vMax: 2  # Maximum logFC value for colour scale.
     size: 3     # Size of median filter to denoise comparison matrix.
-    maxDistance:  1000000
     allPairs: False # If True run '1 vs 2' AND '2 vs 1'
 
 # GATK variant calling best practises for human data

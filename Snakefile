@@ -55,7 +55,6 @@ default_config = {
          'size'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
-         'maxDistance'   : 1000000      ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -2104,7 +2103,7 @@ rule reformatDifferentialTAD:
         '> {output} 2> {log}'
 
 
-rule discretiseAbsChange:
+rule computeChangeScore:
     input:
         expand('dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}.homer',
             region=REGIONS.index),
@@ -2112,17 +2111,16 @@ rule discretiseAbsChange:
         bed = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-changeScore.bed',
         all = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-changeScore.tsv'
     params:
-        maxDistance = config['compareMatrices']['maxDistance'],
         fdr = config['compareMatrices']['fdr'],
         colourmap = config['compareMatrices']['colourmap']
     log:
-        'logs/discretiseAbsChange/{group1}-vs-{group2}-{bin}-{pm}.log'
+        'logs/computeChangeScore/{group1}-vs-{group2}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/discretiseAbsChange.py  --outData {output.all} '
-        '--fdr {params.fdr} --maxDistance {params.maxDistance} {input} '
-        '--colourmap {params.colourmap} > {output.bed} 2> {log}'
+        'python {SCRIPTS}/computeChangeScore.py  --outData {output.all} '
+        '--fdr {params.fdr}  --colourmap {params.colourmap} {input} '
+        '> {output.bed} 2> {log}'
 
 
 rule createCompareConfig:
@@ -2132,7 +2130,7 @@ rule createCompareConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        changeScore = rules.discretiseAbsChange.output.bed
+        changeScore = rules.computeChangeScore.output.bed
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
