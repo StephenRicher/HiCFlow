@@ -90,7 +90,7 @@ def computeScalingFactor(matrices: List):
             allSeperations.update(list(range(0, binRange + 1, binSize)))
     assert len(allBinSizes) == 1, 'Binsizes must be equal across matrices'
     allSeperations = list(sorted(allSeperations))
-    scalingFactor = np.power(np.linspace(1.0, 0.0, num=len(allSeperations)), 1)
+    scalingFactor = np.linspace(1.0, 0.0, num=len(allSeperations))
     scalingFactor = pd.DataFrame(
         {'seperation': allSeperations, 'scale': scalingFactor})
 
