@@ -2311,7 +2311,7 @@ rule plotSubtract:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{pm}-{mini}-{type}.log'
+        'logs/plotSubtract/{group1}-{group2}-{bin}-{region}-{coord}-{pm}-{mini}-{type}.log'
     threads:
         THREADS
     shell:
