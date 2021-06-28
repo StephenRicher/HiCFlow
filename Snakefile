@@ -55,6 +55,7 @@ default_config = {
          'size'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
+         'simpleCompare' : False        ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -188,6 +189,10 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=phaseMode, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
+    ([expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{pm}-{mini}.{type}',
+        region=region, coords=COORDS[region], pm=phaseMode, compare=HiC.groupCompares(),
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin]
+        if config['compareMatrices']['simpleCompare'] else []),
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=phaseMode, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -2247,6 +2252,74 @@ rule plotCompareViewpoint:
     shell:
         'python {SCRIPTS}/plotViewpoint.py {input} --out {output} '
         '--dpi {params.dpi} {params.build} &> {log}'
+
+
+rule HiCsubtract:
+    input:
+        m1 = 'dat/matrix/{region}/{bin}/KR/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/KR/{group2}-{region}-{bin}-{pm}.h5'
+    output:
+        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{pm}.h5'
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'python {SCRIPTS}/simpleCompareHomer.py {input} --outFileName {output} &> {log}'
+
+
+rule createSubtractConfig:
+    input:
+        mat = rules.HiCsubtract.output,
+        vLines = config['plotParams']['vLines'],
+    output:
+        'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{pm}-{mini}.ini',
+    params:
+        depth = getDepth,
+        colourmap = config['compareMatrices']['colourmap'],
+        tracks = getTracks,
+        vMin = config['compareMatrices']['vMin'],
+        vMax = config['compareMatrices']['vMax'],
+        vLines = getVlinesParams
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{pm}-{mini}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/generate_config.py --compare '
+        '--matrix {input.mat} {params.vLines} {params.tracks} '
+        '--vMin {params.vMin} --vMax {params.vMax} '
+        '--depth {params.depth} --colourmap {params.colourmap} '
+        '> {output} 2> {log}'
+
+
+rule plotSubtract:
+    input:
+        rules.createSubtractConfig.output
+    output:
+        'plots/{region}/{bin}/HiCsubtract/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}-{mini}.{type}'
+    params:
+        title = setCompareTitle,
+        region = setRegion,
+        dpi = 600
+    group:
+        'plotHiCsubtract'
+    conda:
+        f'{ENVS}/pygenometracks.yaml'
+    log:
+        'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{pm}-{mini}-{type}.log'
+    threads:
+        THREADS
+    shell:
+        'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
+        '--region {params.region} '
+        '--outFileName {output} '
+        '--title {params.title} '
+        '--dpi {params.dpi} &> {log}'
 
 
 if not ALLELE_SPECIFIC:
