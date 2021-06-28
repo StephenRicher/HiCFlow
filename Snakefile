@@ -82,13 +82,13 @@ default_config = {
          'vLines'        : []       ,
          'miniMatrix'    : False    ,
          'miniHeight'    : 6        ,
+         'runPCA'        : True     ,
          'filetype'      : 'svg'    ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
     'localAlignment':    False,
     'fastq_screen':      None,
     'runQC':             True,
-    'runPCA':            True,
     'phase':             True,
     'createValidBam':    False,
     'runHiCRep':         True,
@@ -206,7 +206,7 @@ HiC_mode = ([
         region=regionBin.keys(), pm=phaseMode, type=config['plotParams']['filetype']),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not (config['microC'] or config['localAlignment']) else []])
 # Exclude PCA if not set
-if config['runPCA']:
+if config['plotParams']['runPCA']:
     methods = ['PCA', 'TADinsulation', 'TADboundaries', 'TADdomains']
 else:
     methods = ['TADinsulation', 'TADboundaries', 'TADdomains']
@@ -1561,13 +1561,13 @@ def getMatrix(wc):
         return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
 
 def getPCAinput(wc):
-    if config['runPCA']:
+    if config['plotParams']['runPCA']:
         return 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix-{pm}.bedgraph'
     else:
         return []
 
 def getPCAparams(wc):
-    if config['runPCA']:
+    if config['plotParams']['runPCA']:
         pca = f'dat/matrix/{wc.region}/{wc.bin}/PCA/{wc.group}-{wc.region}-{wc.bin}-fix-{wc.pm}.bedgraph'
         return f'--bigWig PCA1,{pca}'
     else:

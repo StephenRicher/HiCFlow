@@ -132,6 +132,8 @@ plotParams:
     viewpoints:     ../config/viewpoints.bed
     viewpointRange: 150_000
     plotRep:        True
+    vLines:         ../config/vlines.bed
+    runPCA:         True
 
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
@@ -148,6 +150,7 @@ compareMatrices:
     vMax: 2  # Maximum logFC value for colour scale.
     size: 3     # Size of median filter to denoise comparison matrix.
     allPairs: False # If True run '1 vs 2' AND '2 vs 1'
+    simpleSubtract: True
 
 # GATK variant calling best practises for human data
 gatk:
@@ -164,8 +167,6 @@ gatk:
 
 # Optional run HiCRep - may take a while for high res datasets.
 runHiCRep: True
-
-runPCA: True
 
 # Treat data as microC - ignore restriction digest.
 microC: False
@@ -223,17 +224,17 @@ Consult the official Snakemake documentation [here](https://snakemake.readthedoc
 ### HiC track
 
 HiCflow utilises pyGenomeTracks to plot annotated HiC tracks with nested TAD domains, loops and TAD insulation scores. Custom BED and Bedgraph files can be provided through the configuration file.
-![HiC plot example](./README_files/AS-chr3L-3L_5500000_6000000-3000-custom-full.png)
+![HiC plot example](./README_files/AS-chr3L-3L_5500000_6000000-3000-custom-full-fm.svg)
 
 ### HiCcompare track
 
 HiCflow uses HiCcompare to produce joint normalised log fold-change subtraction matrices between pairs of samples.
-![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC-full.png)
+![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC-full-fm.svg)
 
 ### Viewpoints
 
 HiCFlow can also plot custom viewpoints of specific regions. Viewpoint regions must be provided as  a BED file in the configuration file under plotParams -> viewpoints. The below example compares two samples using between-sample normalised contact frequencies provided by HiCcompare.
-![Viewpoint example](./README_files/G1S-vs-AS-chr3L-3L_5740000_5750000-3000-viewpoint-full.png)
+![Viewpoint example](./README_files/G1S-vs-AS-chr3L-3L_5740000_5750000-3000-viewpoint-full.svg)
 
 ## Quality Control
 
@@ -244,15 +245,15 @@ HiCflow utilises MultiQC to aggregate the QC and metric report across all sample
 ### HiCRep
 
 HiCflow uses HiCRep to assess sample-reproducibility by calculating the stratum-adjusted correlation coefficient between all pairwise samples.
-![HiCRep example](./README_files/chr3L-1000-hicrep-full.png)
+![HiCRep example](./README_files/chr3L-1000-hicrep-full.svg)
 
 ### Other QC Metrics
 
 #### Insert Size Distribution
-![InsertSize](./README_files/insertSizeFrequency.png)
+![InsertSize](./README_files/insertSizeFrequency.svg)
 
 #### Ditag Length
-![Ditag Length](./README_files/ditagLength.png)
+![Ditag Length](./README_files/ditagLength.svg)
 
 ###### References
 Qi Wang, Qiu Sun, Daniel M. Czajkowsky, and Zhifeng Shao. Sub-kb Hi-C in D.
