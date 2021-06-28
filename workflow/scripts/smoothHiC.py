@@ -25,7 +25,7 @@ def readHomer(file):
     homer = {}
     with open(file) as fh:
         homer['header'] = fh.readline()
-        ncols = len(homer['header'].split('\t'))
+        ncols = len(next(fh).strip().split('\t'))
     homer['intervals'] = pd.read_csv(
         file, delimiter='\t', usecols=[0, 1], header=0)
     homer['data'] = np.loadtxt(
