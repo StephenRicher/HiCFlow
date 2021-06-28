@@ -6,4 +6,5 @@ dependencies:
   - r
   - r-base
   - r-r.utils
+  - r-reshape2
   - bioconductor-hiccompare
