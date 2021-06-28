@@ -845,7 +845,7 @@ def getDanglingSequences(wc):
 if config['microC']:
     rule buildBaseMatrix:
         input:
-            bams = expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2']),
+            bams = ancient(expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2'])),
         output:
             hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
             bam = 'dat/matrix/{region}/{sample}-{region}-{pm}.bam',
@@ -887,7 +887,7 @@ if config['microC']:
 else:
     rule buildBaseMatrix:
         input:
-            bams = expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2']),
+            bams = ancient(expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2'])),
             restSites = getRestSites
         output:
             hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
