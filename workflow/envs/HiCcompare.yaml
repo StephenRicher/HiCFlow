@@ -5,6 +5,5 @@ channels:
 dependencies:
   - r
   - r-base
-  - libblas
   - r-r.utils
   - bioconductor-hiccompare
