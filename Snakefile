@@ -608,7 +608,7 @@ rule bowtie2:
     conda:
         f'{ENVS}/bowtie2.yaml'
     threads:
-        THREADS - 2 if THREADS > 1 else 1
+        THREADS - 2 if THREADS > 2 else 1
     shell:
         'bowtie2 -x {params.index} -U {input.fastq} {params.local} '
         '--reorder --threads {threads} --{params.sensitivity} '
