@@ -9,3 +9,4 @@ dependencies:
     - seaborn
     - scikit-learn
     - statsmodels
+    - pysam
