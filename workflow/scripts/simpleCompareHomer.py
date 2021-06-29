@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-""" Simple subtraction of 2 Homer format matrices """
+""" Simple subtraction of 2 H5 format matrices """
 
 
 import sys

@@ -2262,31 +2262,30 @@ rule plotCompareViewpoint:
         '--dpi {params.dpi} {params.build} &> {log}'
 
 ###
-rule shuffleHomer:
+rule shadowBAM:
     input:
-        'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}.gz',
-        'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}.gz'
+        m1 = lambda wc: expand('dat/matrix/{{region}}/{{group1}}-{rep}-{{region}}-{{pm}}.bam',
+            rep=HiC.groups()[wc.group1]),
+        m2 = lambda wc: expand('dat/matrix/{{region}}/{{group2}}-{rep}-{{region}}-{{pm}}.bam',
+            rep=HiC.groups()[wc.group2]),
     output:
-        m1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
-        m2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
-    params:
-        start = lambda wc: REGIONS['start'][wc.region]
+        out1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
+        out2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
     group:
         'shuffleCompare'
     log:
-        'logs/shuffleHomer/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
+        'logs/shadowBAM/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/shuffleHomer.py {input} --start {params.start} '
-        '--binSize {wildcards.bin} --outM1 {output.m1} --outM2 {output.m2} '
-        '--seed {wildcards.x} &> {log}'
+        'python {SCRIPTS}/shadowBAMtoSUTM.py {input} --binSize {wildcards.bin} '
+        '--out1 {output.out1} --out2 {output.out2} --seed {wildcards.x} &> {log}'
 
 
 rule shadowHiCcompare:
     input:
-        m1 = rules.shuffleHomer.output.m1,
-        m2 = rules.shuffleHomer.output.m2
+        m1 = rules.shadowBAM.output.out1,
+        m2 = rules.shadowBAM.output.out2
     output:
         'dat/shuffleCompare/{region}/{bin}/{group1}-vs-{group2}-{pm}-{x}.homer',
     params:
