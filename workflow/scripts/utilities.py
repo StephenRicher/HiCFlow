@@ -3,6 +3,9 @@
 import sys
 import logging
 import argparse
+import itertools
+import contextlib
+import numpy as np
 import pandas as pd
 from collections import defaultdict
 
@@ -109,3 +112,32 @@ def readChromSizes(file):
             chrom, size = line.split()
             chromSizes[str(chrom)] = int(size)
     return chromSizes
+
+
+def homer2Numpy(matrix):
+    # Reader homer, remove header and first 2 text rows and convert to numpy
+    matrix = pd.read_csv(matrix, sep='\t', skiprows=1, header=None)
+    # Must convert to integer as HiCcompare requires
+    matrix = matrix.drop([0, 1], axis=1).to_numpy().astype(int)
+    return matrix
+
+
+def numpy2sutm(matrix, start, binSize, out=None):
+    # Extract upper triangle only with diagonal
+    matrix = np.triu(matrix, k=0)
+    # Define start positions
+    coords = list(range(start, (start + len(matrix) * binSize), binSize))
+    # Get all binPairs
+    binPairs = np.array(list(itertools.product(coords, repeat=2)))
+    # Flatten to 1D list and retrieve all nonZero indexes
+    matrix = matrix.flatten()
+    nonZero = (matrix != 0)
+    # Get bin pairs of nonZero values
+    binPairs = binPairs[nonZero]
+    # Remove zero values from matrix
+    matrix = matrix[nonZero]
+    # Write sutm
+    with contextlib.ExitStack() as stack:
+        fh = stack.enter_context(open(out, 'w')) if out else sys.stdout
+        for (bin1, bin2), value in zip(binPairs, matrix):
+            fh.write(f'{bin1} {bin2} {value}\n')
