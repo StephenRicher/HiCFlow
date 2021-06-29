@@ -99,7 +99,6 @@ default_config = {
     'rescalePKL':        False,
     'groupJobs':         False,
     'microC':            False,
-    'ASHIC':             False,
 }
 
 config = set_config(config, default_config)
@@ -117,34 +116,6 @@ REGIONS = load_regions(config['regions'], adjust=BASE_BIN)
 # Remove region-binSize combinations with too few bins
 regionBin, binRegion = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
 
-if ALLELE_SPECIFIC:
-    # Turn of phasing if allele specific mode is running
-    config['phase'] = False
-    # Turn off plotRep for allele specific mode
-    if config['ASHIC']:
-        if config['plotParams']['plotRep']:
-            print('Per replicate plots not availale in allele specific mode '
-                  'because replicates are merged for ASHIC. Setting plotRep '
-                  'to False.', file=sys.stderr)
-            config['plotParams']['plotRep'] = False
-        if config['createValidBam']:
-            print('createValid bam not available in ASHIC mode. Setting '
-                  'createValidBam to False.', file=sys.stderr)
-            config['createValidBam'] = False
-        if config['runHiCRep']:
-            print('HiCRep not available in ASHIC mode. Setting '
-                  'runHiCRep to False.', file=sys.stderr)
-            config['runHiCRep'] = False
-
-if config['phase']:
-    if config['gatk']['all_known']:
-        PHASE_MODE = 'GATK'
-    else:
-        PHASE_MODE = 'BCFTOOLS'
-else:
-    PHASE_MODE = None
-
-
 wildcard_constraints:
     cellType = rf'{"|".join(HiC.cellTypes())}',
     preGroup = rf'{"|".join(HiC.originalGroups())}',
@@ -157,7 +128,7 @@ wildcard_constraints:
     bin = r'\d+',
     mode = r'SNP|INDEL',
     norm = r'raw|KR',
-    pm = r'ASHIC|SNPsplit' if ALLELE_SPECIFIC else r'full',
+    pm = r'SNPsplit' if ALLELE_SPECIFIC else r'full',
     set = r'logFC|adjIF1|adjIF2',
     adjIF = r'adjIF1|adjIF2',
     compare = r'HiCcompare',
@@ -177,6 +148,14 @@ COORDS = load_coords(REGIONS, config['plotParams']['coordinates'], adjust=BASE_B
 # Generate dictionary of plot viewpoints
 VIEWPOINTS =  load_coords(REGIONS, config['plotParams']['viewpoints'], includeRegions=False)
 
+if config['phase'] and not ALLELE_SPECIFIC:
+    if config['gatk']['all_known']:
+        PHASE_MODE = 'GATK'
+    else:
+        PHASE_MODE = 'BCFTOOLS'
+else:
+    PHASE_MODE = None
+
 # Set whether to print a plain HiC map in addiion to a custom
 vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
@@ -184,41 +163,38 @@ norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 # Set addition suffic if mini matrix
 mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
-if ALLELE_SPECIFIC:
-    phaseMode = 'ASHIC' if config['ASHIC'] else 'SNPsplit'
-else:
-    phaseMode = 'full'
+pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
 # Get list of unique valid bins
 validBins = set(itertools.chain(*regionBin.values()))
 
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
-        region=region, coords=COORDS[region], pm=phaseMode, compare=HiC.groupCompares(),
+        region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
     ([expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{pm}-{mini}.{type}',
-        region=region, coords=COORDS[region], pm=phaseMode, compare=HiC.groupCompares(),
+        region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin]
         if config['compareMatrices']['simpleCompare'] else []),
     (expand('dat/changeScore/{bin}/{compare}-{pm}-{bin}-shadow{x}-changeScore.tsv',
-        bin=validBins, compare=HiC.groupCompares(), pm=phaseMode,
+        bin=validBins, compare=HiC.groupCompares(), pm=pm,
         x=range(config['compareMatrices']['nShadow']))),
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
-        region=region, coords=COORDS[region], norm=norm, pm=phaseMode, vis=vis, group=HiC.groups(),
+        region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
-        region=region, coords=VIEWPOINTS[region], pm=phaseMode, compare=HiC.groupCompares(),
+        region=region, coords=VIEWPOINTS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
-        region=region, coords=VIEWPOINTS[region], norm=norm, pm=phaseMode, preGroup=HiC.groups(),
+        region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
-        region=region, bin=regionBin[region], pm=phaseMode,
+        region=region, bin=regionBin[region], pm=pm,
         norm=norm, type=config['plotParams']['filetype']) for region in regionBin],
      expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
-        region=regionBin.keys(), pm=phaseMode, type=config['plotParams']['filetype']),
+        region=regionBin.keys(), pm=pm, type=config['plotParams']['filetype']),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not (config['microC'] or config['localAlignment']) else []])
 # Exclude PCA if not set
 if config['plotParams']['runPCA']:
@@ -228,7 +204,7 @@ else:
 rescalePKL = ([
     expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
             all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
-            bin=binRegion.keys(), pm=phaseMode, method=methods)])
+            bin=binRegion.keys(), pm=pm, method=methods)])
 
 
 def getChromSizes(wc):
@@ -253,15 +229,15 @@ rule all:
     input:
         HiC_mode,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
-         if config['phase'] else []),
+         if PHASE_MODE is not None else []),
         ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
           'qc/multiqc','qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
         ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}', region=region,
-            bin=regionBin[region], pm=phaseMode,
+            bin=regionBin[region], pm=pm,
             type=config['plotParams']['filetype']) for region in regionBin]
          if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC-{pm}.bam',
-            sample=HiC.samples(), pm=phaseMode)
+            sample=HiC.samples(), pm=pm)
          if (config['createValidBam'] and regionBin) else []),
         rescalePKL if config['rescalePKL'] else []
 
@@ -780,29 +756,9 @@ rule mergeSNPsplit:
         'samtools merge -@ {threads} -n {output} {input} &> {log}'
 
 
-rule mergeALLSNPsplit:
-    input:
-        rules.SNPsplit.output.bam
-    output:
-        temp('dat/snpsplit/merged/{preSample}.ASHIC.bam')
-    group:
-        'mergeALLSNPsplit'
-    log:
-        'logs/mergeSNPsplit/{preSample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools merge -@ {threads} -n {output} {input} &> {log}'
-
-
 def splitInput(wc):
     if ALLELE_SPECIFIC:
-        if config['ASHIC']:
-            return 'dat/snpsplit/merged/{sample}.ASHIC.bam'
-        else:
-            return 'dat/snpsplit/merged/{sample}.hic.bam'
+        return 'dat/snpsplit/merged/{sample}.hic.bam'
     else:
         return 'dat/mapped/{sample}.fixed.bam'
 
@@ -959,154 +915,6 @@ rule mergeValidHiC:
     shell:
         'samtools merge -@ {threads} {output} {input} '
         '2> {log} || touch {output}'
-
-
-rule reformatASHIC:
-    input:
-        'dat/mapped/{preSample}-validHiC-ASHIC.bam'
-    output:
-        readPairs = expand('dat/ashic/readPairs/{{preSample}}/{chr}_{combo}',
-            chr=list(REGIONS['chr'].unique()),
-            combo=['alt_alt', 'alt_both-ref', 'both-ref_both-ref',
-                   'ref_alt', 'ref_both-ref', 'ref_ref']),
-        dir = directory('dat/ashic/readPairs/{preSample}/')
-    params:
-        prefix = lambda wc: f'dat/ashic/readPairs/{wc.preSample}/'
-    log:
-        'logs/reformatASHIC/{preSample}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        '(touch {output.readPairs} && awk -f {SCRIPTS}/processSNPsplit.awk '
-        '-v prefix={params.prefix} '
-        '<(samtools cat {input} | samtools view -@ {threads})) &> {log} '
-        '|| touch {output.readPairs}; mkdir -p {output.dir}'
-
-
-rule mergeASHIC:
-    input:
-        lambda wc: expand(
-            'dat/ashic/readPairs/{preGroup}-{rep}/{chr}_{combo}',
-            preGroup=wc.preGroup, rep=HiC.originalGroups()[wc.preGroup],
-            chr=wc.chr, combo=wc.combo)
-    output:
-        'dat/ashic/readPairs/{preGroup}_{chr}_{combo}'
-    log:
-        'logs/mergeAshic/{preGroup}-{chr}-{combo}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'cat {input} > {output} 2> {log}'
-
-
-rule ASHICbin:
-    input:
-        lambda wc: expand(
-            'dat/ashic/readPairs/{{preGroup}}_{chr}_{combo}',
-            chr=REGIONS['chr'][wc.region],
-            combo=['alt_alt', 'alt_both-ref', 'both-ref_both-ref',
-                   'ref_alt', 'ref_both-ref', 'ref_ref']),
-        chromSizes = getChromSizes
-    output:
-        directory(f'dat/ashic/binned/{{preGroup}}-{{region}}-{BASE_BIN}-binned/')
-    params:
-        bin = BASE_BIN,
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region],
-        end = lambda wc: REGIONS['end'][wc.region]
-    group:
-        'ASHIC'
-    log:
-        'logs/ASHICbin/{preGroup}-{region}.log'
-    conda:
-        f'{ENVS}/ashic.yaml'
-    shell:
-        'ashic-data binning --res {params.bin} --chrom {params.chr} '
-        '--c1 1 --p1 2 --a1 3 --c2 4 --p2 5 --a2 6 '
-        '--genome {input.chromSizes} '
-        '--start {params.start} --end {params.end} '
-        'dat/ashic/readPairs/{wildcards.preGroup} {output} &> {log}'
-
-
-rule ASHICpack:
-    input:
-        rules.ASHICbin.output
-    output:
-        directory(f'dat/ashic/packed/{{preGroup}}-{{region}}-{BASE_BIN}-packed/')
-    params:
-        diag = 0,
-        perc = 2
-    group:
-        'ASHIC'
-    log:
-        'logs/ASHICpack/{preGroup}-{region}.log'
-    conda:
-        f'{ENVS}/ashic.yaml'
-    shell:
-        'ashic-data pack --diag {params.diag} --perc {params.perc} {input} '
-        '{output} &> {log}'
-
-
-rule ASHIC:
-    input:
-        rules.ASHICpack.output
-    output:
-        directory(f'dat/ashic/imputed/{{preGroup}}-{{region}}-{BASE_BIN}-imputed/')
-    params:
-        model = 'ASHIC-ZIPM',
-        diag = 0,
-        maxIter = 100,
-        seed = 0
-    group:
-        'ASHIC'
-    log:
-        'logs/ASHIC/{preGroup}-{region}.log'
-    conda:
-        f'{ENVS}/ashic.yaml'
-    shell:
-        'ashic -i {input}/*.pickle -o {output} --model {params.model} '
-        '--diag {params.diag} --seed {params.seed} '
-        '--max-iter {params.maxIter} &> {log}'
-
-
-rule ASHIC2homer:
-    input:
-        rules.ASHIC.output
-    output:
-        f'dat/matrix/{{region}}/base/raw/{{preGroup}}_a{{allele}}-{{region}}-ASHIC.{BASE_BIN}.homer'
-    params:
-        bin = BASE_BIN,
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region],
-        mat = lambda wc: 't_mm.txt' if wc.allele == '1' else 't_pp.txt'
-    group:
-        'ASHIC'
-    log:
-        'logs/ASHIC2homer/{preGroup}-a{allele}-{region}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/ashic2homer.py {input}/matrices/{params.mat} '
-        '--chrom {params.chr} --start {params.start} --binSize {params.bin} '
-        '> {output} 2> {log} '
-
-
-rule ASHIChomerToH5:
-    input:
-        rules.ASHIC2homer.output
-    output:
-        f'dat/matrix/{{region}}/base/raw/{{preGroup}}_a{{allele}}-{{region}}.{BASE_BIN}-ASHIC.h5'
-    group:
-        'ASHIC'
-    log:
-        'logs/ASHIChomerToH5/{preGroup}-a{allele}-{region}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicConvertFormat --matrices {input} --outFileName {output} '
-        '--inputFormat homer --outputFormat h5 &> {log}'
 
 
 def nonEmpty(wc, output, input):
@@ -3241,8 +3049,8 @@ rule multiqc:
             sample=HiC.originalSamples(), read=['R1', 'R2']) if config['fastq_screen'] else [],
          expand('qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt',
             region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []],
-        [expand('qc/hicexplorer/{sample}-{region}.{bin}-{pm}_QC', region=region,
-            sample=HiC.samples(), bin=BASE_BIN, pm=phaseMode) for region in regionBin] if not config['ASHIC'] else [],
+         [expand('qc/hicexplorer/{sample}-{region}.{bin}-{pm}_QC', region=region,
+            sample=HiC.samples(), bin=BASE_BIN, pm=pm) for region in regionBin],
     output:
         directory('qc/multiqc')
     params:
