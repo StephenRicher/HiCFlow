@@ -17,7 +17,7 @@ __version__ = '1.0.0'
 def homer2sutm(BAMs: List, binSize: int, out1: str, out2: str, seed: int):
 
     random.seed(seed)
-    
+
     split1 = defaultdict(lambda: defaultdict(int))
     split2 = defaultdict(lambda: defaultdict(int))
 
@@ -35,10 +35,10 @@ def homer2sutm(BAMs: List, binSize: int, out1: str, out2: str, seed: int):
                 split2[positions[0]][positions[1]] += 1
 
     split1 = [(k, k1, v1) for k, v in split1.items() for k1, v1 in v.items()]
-    pd.DataFrame(split1).sort_values([0, 1]).to_csv(out1, index=False)
+    pd.DataFrame(split1).sort_values([0, 1]).to_csv(out1, header=False, index=False)
 
     split2 = [(k, k1, v1) for k, v in split2.items() for k1, v1 in v.items()]
-    pd.DataFrame(split2).sort_values([0, 1]).to_csv(out2, index=False)
+    pd.DataFrame(split2).sort_values([0, 1]).to_csv(out2, header=False, index=False)
 
 
 
