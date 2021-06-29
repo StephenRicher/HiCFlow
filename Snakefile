@@ -2076,6 +2076,10 @@ rule shadowBAM:
             rep=HiC.groups()[wc.group1]),
         m2 = lambda wc: expand('dat/matrix/{{region}}/{{group2}}-{rep}-{{region}}-{{pm}}.bam',
             rep=HiC.groups()[wc.group2]),
+        qc1 = lambda wc: expand('qc/hicexplorer/{{group1}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt',
+            rep=HiC.groups()[wc.group1], BASE_BIN=BASE_BIN)
+        qc2 = lambda wc: expand('qc/hicexplorer/{{group2}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt',
+            rep=HiC.groups()[wc.group2], BASE_BIN=BASE_BIN)
     output:
         out1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
         out2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
@@ -2086,8 +2090,10 @@ rule shadowBAM:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/shadowBAMtoSUTM.py {input} --binSize {wildcards.bin} '
-        '--out1 {output.out1} --out2 {output.out2} --seed {wildcards.x} &> {log}'
+        'python {SCRIPTS}/shadowBAMtoSUTM.py {input.m1} {input.m1} '
+        '--binSize {wildcards.bin} --seed {wildcards.x} '
+        '--out1 {output.out1} --out2 {output.out2} '
+        '--bamLogs {input.qc1} {input.qc2} &> {log}'
 
 
 rule shadowHiCcompare:
