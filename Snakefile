@@ -2107,8 +2107,6 @@ rule shadowHiCcompare:
         'logs/shadowHiCcompare/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
     conda:
         f'{ENVS}/HiCcompare.yaml'
-    threads:
-        THREADS
     shell:
         'Rscript {SCRIPTS}/shadowHiCcompare.R {params.dir} '
         '{params.chr} {params.start} {params.end} '
