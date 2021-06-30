@@ -165,9 +165,6 @@ mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
-# Get list of unique valid bins
-validBins = set(itertools.chain(*regionBin.values()))
-
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
@@ -185,7 +182,7 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('dat/changeScore/{bin}/{compare}-{region}-{pm}-{bin}-shadowed.tsv',
+    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.tsv',
         region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
@@ -2120,7 +2117,8 @@ rule shadowComputeChangeScore:
             'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}-{x}.homer',
             x=range(config['compareMatrices']['nShadow']))
     output:
-        'dat/changeScore/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadowed.tsv'
+        result = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.tsv',
+        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-raw.tsv'
     group:
         'shuffleCompare'
     log:
@@ -2129,7 +2127,8 @@ rule shadowComputeChangeScore:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/computeChangeScore2.py {input.matrix} '
-        '{input.shadowMatrices} > {output} 2> {log}'
+        '{input.shadowMatrices} --rawOut {output.raw} '
+        '> {output.result} 2> {log}'
 
 ####
 rule HiCsubtract:

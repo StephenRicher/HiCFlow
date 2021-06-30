@@ -15,7 +15,7 @@ from utilities import setDefaults, createMainParent, readHomer
 __version__ = '1.0.0'
 
 
-def computeChangeScore(matrix: str, shadowMatrices: List):
+def computeChangeScore(matrix: str, shadowMatrices: List, rawOut: str):
 
     allRegions = []
     for i, mat in enumerate([matrix] + shadowMatrices):
@@ -41,6 +41,9 @@ def computeChangeScore(matrix: str, shadowMatrices: List):
     columns = ['chrom', 'start', 'end', 'p']
     permutation[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
+    if rawOut is not None:
+        allRegions.to_csv(rawOut, header=True, sep='\t')
+
 
 def permutationTest(x):
     """ Compare shadow abs(score) against normal matrix """
@@ -61,6 +64,7 @@ def parseArgs():
     parser.add_argument(
         'shadowMatrices', nargs='*',
         help='Shadow HiC matrices in homer format.')
+    parser.add_argument('--rawOut', help='Path for raw, unsummarised data.')
 
     return setDefaults(parser)
 
