@@ -176,8 +176,6 @@ HiC_mode = ([
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin]
         if config['compareMatrices']['simpleCompare'] else []),
-    [expand('dat/changeScore/{bin}/{compare}-{region}-{pm}-{bin}-shadowed-changeScore.bed',
-        compare=HiC.groupCompares(), region=region, bin=regionBin[region], pm=pm) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
