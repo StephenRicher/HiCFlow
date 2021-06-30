@@ -176,9 +176,8 @@ HiC_mode = ([
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin]
         if config['compareMatrices']['simpleCompare'] else []),
-    (expand('dat/changeScore/{bin}/{compare}-{pm}-{bin}-shadow{x}-changeScore.tsv',
-        bin=validBins, compare=HiC.groupCompares(), pm=pm,
-        x=range(config['compareMatrices']['nShadow']))),
+    [expand('dat/changeScore/{bin}/{compare}-{region}-{pm}-{bin}-shadowed-changeScore.bed',
+        compare=HiC.groupCompares(), region=region, bin=regionBin[region], pm=pm) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -1707,11 +1706,10 @@ rule reformatSUTM:
     log:
         'logs/reformatSUTM/{region}/{bin}/{all}-{pm}.log'
     conda:
-        f'{ENVS}/python3.yaml'
+         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/homer2sutm.py {input} --start {params.start} '
-        '--binSize {wildcards.bin} > {output} 2> {log}'
-
+         '--binSize {wildcards.bin} > {output} 2> {log}'
 
 rule HiCcompare:
     input:
@@ -1953,7 +1951,7 @@ rule createCompareConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        changeScore = rules.computeChangeScore.output.bed
+        changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadowed-changeScore.bed'
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
@@ -2072,36 +2070,29 @@ rule plotCompareViewpoint:
         '--dpi {params.dpi} {params.build} &> {log}'
 
 ###
-rule shadowBAM:
+rule shadowSUTM:
     input:
-        m1 = lambda wc: expand('dat/matrix/{{region}}/{{group1}}-{rep}-{{region}}-{{pm}}.bam',
-            rep=HiC.groups()[wc.group1]),
-        m2 = lambda wc: expand('dat/matrix/{{region}}/{{group2}}-{rep}-{{region}}-{{pm}}.bam',
-            rep=HiC.groups()[wc.group2]),
-        qc1 = lambda wc: expand('qc/hicexplorer/{{group1}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt',
-            rep=HiC.groups()[wc.group1], BASE_BIN=BASE_BIN),
-        qc2 = lambda wc: expand('qc/hicexplorer/{{group2}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt',
-            rep=HiC.groups()[wc.group2], BASE_BIN=BASE_BIN),
+        m1 = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-sutm.txt',
+        m2 = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-sutm.txt'
     output:
         out1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
         out2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
     group:
         'shuffleCompare'
     log:
-        'logs/shadowBAM/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
+        'logs/shadowSUTM/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/shadowBAMtoSUTM.py {input.m1} {input.m1} '
-        '--binSize {wildcards.bin} --seed {wildcards.x} '
-        '--out1 {output.out1} --out2 {output.out2} '
-        '--bamLogs {input.qc1} {input.qc2} &> {log}'
+        'python {SCRIPTS}/shadowSUTM.py {input.m1} {input.m2} '
+        '--seed {wildcards.x} '
+        '--out1 {params.prefix1} --out2 {params.prefix2} &> {log}'
 
 
 rule shadowHiCcompare:
     input:
-        m1 = rules.shadowBAM.output.out1,
-        m2 = rules.shadowBAM.output.out2
+        m1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
+        m2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
     output:
         'dat/shuffleCompare/{region}/{bin}/{group1}-vs-{group2}-{pm}-{x}.homer',
     params:
@@ -2113,9 +2104,11 @@ rule shadowHiCcompare:
     group:
         'shuffleCompare'
     log:
-        'logs/shuffleCompare/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
+        'logs/shadowHiCcompare/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
     conda:
         f'{ENVS}/HiCcompare.yaml'
+    threads:
+        THREADS
     shell:
         'Rscript {SCRIPTS}/shadowHiCcompare.R {params.dir} '
         '{params.chr} {params.start} {params.end} '
@@ -2142,24 +2135,21 @@ rule shadowApplyMedianFilter:
 
 rule shadowComputeChangeScore:
     input:
-        expand('dat/shuffleCompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}-{{x}}.homer',
-            region=REGIONS.index),
+        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}.homer',
+        shadowMatrices = expand(
+            'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}-{x}.homer',
+            x=range(config['compareMatrices']['nShadow']))
     output:
-        bed = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-shadow{x}-changeScore.bed',
-        all = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-shadow{x}-changeScore.tsv'
-    params:
-        fdr = config['compareMatrices']['fdr'],
-        colourmap = config['compareMatrices']['colourmap']
+        'dat/changeScore/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadowed-changeScore.bed'
     group:
         'shuffleCompare'
     log:
-        'logs/computeChangeScore/{group1}-vs-{group2}-{bin}-{pm}-{x}.log'
+        'logs/shadowComputeChangeScore/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/computeChangeScore.py --outData {output.all} '
-        '--fdr {params.fdr}  --colourmap {params.colourmap} {input} '
-        '> {output.bed} 2> {log}'
+        'python {SCRIPTS}/computeChangeScore2.py {input.matrix} '
+        '{input.shadowMatrices} > {output} 2> {log}'
 
 ####
 rule HiCsubtract:

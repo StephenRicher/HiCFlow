@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import logging
 import argparse
@@ -141,3 +142,14 @@ def numpy2sutm(matrix, start, binSize, out=None):
         fh = stack.enter_context(open(out, 'w')) if out else sys.stdout
         for (bin1, bin2), value in zip(binPairs, matrix):
             fh.write(f'{bin1} {bin2} {value}\n')
+
+
+def getGroup(path):
+    """ Retrieve group name from file path """
+    basename = os.path.basename(path)
+    return basename.split('-')[0]
+
+
+def getBin(pos: int, binSize: int, start: int):
+    matrixBin = (pos - start) // binSize
+    return start + (matrixBin * binSize)
