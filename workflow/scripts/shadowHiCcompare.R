@@ -2,17 +2,6 @@
 
 library(reshape2)
 library(HiCcompare)
-#pdf(NULL)
-
-# Prevent scientific notation
-options(scipen=999)
-
-get_group <- function(path) {
-  splitpath = gsub('\\..*$', '', basename(path))
-  split = strsplit(splitpath, '-')[[1]]
-  sample = split[1]
-  return(sample)
-}
 
 
 addMissingIntervals <- function(hic.table, start, end, binsize) {
@@ -57,35 +46,21 @@ numBins <- function(start, end, binsize) {
 
 args = commandArgs(trailingOnly=TRUE)
 
-outdir = args[1]
-chr = args[2]
-start = as.integer(args[3])
-end = as.integer(args[4])
-binsize = as.integer(args[5])
-suffix = args[6]
-matrix1 = args[7]
-matrix2 = args[8]
+matrix1 = args[1]
+matrix2 = args[2]
+out = args[3]
+chr = args[4]
+start = as.integer(args[5])
+end = as.integer(args[6])
+binsize = as.integer(args[7])
 
-print(matrix1)
-print(matrix2)
-group1 = get_group(matrix1)
-group2 = get_group(matrix2)
+data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr=chr)
 
-out_matrix = paste(outdir, '/', group1, '-vs-', group2, '-', suffix, '.homer', sep = '')
-
-data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
-
-hic.table <- hic_loess(data.table, Plot = FALSE, Plot.smooth = FALSE)
-
-# Number of changes is 1% of unique bins or 300, whichever higher
-changes = as.integer(max(300, numBins(start, end, binsize) * 0.01))
-
-# Very sparse matrices can trigger exceptions in filter params
-try(filter_params(hic.table, numChanges = changes, Plot = FALSE))
-
-hic.table <- hic_compare(hic.table, adjust.dist = TRUE, p.method = 'fdr', Plot = FALSE)
+hic.table <- hic_loess(data.table, Plot=FALSE, Plot.smooth=FALSE)
 
 hic.table = as.data.frame(hic.table)
 
+# WRITE TO SUTM INSTEAD #
+
 # Write matrix of logFC values
-writeMatrix(hic.table, out_matrix, chr, start, end, binsize, 'adj.M')
+writeMatrix(hic.table, out, chr, start, end, binsize, 'adj.M')

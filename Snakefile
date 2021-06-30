@@ -2105,9 +2105,9 @@ rule shadowHiCcompare:
     conda:
         f'{ENVS}/HiCcompare.yaml'
     shell:
-        'Rscript {SCRIPTS}/shadowHiCcompare.R {params.dir} '
+        'Rscript {SCRIPTS}/shadowHiCcompare.R {input} {output} '
         '{params.chr} {params.start} {params.end} '
-        '{wildcards.bin} {params.suffix} {input} &> {log}'
+        '{wildcards.bin} &> {log}'
 
 
 rule shadowComputeChangeScore:
