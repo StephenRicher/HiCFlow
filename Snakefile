@@ -187,6 +187,8 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('dat/changeScore/{bin}/{compare}-{region}-{pm}-{bin}-shadowed.tsv',
+        region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=pm,
@@ -1951,7 +1953,7 @@ rule createCompareConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadowed-changeScore.bed'
+        changeScore = rules.computeChangeScore.output.bed
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
@@ -2122,7 +2124,7 @@ rule shadowComputeChangeScore:
             'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}-{x}.homer',
             x=range(config['compareMatrices']['nShadow']))
     output:
-        'dat/changeScore/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadowed-changeScore.bed'
+        'dat/changeScore/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadowed.tsv'
     group:
         'shuffleCompare'
     log:

@@ -37,16 +37,8 @@ def computeChangeScore(matrix: str, shadowMatrices: List):
     permutation = (allRegions.groupby(['chrom', 'start']).apply(permutationTest)
         .reset_index().rename({0: 'p'}, axis=1))
 
-    permutation['score'] = 1 - permutation['p']
-    permutation['colour'] = permutation.apply(getColour, axis=1)
-    permutation['name'] = '.'
-    permutation['strand'] = '.'
     permutation['end'] = permutation['start'] + binSize
-    permutation['thickStart'] = permutation['start']
-    permutation['thickEnd'] = permutation['end']
-    columns = ([
-        'chrom', 'start', 'end', 'name', 'score', 'strand',
-        'thickStart', 'thickEnd', 'colour'])
+    columns = ['chrom', 'start', 'end', 'p']
     permutation[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
 
@@ -56,12 +48,6 @@ def permutationTest(x):
     normalScore = float(x.loc[~x['shadow'], 'abs(score)'])
     totalAbove = (shadowScores > normalScore).sum()
     return totalAbove / len(shadowScores)
-
-
-def getColour(x):
-    colour = to_hex(cm.get_cmap('binary', 100)(x['score']))[1:]
-    colour = f'{int(colour[:2], 16)},{int(colour[2:4], 16)},{int(colour[4:], 16)}'
-    return colour
 
 
 def parseArgs():
