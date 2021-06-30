@@ -815,7 +815,8 @@ if config['microC']:
         output:
             hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
             bam = 'dat/matrix/{region}/{sample}-{region}-{pm}.bam',
-            qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC')
+            qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC'),
+            qc_table = f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt'
         params:
             bin = BASE_BIN,
             chr = lambda wc: REGIONS['chr'][wc.region],
@@ -858,7 +859,8 @@ else:
         output:
             hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
             bam = 'dat/matrix/{region}/{sample}-{region}-{pm}.bam',
-            qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC')
+            qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC'),
+            qc_table = f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt'
         params:
             bin = BASE_BIN,
             chr = lambda wc: REGIONS['chr'][wc.region],
@@ -2077,9 +2079,9 @@ rule shadowBAM:
         m2 = lambda wc: expand('dat/matrix/{{region}}/{{group2}}-{rep}-{{region}}-{{pm}}.bam',
             rep=HiC.groups()[wc.group2]),
         qc1 = lambda wc: expand('qc/hicexplorer/{{group1}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt',
-            rep=HiC.groups()[wc.group1], BASE_BIN=BASE_BIN)
+            rep=HiC.groups()[wc.group1], BASE_BIN=BASE_BIN),
         qc2 = lambda wc: expand('qc/hicexplorer/{{group2}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt',
-            rep=HiC.groups()[wc.group2], BASE_BIN=BASE_BIN)
+            rep=HiC.groups()[wc.group2], BASE_BIN=BASE_BIN),
     output:
         out1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
         out2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
