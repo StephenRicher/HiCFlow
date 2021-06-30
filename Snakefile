@@ -2086,7 +2086,7 @@ rule shadowSUTM:
     shell:
         'python {SCRIPTS}/shadowSUTM.py {input.m1} {input.m2} '
         '--seed {wildcards.x} '
-        '--out1 {params.prefix1} --out2 {params.prefix2} &> {log}'
+        '--out1 {output.out1} --out2 {output.out2} &> {log}'
 
 
 rule shadowHiCcompare:
