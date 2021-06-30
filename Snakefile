@@ -2115,29 +2115,11 @@ rule shadowHiCcompare:
         '{wildcards.bin} {params.suffix} {input} &> {log}'
 
 
-rule shadowApplyMedianFilter:
-    input:
-        rules.shadowHiCcompare.output
-    output:
-        'dat/shuffleCompare/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}-{x}.homer',
-    params:
-        size = config['compareMatrices']['size']
-    group:
-        'shuffleCompare'
-    log:
-        'logs/shadowApplyMedianFilter/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/smoothHiC.py {input} --size {params.size} '
-        '> {output} 2> {log}'
-
-
 rule shadowComputeChangeScore:
     input:
-        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}.homer',
+        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer',
         shadowMatrices = expand(
-            'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}-{x}.homer',
+            'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}-{x}.homer',
             x=range(config['compareMatrices']['nShadow']))
     output:
         'dat/changeScore/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadowed-changeScore.bed'
