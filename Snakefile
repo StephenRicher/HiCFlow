@@ -59,6 +59,7 @@ default_config = {
          'allPairs'      : False        ,
          'simpleCompare' : False        ,
          'nShadow'       : 1            ,
+         'shadowPerJob'  : 100          ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -165,10 +166,22 @@ norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
-# Set shadowSeeds
-random.seed(42)
-nShadow = config['compareMatrices']['nShadow']
-shadowSeeds = [random.randint(1, 1e9) for i in range(nShadow)]
+
+def processShadow(nShadow, nShadowPerJob, seed=42):
+    """ Get seeds and shadows per job """
+    random.seed(seed)
+    shadowReps = math.ceil(nShadow / nShadowPerJob)
+    shadowCount = [nShadowPerJob] * shadowReps
+    remainder = nShadow % nShadowPerJob
+    if remainder != 0:
+        shadowCount[-1] = remainder
+    shadowSeeds = [random.randint(1, 1e9) for i in range(shadowReps)]
+    return shadowSeeds, shadowCount
+
+shadowSeeds, shadowCount = processShadow(
+    config['compareMatrices']['nShadow'],
+    config['compareMatrices']['shadowPerJob'])
+
 
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
@@ -1719,10 +1732,11 @@ rule HiCcompare:
         'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-sutm.txt'
     output:
         all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer',
-        sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.sutm',
         links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.links',
         adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.homer',
-        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.homer'
+        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.homer',
+        adjIF1sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.sutm',
+        adjIF2sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.sutm'
     params:
         dir = lambda wc: f'dat/HiCcompare/{wc.region}/{wc.bin}',
         qcdir = lambda wc: f'qc/HiCcompare/{wc.region}/{wc.bin}',
@@ -2075,68 +2089,63 @@ rule plotCompareViewpoint:
         '--dpi {params.dpi} {params.build} &> {log}'
 
 ###
-rule shadowSUTM:
+rule computeAdjM:
     input:
-        m1 = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-sutm.txt',
-        m2 = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-sutm.txt'
+        m1 = rules.HiCcompare.output.adjIF1sutm,
+        m2 = rules.HiCcompare.output.adjIF2sutm
     output:
-        out1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
-        out2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
-    params:
-        seed = lambda wc: shadowSeeds[int(wc.x)]
+        adjM = 'dat/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-adjM.pkl',
+        merged = 'data/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-merged.pkl'
     group:
         'shuffleCompare'
     log:
-        'logs/shadowSUTM/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
+        'logs/computeAdjM/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/shadowSUTM.py {input.m1} {input.m2} '
-        '--seed {params.seed} '
-        '--out1 {output.out1} --out2 {output.out2} &> {log}'
+        'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
+        '--adjM_out {output.adjM} --merge_out {output.merged} &> {log}'
 
 
-rule shadowHiCcompare:
+rule shadowSUTM:
     input:
-        m1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
-        m2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
+        rules.computeAdjM.output.merged
     output:
-        'dat/shuffleCompare/{region}/{bin}/{group1}-vs-{group2}-{pm}-{x}.sutm',
+        'dat/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadow{x}-adjM.pkl',
     params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
+        seed = lambda wc: shadowSeeds[int(wc.x)],
+        nShadow =  lambda wc: shadowCount[int(wc.x)],
     group:
         'shuffleCompare'
     log:
-        'logs/shadowHiCcompare/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
+        'logs/shadowSUTM/{group1}-vs-{group2}-{region}-{bin}-{x}-{pm}.log'
     conda:
-        f'{ENVS}/shadowHiCcompare.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
-        'Rscript {SCRIPTS}/shadowHiCcompare.R {input} {output} '
-        '{params.chr} &> {log}'
+        'python {SCRIPTS}/shadowSUTM.py {input} --out {output} '
+        '--seed {params.seed} --nShadow {params.nShadow} &> {log}'
 
 
-rule shadowComputeChangeScore:
+rule permutationTest:
     input:
-        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.sutm',
-        shadowMatrices = expand(
-            'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}-{x}.sutm',
-            x=range(config['compareMatrices']['nShadow']))
+        real = rules.computeAdjM.output.adjM,
+        allShadow = expand('dat/permuteTest/{{bin}}/{{group1}}-vs-{{group2}}-{{region}}-{{pm}}-{{bin}}-shadow{x}-adjM.pkl',
+            x=range(len(shadowCount)))
     output:
         bed = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
         raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-raw.tsv'
     params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
+        chr = lambda wc: REGIONS['chr'][wc.region]
     group:
         'shuffleCompare'
     log:
-        'logs/shadowComputeChangeScore/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
+        'logs/permutationTest/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/computeChangeScore2.py {input.matrix} '
-        '{input.shadowMatrices} --rawOut {output.raw} '
-        '--chrom {params.chr} --binSize {wildcards.bin} '
-        '> {output.bed} 2> {log}'
+        'python {SCRIPTS}/permutationTest.py {input.real} {input.allShadow} '
+        '--rawOut {output.raw} --binSize {wildcards.bin} '
+        '--chrom {params.chr} > {output.bed} 2> {log}'
 
 ####
 rule HiCsubtract:

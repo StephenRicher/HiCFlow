@@ -1,43 +1,36 @@
 #!/usr/bin/env python3
 
-""" Perform permutation testing by merging BAMs from both groups and randomly
-    split (keeping the relative sample sizes approximately equal). Output is
-    written to SUTM format and is repeated a determined number of times. """
+""" Randomly split and relabel HiC interaction frequencies """
 
 import os
 import sys
 import argparse
 import numpy as np
 import pandas as pd
-from typing import List
-from collections import defaultdict
-from utilities import setDefaults, createMainParent, getGroup
+from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
 
 
-def homer2sutm(SUTM1: str, SUTM2: str, out1: str, out2: str, seed: int):
+def shadowSUTM(mergedSUTM: str, out: str, nShadow: int, seed: int):
 
     np.random.seed(seed)
 
-    SUTM1 = pd.read_csv(SUTM1, names=['pos1', 'pos2', 'count'], sep='\s+')
-    SUTM2 = pd.read_csv(SUTM2, names=['pos1', 'pos2', 'count'], sep='\s+')
-
-    totalHiC = SUTM1['count'].sum() + SUTM2['count'].sum()
-    SUTM1ratio = SUTM1['count'].sum() / totalHiC
-
-    mergedSUTM = (
-        pd.concat([SUTM1, SUTM2]).groupby(['pos1', 'pos2']).sum().reset_index())
-
-    mergedSUTM['SUTM1'] = mergedSUTM['count'].apply(
-        lambda x: np.random.binomial(x, SUTM1ratio))
-    mergedSUTM['SUTM2'] = mergedSUTM['count'] - mergedSUTM['SUTM1']
-
-    for group in ['SUTM1', 'SUTM2']:
-        names = ['pos1', 'pos2', group]
-        out = out1 if group == 'SUTM1' else out2
-        sutm = mergedSUTM.loc[mergedSUTM[group] > 0, names].sort_values(['pos1', 'pos2'])
-        sutm.to_csv(out, sep=' ', header=False, index=False)
+    mergedSUTM = pd.read_pickle(mergedSUTM)
+    IF1ratio = mergedSUTM.attrs['IF1ratio']
+    allShadow = []
+    for i in range(nShadow):
+        shadowDF = mergedSUTM.copy()
+        shadowDF['adjIF_x'] = shadowDF['adjIF'].apply(
+            lambda x: np.random.binomial(x, IF1ratio))
+        shadowDF['adjIF_y'] = shadowDF['adjIF'] - shadowDF['adjIF_x']
+        shadowDF['abs(logFC)'] = np.log2(shadowDF['adjIF_x'] / shadowDF['adjIF_y'])#.abs()
+        invalid = shadowDF['abs(logFC)'].isin([np.nan, np.inf, -np.inf])
+        shadowDF = shadowDF.loc[~invalid, 'abs(logFC)'].reset_index()
+        shadowDF = shadowDF.groupby('start1')['abs(logFC)'].sum().reset_index()
+        shadowDF['shadow'] = i + 1
+        allShadow.append(shadowDF)
+    pd.concat(allShadow).to_pickle(out)
 
 
 def parseArgs():
@@ -47,20 +40,16 @@ def parseArgs():
     parser = argparse.ArgumentParser(
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.add_argument(
-        'SUTM1', help='Sparse upper triangular matrix file, group 1.')
+        'mergedSUTM', help='Pickled absolute sum logFC of merged true data.')
     parser.add_argument(
-        'SUTM2', help='Sparse upper triangular matrix file, group 2.')
+        '--out', help='Pickled output of shadow logFC.')
+    parser.add_argument(
+        '--nShadow', default=1, type=int,
+        help='Number of random permutations (default: %(default)s)')
     parser.add_argument(
         '--seed', default=None, type=int,
         help='Seed for random swap (default: %(default)s)')
-    requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument(
-        '--out1', required=True,
-        help='Path prefix of shadow matrices (group 1) in SUTM format.')
-    requiredNamed.add_argument(
-        '--out2', required=True,
-        help='Path prefix of shadow matrices (group 2) in SUTM format.')
-    parser.set_defaults(function=homer2sutm)
+    parser.set_defaults(function=shadowSUTM)
 
     return setDefaults(parser)
 

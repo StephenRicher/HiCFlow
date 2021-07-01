@@ -288,7 +288,7 @@ def writePermuteScore(bed):
           f'file = {bed}',
           f'title = Permute score',
           f'labels = false',
-          f'color = RdBu',
+          f'color = binary_r',
           f'border_color = none',
           f'min_value = 0',
           f'max_value = 1',
