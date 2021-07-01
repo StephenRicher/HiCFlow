@@ -91,6 +91,11 @@ png(loess_plot)
 hic.table <- hic_loess(data.table, Plot = TRUE, Plot.smooth = FALSE)
 dev.off()
 
+# Finally write matrix in SUTM format
+write.table(
+    hic.table[, c('start1', 'start2', 'adj.M')],
+    outSUTM, sep=' ', quote=FALSE, row.names=FALSE, col.names=FALSE)
+
 # Number of changes is 1% of unique bins or 300, whichever higher
 changes = as.integer(max(300, numBins(start, end, binsize) * 0.01))
 
@@ -120,7 +125,3 @@ hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
   out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
-
-# Finally write matrix in SUTM format
-hic.table = hic.table[, c('start1', 'start2', 'adj.M')]
-write.table(hic.table, outSUTM, sep=' ', quote=FALSE, row.names=FALSE, col.names=FALSE)
