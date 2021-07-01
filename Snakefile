@@ -182,7 +182,7 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.tsv',
+    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.bed',
         region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
@@ -1714,6 +1714,7 @@ rule HiCcompare:
         'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-sutm.txt'
     output:
         all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer',
+        sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.sutm',
         links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.links',
         adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.homer',
         adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.homer'
@@ -1948,7 +1949,8 @@ rule createCompareConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        changeScore = rules.computeChangeScore.output.bed
+        changeScore = rules.computeChangeScore.output.bed,
+        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
@@ -1971,6 +1973,7 @@ rule createCompareConfig:
         #'--insulations {input.insulations}  '
         '--changeScore_title {params.changeScore_title} '
         '--changeScore {input.changeScore} '
+        '--permuteScore {input.permuteScore} '
         '{params.vLines} {params.tracks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
@@ -2091,34 +2094,31 @@ rule shadowHiCcompare:
         m1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
         m2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
     output:
-        'dat/shuffleCompare/{region}/{bin}/{group1}-vs-{group2}-{pm}-{x}.homer',
+        'dat/shuffleCompare/{region}/{bin}/{group1}-vs-{group2}-{pm}-{x}.sutm',
     params:
-        dir = lambda wc: f'dat/shuffleCompare/{wc.region}/{wc.bin}',
         chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
-        suffix = lambda wc: f'{wc.pm}-{wc.x}',
     group:
         'shuffleCompare'
     log:
         'logs/shadowHiCcompare/{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}.log'
     conda:
-        f'{ENVS}/HiCcompare.yaml'
+        f'{ENVS}/shadowHiCcompare.yaml'
     shell:
         'Rscript {SCRIPTS}/shadowHiCcompare.R {input} {output} '
-        '{params.chr} {params.start} {params.end} '
-        '{wildcards.bin} &> {log}'
+        '{params.chr} &> {log}'
 
 
 rule shadowComputeChangeScore:
     input:
-        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer',
+        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.sutm',
         shadowMatrices = expand(
-            'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}-{x}.homer',
+            'dat/shuffleCompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}-{x}.sutm',
             x=range(config['compareMatrices']['nShadow']))
     output:
-        result = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.tsv',
+        bed = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
         raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-raw.tsv'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
     group:
         'shuffleCompare'
     log:
@@ -2128,7 +2128,8 @@ rule shadowComputeChangeScore:
     shell:
         'python {SCRIPTS}/computeChangeScore2.py {input.matrix} '
         '{input.shadowMatrices} --rawOut {output.raw} '
-        '> {output.result} 2> {log}'
+        '--chrom {params.chr} --binSize {wildcards.bin} '
+        '> {output.bed} 2> {log}'
 
 ####
 rule HiCsubtract:

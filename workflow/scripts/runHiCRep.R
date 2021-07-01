@@ -1,5 +1,10 @@
 #!/usr/bin/env Rscript
 
+# Set .libPaths to last path (the Conda environemnt) to avoid conflicts
+paths = .libPaths()
+lastPath = paths[length(paths)]
+.libPaths(lastPath)
+
 library(hicrep)
 
 get_sample <- function(path) {

@@ -1,56 +1,71 @@
 #!/usr/bin/env python3
 
-""" Compute change score and estimate directional preference """
+""" Compute permutation score of between sum(logFC) at bin position """
 
 import os
 import sys
 import argparse
+import numpy as np
 import pandas as pd
 from typing import List
 from matplotlib import cm
+from functools import reduce
 from matplotlib.colors import to_hex
-from utilities import setDefaults, createMainParent, readHomer
+from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
 
 
-def computeChangeScore(matrix: str, shadowMatrices: List, rawOut: str):
+def computeChangeScore(matrix: str, shadowMatrices: List, rawOut: str, binSize: int, chrom: str):
 
     allRegions = []
+    nShadow = len(shadowMatrices)
     for i, mat in enumerate([matrix] + shadowMatrices):
-        mat = readHomer(mat, diagonal=True, sparse=False)
-        chrom = mat.attrs['chrom']
-        binSize = mat.attrs['binSize']
-        mat['seperation'] = (mat['start'] - mat['start2']).abs()
-        mat['abs(score)'] = abs(mat['score'])
-        summed = mat.groupby('start')[['abs(score)']].sum().reset_index()
-        summed['chrom'] = chrom
-        if i == 0:
-            summed['shadow'] = False
-        else:
-            summed['shadow'] = True
-        allRegions.append(summed)
+        mat = readSUTM(mat, lower=True)
+        mat[i] = abs(mat['score'])
+        summed = mat.groupby('start1')[[i]].sum().reset_index()
+        allRegions.append(summed.set_index('start1'))
+    allRegions = reduce(
+        lambda l, r: pd.merge(
+            l, r, left_index=True, right_index=True, how='left'), allRegions)
 
-    # Combine and shuffle rows to avoid bias in ranking
-    allRegions = pd.concat(allRegions)
-    permutation = (allRegions.groupby(['chrom', 'start']).apply(permutationTest)
+    allRegions = (allRegions
+        .fillna(0)
+        .melt(var_name='shadow', value_name='abs(score)', ignore_index=False)
+        .reset_index())
+    allRegions['real'] = allRegions['shadow'] == 0
+
+    permutation = (allRegions.groupby('start1')
+        .apply(permutationTest, nShadow=nShadow)
         .reset_index().rename({0: 'p'}, axis=1))
 
-    permutation['end'] = permutation['start'] + binSize
-    columns = ['chrom', 'start', 'end', 'p']
+    permutation['chrom'] = chrom
+    permutation['name'] = '.'
+    permutation['end'] = permutation['start1'] + binSize
+    columns = ['chrom', 'start1', 'end', 'name', 'p']
     permutation[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
     if rawOut is not None:
+        allRegions['chrom'] = chrom
         allRegions.to_csv(rawOut, header=True, sep='\t')
 
 
-def permutationTest(x):
+def readSUTM(sutm, lower=False):
+    sutm = pd.read_csv(sutm, names=['start1', 'start2', 'score'], sep='\s+')
+    if lower:
+        sltm = sutm.loc[sutm['start1'] != sutm['start2']].rename(
+            {'start1': 'start2', 'start2': 'start1'}, axis=1)
+        sutm  = pd.concat([sutm, sltm])
+    return sutm
+
+
+def permutationTest(x, nShadow):
     """ Compare shadow abs(score) against normal matrix """
-    shadowScores = x.loc[x['shadow'], 'abs(score)']
-    normalScore = float(x.loc[~x['shadow'], 'abs(score)'])
+    shadowScores = x.loc[~x['real'], 'abs(score)']
+    normalScore = float(x.loc[x['real'], 'abs(score)'])
     totalAbove = (shadowScores > normalScore).sum()
-    return totalAbove / len(shadowScores)
+    return totalAbove / nShadow
 
 
 def parseArgs():
@@ -60,11 +75,17 @@ def parseArgs():
     parser = argparse.ArgumentParser(
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=computeChangeScore)
-    parser.add_argument('matrix', help='HiC matrix in homer format.')
+    parser.add_argument(
+        'matrix', help='HiC matrix in SUTM format.')
     parser.add_argument(
         'shadowMatrices', nargs='*',
-        help='Shadow HiC matrices in homer format.')
-    parser.add_argument('--rawOut', help='Path for raw, unsummarised data.')
+        help='Shadow HiC matrices inSUTM format.')
+    parser.add_argument(
+        '--chrom', help='Reference of correponding matrices.')
+    parser.add_argument(
+        '--binSize', type=int, help='Bin size of corresponding matrices')
+    parser.add_argument(
+        '--rawOut', help='Path for raw, unsummarised data.')
 
     return setDefaults(parser)
 

@@ -1,8 +1,12 @@
 #!/usr/bin/env Rscript
 
+# Set .libPaths to last path (the Conda environemnt) to avoid conflicts
+paths = .libPaths()
+lastPath = paths[length(paths)]
+.libPaths(lastPath)
+
 library(reshape2)
 library(HiCcompare)
-#pdf(NULL)
 
 # Prevent scientific notation
 options(scipen=999)
@@ -79,6 +83,7 @@ out_links = paste(outdir, '/', group1, '-vs-', group2, '-', suffix, '.links', se
 out_matrix = paste(outdir, '/', group1, '-vs-', group2, '-', suffix, '.homer', sep = '')
 outIF1 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1-', suffix, '.homer', sep = '')
 outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.homer', sep = '')
+outSUTM = paste(outdir, '/', group1, '-vs-', group2, '-', suffix, '.sutm', sep = '')
 
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
 
@@ -115,3 +120,7 @@ hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
   out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
+
+# Finally write matrix in SUTM format
+hic.table = hic.table[, c('start1', 'start2', 'adj.M')]
+write.table(hic.table, outSUTM, sep=' ', quote=FALSE, row.names=FALSE, col.names=FALSE)
