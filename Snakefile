@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import math
+import random
 import tempfile
 import itertools
 from snake_setup import set_config, load_regions, load_coords, filterRegions, HiCSamples
@@ -164,6 +165,10 @@ norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
+# Set shadowSeeds
+random.seed(42)
+nShadow = config['compareMatrices']['nShadow']
+shadowSeeds = [random.randint(1, 1e9) for i in range(nShadow)]
 
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
@@ -2077,6 +2082,8 @@ rule shadowSUTM:
     output:
         out1 = 'dat/shuffleCompare/{region}/{bin}/raw/{group1}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt',
         out2 = 'dat/shuffleCompare/{region}/{bin}/raw/{group2}-{group1}-vs-{group2}-{region}-{bin}-{pm}-{x}-sutm.txt'
+    params:
+        seed = lambda wc: shadowSeeds[int(wc.x)]
     group:
         'shuffleCompare'
     log:
@@ -2085,7 +2092,7 @@ rule shadowSUTM:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/shadowSUTM.py {input.m1} {input.m2} '
-        '--seed {wildcards.x} '
+        '--seed {params.seed} '
         '--out1 {output.out1} --out2 {output.out2} &> {log}'
 
 
