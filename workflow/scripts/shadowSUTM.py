@@ -22,7 +22,7 @@ def shadowSUTM(adjM: str, out: str, nShadow: int, nSplits: int, seed: int):
         shadow = adjM.copy()
         shadow.loc[:] = shuffleAlongAxis(shadow.values, 1)
         shadow[i] = np.log2(shadow['adjIF_x'] / shadow['adjIF_y'])
-        shadow = shadow.groupby('start1')[i].sum().to_frame()
+        shadow = shadow.groupby('start1')[i].sum().abs().to_frame()
         allShadow.append(shadow)
     allShadow = (pd.concat(allShadow, axis=1)
         .melt(ignore_index=False, var_name='shadow', value_name='logFC')
@@ -33,7 +33,6 @@ def shadowSUTM(adjM: str, out: str, nShadow: int, nSplits: int, seed: int):
     allShadow['split'] = splitData(len(allShadow), nShadow, nSplits)
     with open(out,'wb') as fh:
         for split, splitGroup in allShadow.groupby('split'):
-            print(split, file=sys.stderr)
             pickle.dump(splitGroup.drop('split', axis=1), fh)
 
 

@@ -33,7 +33,7 @@ def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str, nSplits
     adjM[0] = np.log2(adjM['adjIF_x'] / adjM['adjIF_y'])
 
     # Sum values across bins and save to pickle
-    adjM = (adjM.groupby('start1')[0].sum().to_frame()
+    adjM = (adjM.groupby('start1')[0].sum().abs().to_frame()
         .melt(ignore_index=False, var_name='shadow', value_name='logFC')
         .sort_values('start1'))
 

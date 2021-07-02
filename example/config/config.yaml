@@ -35,7 +35,7 @@ phased_vcf:
 # must be whole divisible by the base bin size e.g. [1000, 1500] is invalid.
 resolution:
     base : 1000
-    bins : [1000, 3000]
+    bins : [3000]
 
 # Parameters for cutadapt - see https://cutadapt.readthedocs.io/en/stable/guide.html
 cutadapt:
@@ -95,6 +95,11 @@ compareMatrices:
     size: 3     # Size of median filter to denoise comparison matrix.
     allPairs: False # If True run '1 vs 2' AND '2 vs 1'
     simpleSubtract: True
+
+permuteTest:
+    nShadow: 10000
+    shadowPerJob: 1000
+    nSplits: 10
 
 # GATK variant calling best practises for human data
 gatk:
