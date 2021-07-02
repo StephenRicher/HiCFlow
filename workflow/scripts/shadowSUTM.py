@@ -20,9 +20,7 @@ def shadowSUTM(adjM: str, out: str, nShadow: int, nSplits: int, seed: int):
     allShadow = []
     for i in range(1, nShadow + 1):
         shadow = adjM.copy()
-        print(shadow.head(), file=sys.stderr)
         shadow.loc[:] = shuffleAlongAxis(shadow.values, 1)
-        print(shadow.head(), file=sys.stderr)
         shadow[i] = (shadow['adjIF_x'] - shadow['adjIF_y']).apply(getDirection)
         shadow = shadow.groupby('start1')[i].apply(rle).to_frame()
         allShadow.append(shadow)

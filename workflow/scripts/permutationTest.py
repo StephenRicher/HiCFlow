@@ -27,7 +27,6 @@ def permutationTest(trueLogFC: str, allShadow: List, rawOut: str, binSize: int, 
         while True:
             try:
                 allData = pd.concat([pickle.load(fh) for fh in files])
-                allData.to_csv(sys.stderr)
                 permutation = (allData.groupby('start1').apply(runPermute)
                         .reset_index().rename({0: 'p'}, axis=1))
                 allPermute.append(permutation)
