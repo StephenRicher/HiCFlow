@@ -12,25 +12,26 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def shadowSUTM(mergedSUTM: str, out: str, nShadow: int, seed: int):
+def shadowSUTM(adjM: str, out: str, nShadow: int, seed: int):
 
     np.random.seed(seed)
-
-    mergedSUTM = pd.read_pickle(mergedSUTM)
-    IF1ratio = mergedSUTM.attrs['IF1ratio']
+    adjM = pd.read_pickle(adjM)
     allShadow = []
-    for i in range(nShadow):
-        shadowDF = mergedSUTM.copy()
-        shadowDF['adjIF_x'] = shadowDF['adjIF'].apply(
-            lambda x: np.random.binomial(x, IF1ratio))
-        shadowDF['adjIF_y'] = shadowDF['adjIF'] - shadowDF['adjIF_x']
-        shadowDF['abs(logFC)'] = np.log2(shadowDF['adjIF_x'] / shadowDF['adjIF_y'])#.abs()
-        invalid = shadowDF['abs(logFC)'].isin([np.nan, np.inf, -np.inf])
-        shadowDF = shadowDF.loc[~invalid, 'abs(logFC)'].reset_index()
-        shadowDF = shadowDF.groupby('start1')['abs(logFC)'].sum().reset_index()
-        shadowDF['shadow'] = i + 1
-        allShadow.append(shadowDF)
-    pd.concat(allShadow).to_pickle(out)
+    for i in range(1, nShadow + 1):
+        shadow = adjM.copy()
+        shadow.loc[:] = shuffleAlongAxis(shadow.values, 1)
+        shadow[i] = np.log2(shadow['adjIF_x'] / shadow['adjIF_y'])
+        shadow = shadow.groupby('start1')[i].sum().to_frame()
+        allShadow.append(shadow)
+    (pd.concat(allShadow, axis=1)
+        .melt(ignore_index=False, var_name='shadow', value_name='logFC')
+        .sort_values('start1').to_pickle(out))
+
+
+def shuffleAlongAxis(a, axis):
+    """ Shuffle independenly along an axis """
+    idx = np.random.rand(*a.shape).argsort(axis=axis)
+    return np.take_along_axis(a, idx, axis=axis)
 
 
 def parseArgs():
@@ -40,7 +41,7 @@ def parseArgs():
     parser = argparse.ArgumentParser(
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.add_argument(
-        'mergedSUTM', help='Pickled absolute sum logFC of merged true data.')
+        'adjM', help='Pickled merged IF of HiC groups.')
     parser.add_argument(
         '--out', help='Pickled output of shadow logFC.')
     parser.add_argument(

@@ -21,23 +21,20 @@ def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str):
     adjIF2 = readSUTM(adjIF2, lower=True, integer=True)
 
     # Compute absolute logFC
-    adjM = pd.merge(adjIF1, adjIF2, left_index=True, right_index=True)
-    adjM[0] = np.log2(adjM['adjIF_x'] / adjM['adjIF_y'])#.abs()
+    adjM = pd.merge(
+        adjIF1, adjIF2, how='inner',
+        left_index=True, right_index=True)
+    # Write merged data to pickle for fast access later
+    adjM.to_pickle(merge_out)
 
-    # Remove bins with partial counts
-    adjM = adjM.loc[~adjM[0].isin([np.nan, np.inf, -np.inf]),]
-
-    # Retrieve ratio of IF between samples to set sampling probability
-    totalIF = adjIF1['adjIF'].sum() + adjIF2['adjIF'].sum()
-    IF1ratio = adjIF1['adjIF'].sum() / totalIF
+    # Compute logFC - no need to check invalid as inner join of sparse
+    # removes partials.
+    adjM[0] = np.log2(adjM['adjIF_x'] / adjM['adjIF_y'])
 
     # Sum values across bins and save to pickle
-    adjM = adjM.groupby('start1')[0].sum().to_frame().to_pickle(adjM_out)
-
-    # Combine bin-pair counts of both groups
-    mergedSUTM = pd.concat([adjIF1, adjIF2]).groupby(['start1', 'start2']).sum()
-    mergedSUTM.attrs['IF1ratio'] = IF1ratio
-    mergedSUTM.to_pickle(merge_out)
+    (adjM.groupby('start1')[0].sum().to_frame()
+        .melt(ignore_index=False, var_name='shadow', value_name='logFC')
+        .sort_values('start1').to_pickle(adjM_out))
 
 
 def readSUTM(sutm, lower=False, integer=False):

@@ -2133,7 +2133,7 @@ rule permutationTest:
             x=range(len(shadowCount)))
     output:
         bed = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
-        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-raw.tsv'
+        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-raw.tsv.gz'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region]
     group:

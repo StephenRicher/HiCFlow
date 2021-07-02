@@ -17,6 +17,15 @@ __version__ = '1.0.0'
 
 def permutationTest(trueLogFC: str, allShadow: List, rawOut: str, binSize: int, chrom: str):
 
+    trueLogFC = pd.read_pickle(trueLogFC)
+    trueLogFC['shadow'] = 0
+
+    # To save memory each file could be opened and read in chunksizes of (N x nShadow)
+    # Process N start positions at a time
+    # See https://stackoverflow.com/questions/59983073/how-to-load-pickle-file-in-chunks
+    # The pickle would need to be saved in chunks within shadowSUTM and then iteratively read
+    # Could write a seperate wscript to read pickles and merge 
+
     # Read and concanate all shadows, correctly adjust rep numbers
     nShadow = 0
     allData = []
@@ -25,23 +34,9 @@ def permutationTest(trueLogFC: str, allShadow: List, rawOut: str, binSize: int, 
         shadow['shadow'] = shadow['shadow'] + nShadow
         nShadow = shadow['shadow'].max()
         allData.append(shadow)
-    allShadow = pd.concat(allData)
-    trueLogFC = pd.read_pickle(trueLogFC)
-    trueLogFC['shadow'] = 0
-    print(nShadow, file=sys.stderr)
-    # Pivot and merge with real logFC, retain only bins measured in real data
-    allShadow = allShadow.pivot(
-        index='start1', columns='shadow', values='abs(logFC)')
-    allData = pd.merge(
-        trueLogFC[0].to_frame(), allShadow,
-        how='left', left_index=True, right_index=True)
+    allData = pd.concat(allData + [trueLogFC])
 
-    # Reformat to long format
-    allData = allData.melt(
-        var_name='shadow', value_name='abs(logFC)', ignore_index=False)
-
-    permutation = (allData.groupby('start1')
-        .apply(runPermute, nShadow=nShadow)
+    permutation = (allData.groupby('start1').apply(runPermute)
         .reset_index().rename({0: 'p'}, axis=1))
 
     permutation['name'] = '.'
@@ -55,14 +50,15 @@ def permutationTest(trueLogFC: str, allShadow: List, rawOut: str, binSize: int, 
         allData.to_csv(rawOut, header=True, sep='\t')
 
 
-def runPermute(x, nShadow):
+def runPermute(x):
     """ Compare shadow abs(score) against normal matrix """
-    shadowScores = x.loc[x['shadow'] > 0, 'abs(logFC)']
-    normalScore = float(x.loc[x['shadow'] == 0, 'abs(logFC)'])
+    shadowScores = x.loc[x['shadow'] > 0, 'logFC']
+    normalScore = float(x.loc[x['shadow'] == 0, 'logFC'])
     totalAbove = (shadowScores >= normalScore).sum()
-    p = (totalAbove / nShadow)
+    total = len(shadowScores)
+    p = (totalAbove / total)
     if p == 0:
-        p += (1 / nShadow)
+        p += (1 / total)
     return p
 
 
