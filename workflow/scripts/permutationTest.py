@@ -6,10 +6,13 @@
 
 import os
 import sys
+import pickle
 import argparse
 import numpy as np
 import pandas as pd
 from typing import List
+from contextlib import ExitStack
+from statsmodels.stats.multitest import fdrcorrection
 from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
@@ -17,37 +20,25 @@ __version__ = '1.0.0'
 
 def permutationTest(trueLogFC: str, allShadow: List, rawOut: str, binSize: int, chrom: str):
 
-    trueLogFC = pd.read_pickle(trueLogFC)
-    trueLogFC['shadow'] = 0
+    allFiles = [trueLogFC] + allShadow
+    allPermute = []
+    with ExitStack() as stack:
+        files = [stack.enter_context(open(file, 'rb')) for file in allFiles]
+        while True:
+            try:
+                allData = pd.concat([pickle.load(fh) for fh in files])
+                permutation = (allData.groupby('start1').apply(runPermute)
+                        .reset_index().rename({0: 'p'}, axis=1))
+                allPermute.append(permutation)
+            except EOFError:
+                break
+    allPermute = pd.concat(allPermute)
 
-    # To save memory each file could be opened and read in chunksizes of (N x nShadow)
-    # Process N start positions at a time
-    # See https://stackoverflow.com/questions/59983073/how-to-load-pickle-file-in-chunks
-    # The pickle would need to be saved in chunks within shadowSUTM and then iteratively read
-    # Could write a seperate wscript to read pickles and merge 
-
-    # Read and concanate all shadows, correctly adjust rep numbers
-    nShadow = 0
-    allData = []
-    for shadow in allShadow:
-        shadow = pd.read_pickle(shadow)
-        shadow['shadow'] = shadow['shadow'] + nShadow
-        nShadow = shadow['shadow'].max()
-        allData.append(shadow)
-    allData = pd.concat(allData + [trueLogFC])
-
-    permutation = (allData.groupby('start1').apply(runPermute)
-        .reset_index().rename({0: 'p'}, axis=1))
-
-    permutation['name'] = '.'
-    permutation['chrom'] = chrom
-    permutation['end'] = permutation['start1'] + binSize
-    columns = ['chrom', 'start1', 'end', 'name', 'p']
-    permutation[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
-
-    if rawOut is not None:
-        allData['chrom'] = chrom
-        allData.to_csv(rawOut, header=True, sep='\t')
+    allPermute ['fdr'] =  fdrcorrection(allPermute['p'])[1]
+    allPermute['chrom'] = chrom
+    allPermute['end'] = allPermute['start1'] + binSize
+    columns = ['chrom', 'start1', 'end', 'p', 'fdr']
+    allPermute[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
 
 def runPermute(x):

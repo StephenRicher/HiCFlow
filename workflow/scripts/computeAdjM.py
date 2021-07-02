@@ -6,6 +6,7 @@
 
 import os
 import sys
+import pickle
 import argparse
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str):
+def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str, nSplits: int):
 
     adjIF1 = readSUTM(adjIF1, lower=True, integer=True)
     adjIF2 = readSUTM(adjIF2, lower=True, integer=True)
@@ -32,9 +33,35 @@ def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str):
     adjM[0] = np.log2(adjM['adjIF_x'] / adjM['adjIF_y'])
 
     # Sum values across bins and save to pickle
-    (adjM.groupby('start1')[0].sum().to_frame()
+    adjM = (adjM.groupby('start1')[0].sum().to_frame()
         .melt(ignore_index=False, var_name='shadow', value_name='logFC')
-        .sort_values('start1').to_pickle(adjM_out))
+        .sort_values('start1'))
+
+    # Write data in groups sorted by start positions. This allows chunksize
+    # processing of data during permution test to save memory. Must match
+    # the number of splits used in shadowSUTM.py
+    adjM['split'] = splitData(len(adjM), 1, nSplits)
+    with open(adjM_out,'wb') as fh:
+        for split, splitGroup in adjM.groupby('split'):
+            pickle.dump(splitGroup.drop('split', axis=1), fh)
+
+
+def splitData(size, nShadow, nSplits):
+    """ Split start positions as evenly as possible"""
+    uniqueStart = int(size / nShadow)
+    # Cannot split more than unique start as shadows must be grouped
+    assert nSplits <= uniqueStart
+    if nSplits == 1:
+        return np.repeat(1, size)
+    else:
+        splitSize = uniqueStart // nSplits
+        evenSplits = np.repeat(np.arange(1, nSplits), splitSize)
+        # Create final split with remainder
+        remaining = uniqueStart - (splitSize * (nSplits - 1))
+        finalSplits = np.ones(remaining) * nSplits
+        # Merge even with remainder
+        splits = np.append(evenSplits, finalSplits)
+    return np.repeat(splits, nShadow)
 
 
 def readSUTM(sutm, lower=False, integer=False):
@@ -63,6 +90,9 @@ def parseArgs():
         help='Pickled output for absolute sum logFC.')
     parser.add_argument(
         '--merge_out', help='Pickled output of merged per-bin counts.')
+    parser.add_argument(
+        '--nSplits', default=1, type=int,
+        help='Number of splits to save pickled data (default: %(default)s)')
     parser.set_defaults(function=computeAdjM)
 
     return setDefaults(parser)

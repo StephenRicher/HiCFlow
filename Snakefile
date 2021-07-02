@@ -58,9 +58,12 @@ default_config = {
          'tads'          : None         ,
          'allPairs'      : False        ,
          'simpleCompare' : False        ,
-         'nShadow'       : 1            ,
-         'shadowPerJob'  : 100          ,
+
          'absChangeTitle': 'Difference score'},
+    'permuteTest':
+        {'nShadow'       : 1000         ,
+         'shadowPerJob'  : 100          ,
+         'nSplits'       : 10           ,},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -141,7 +144,7 @@ wildcard_constraints:
     sample = rf'{"|".join(HiC.samples(all=True))}',
     all = rf'{"|".join(HiC.samples() + list(HiC.groups()))}',
     combo = r'alt_alt|alt_both-ref|both-ref_both-ref|ref_alt|ref_both-ref|ref_ref',
-    x = rf'{"|".join([str(i) for i in range(config["compareMatrices"]["nShadow"])])}'
+    x = rf'{"|".join([str(i) for i in range(config["permuteTest"]["nShadow"])])}'
 
 
 # Generate dictionary of plot coordinates, may be multple per region
@@ -179,8 +182,8 @@ def processShadow(nShadow, nShadowPerJob, seed=42):
     return shadowSeeds, shadowCount
 
 shadowSeeds, shadowCount = processShadow(
-    config['compareMatrices']['nShadow'],
-    config['compareMatrices']['shadowPerJob'])
+    config['permuteTest']['nShadow'],
+    config['permuteTest']['shadowPerJob'])
 
 
 HiC_mode = ([
@@ -2096,6 +2099,8 @@ rule computeAdjM:
     output:
         adjM = 'dat/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-adjM.pkl',
         merged = 'data/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-merged.pkl'
+    params:
+        nSplits = config['permuteTest']['nSplits']
     group:
         'shuffleCompare'
     log:
@@ -2104,7 +2109,8 @@ rule computeAdjM:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
-        '--adjM_out {output.adjM} --merge_out {output.merged} &> {log}'
+        '--adjM_out {output.adjM} --merge_out {output.merged} '
+        '--nSplits {params.nSplits} &> {log}'
 
 
 rule shadowSUTM:
@@ -2115,6 +2121,7 @@ rule shadowSUTM:
     params:
         seed = lambda wc: shadowSeeds[int(wc.x)],
         nShadow =  lambda wc: shadowCount[int(wc.x)],
+        nSplits = config['permuteTest']['nSplits'],
     group:
         'shuffleCompare'
     log:
@@ -2123,7 +2130,8 @@ rule shadowSUTM:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/shadowSUTM.py {input} --out {output} '
-        '--seed {params.seed} --nShadow {params.nShadow} &> {log}'
+        '--seed {params.seed} --nShadow {params.nShadow} '
+        '--nSplits {params.nSplits} &> {log}'
 
 
 rule permutationTest:
@@ -2132,8 +2140,7 @@ rule permutationTest:
         allShadow = expand('dat/permuteTest/{{bin}}/{{group1}}-vs-{{group2}}-{{region}}-{{pm}}-{{bin}}-shadow{x}-adjM.pkl',
             x=range(len(shadowCount)))
     output:
-        bed = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
-        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-raw.tsv.gz'
+        'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region]
     group:
@@ -2144,8 +2151,7 @@ rule permutationTest:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/permutationTest.py {input.real} {input.allShadow} '
-        '--rawOut {output.raw} --binSize {wildcards.bin} '
-        '--chrom {params.chr} > {output.bed} 2> {log}'
+        '--binSize {wildcards.bin} --chrom {params.chr} > {output} 2> {log}'
 
 ####
 rule HiCsubtract:
