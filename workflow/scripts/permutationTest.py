@@ -27,6 +27,7 @@ def permutationTest(trueLogFC: str, allShadow: List, rawOut: str, binSize: int, 
         while True:
             try:
                 allData = pd.concat([pickle.load(fh) for fh in files])
+                allData.to_csv(sys.stderr)
                 permutation = (allData.groupby('start1').apply(runPermute)
                         .reset_index().rename({0: 'p'}, axis=1))
                 allPermute.append(permutation)
@@ -45,7 +46,7 @@ def runPermute(x):
     """ Compare shadow abs(score) against normal matrix """
     shadowScores = x.loc[x['shadow'] > 0, 'logFC']
     normalScore = float(x.loc[x['shadow'] == 0, 'logFC'])
-    totalAbove = (shadowScores >= normalScore).sum()
+    totalAbove = (shadowScores <= normalScore).sum()
     total = len(shadowScores)
     p = (totalAbove / total)
     if p == 0:

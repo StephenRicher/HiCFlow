@@ -20,10 +20,11 @@ def shadowSUTM(adjM: str, out: str, nShadow: int, nSplits: int, seed: int):
     allShadow = []
     for i in range(1, nShadow + 1):
         shadow = adjM.copy()
+        print(shadow.head(), file=sys.stderr)
         shadow.loc[:] = shuffleAlongAxis(shadow.values, 1)
-        shadow[i] =  shadow['adjIF_x'] - shadow['adjIF_y']
-        # np.log2(shadow['adjIF_x'] / shadow['adjIF_y'])
-        shadow = shadow.groupby('start1')[i].sum().abs().to_frame()
+        print(shadow.head(), file=sys.stderr)
+        shadow[i] = (shadow['adjIF_x'] - shadow['adjIF_y']).apply(getDirection)
+        shadow = shadow.groupby('start1')[i].apply(rle).to_frame()
         allShadow.append(shadow)
     allShadow = (pd.concat(allShadow, axis=1)
         .melt(ignore_index=False, var_name='shadow', value_name='logFC')
@@ -35,6 +36,15 @@ def shadowSUTM(adjM: str, out: str, nShadow: int, nSplits: int, seed: int):
     with open(out,'wb') as fh:
         for split, splitGroup in allShadow.groupby('split'):
             pickle.dump(splitGroup.drop('split', axis=1), fh)
+
+
+def getDirection(x):
+    if x < 0:
+        return -1
+    elif x > 0:
+        return 1
+    else:
+        return 0
 
 
 def shuffleAlongAxis(a, axis):
@@ -59,6 +69,31 @@ def splitData(size, nShadow, nSplits):
         # Merge even with remainder
         splits = np.append(evenSplits, finalSplits)
     return np.repeat(splits, nShadow)
+
+
+def getDirection(x):
+    if x < 0:
+        return -1
+    elif x > 0:
+        return 1
+    else:
+        return 0
+
+
+def rle(inarray):
+    """ run length encoding. Partial credit to R rle function.
+        Multi datatype arrays catered for including non Numpy
+        returns: tuple (runlengths, startpositions, values) """
+    # https://stackoverflow.com/questions/1066758/find-length-of-sequences-of-identical-values-in-a-numpy-array-run-length-encodi
+    ia = np.asarray(inarray)
+    n = len(ia)
+    if n == 0:
+        return None
+    else:
+        y = ia[1:] != ia[:-1]               # pairwise unequal (string safe)
+        i = np.append(np.where(y), n - 1)   # must include last element posi
+        z = np.diff(np.append(-1, i))       # run lengths
+        return len(z)
 
 
 def parseArgs():

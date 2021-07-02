@@ -28,13 +28,11 @@ def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str, nSplits
     # Write merged data to pickle for fast access later
     adjM.to_pickle(merge_out)
 
-    # Compute logFC - no need to check invalid as inner join of sparse
-    # removes partials.
-    adjM[0] = adjM['adjIF_x'] - adjM['adjIF_y']
-    # np.log2(adjM['adjIF_x'] / adjM['adjIF_y'])
+
+    adjM[0] = (adjM['adjIF_x'] - adjM['adjIF_y']).apply(getDirection)
 
     # Sum values across bins and save to pickle
-    adjM = (adjM.groupby('start1')[0].sum().abs().to_frame()
+    adjM = (adjM.groupby('start1')[0].apply(rle).to_frame()
         .melt(ignore_index=False, var_name='shadow', value_name='logFC')
         .sort_values('start1'))
 
@@ -71,7 +69,32 @@ def readSUTM(sutm, lower=False):
         sltm = sutm.loc[sutm['start1'] != sutm['start2']].rename(
             {'start1': 'start2', 'start2': 'start1'}, axis=1)
         sutm  = pd.concat([sutm, sltm])
-    return sutm.set_index(['start1', 'start2'])
+    return sutm.sort_values(['start1', 'start2']).set_index(['start1', 'start2'])
+
+
+def getDirection(x):
+    if x < 0:
+        return -1
+    elif x > 0:
+        return 1
+    else:
+        return 0
+
+
+def rle(inarray):
+    """ run length encoding. Partial credit to R rle function.
+        Multi datatype arrays catered for including non Numpy
+        returns: tuple (runlengths, startpositions, values) """
+    # https://stackoverflow.com/questions/1066758/find-length-of-sequences-of-identical-values-in-a-numpy-array-run-length-encodi
+    ia = np.asarray(inarray)
+    n = len(ia)
+    if n == 0:
+        return None
+    else:
+        y = ia[1:] != ia[:-1]               # pairwise unequal (string safe)
+        i = np.append(np.where(y), n - 1)   # must include last element posi
+        z = np.diff(np.append(-1, i))       # run lengths
+        return len(z)
 
 
 def parseArgs():
