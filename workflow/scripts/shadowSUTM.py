@@ -21,7 +21,8 @@ def shadowSUTM(adjM: str, out: str, nShadow: int, nSplits: int, seed: int):
     for i in range(1, nShadow + 1):
         shadow = adjM.copy()
         shadow.loc[:] = shuffleAlongAxis(shadow.values, 1)
-        shadow[i] = np.log2(shadow['adjIF_x'] / shadow['adjIF_y'])
+        shadow[i] =  shadow['adjIF_x'] - shadow['adjIF_y']
+        # np.log2(shadow['adjIF_x'] / shadow['adjIF_y'])
         shadow = shadow.groupby('start1')[i].sum().abs().to_frame()
         allShadow.append(shadow)
     allShadow = (pd.concat(allShadow, axis=1)

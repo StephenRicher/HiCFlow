@@ -18,8 +18,8 @@ __version__ = '1.0.0'
 
 def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str, nSplits: int):
 
-    adjIF1 = readSUTM(adjIF1, lower=True, integer=True)
-    adjIF2 = readSUTM(adjIF2, lower=True, integer=True)
+    adjIF1 = readSUTM(adjIF1, lower=True)
+    adjIF2 = readSUTM(adjIF2, lower=True)
 
     # Compute absolute logFC
     adjM = pd.merge(
@@ -30,7 +30,8 @@ def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str, nSplits
 
     # Compute logFC - no need to check invalid as inner join of sparse
     # removes partials.
-    adjM[0] = np.log2(adjM['adjIF_x'] / adjM['adjIF_y'])
+    adjM[0] = adjM['adjIF_x'] - adjM['adjIF_y']
+    # np.log2(adjM['adjIF_x'] / adjM['adjIF_y'])
 
     # Sum values across bins and save to pickle
     adjM = (adjM.groupby('start1')[0].sum().abs().to_frame()
@@ -64,14 +65,12 @@ def splitData(size, nShadow, nSplits):
     return np.repeat(splits, nShadow)
 
 
-def readSUTM(sutm, lower=False, integer=False):
+def readSUTM(sutm, lower=False):
     sutm = pd.read_csv(sutm, names=['start1', 'start2', 'adjIF'], sep=' ')
     if lower:
         sltm = sutm.loc[sutm['start1'] != sutm['start2']].rename(
             {'start1': 'start2', 'start2': 'start1'}, axis=1)
         sutm  = pd.concat([sutm, sltm])
-    if integer:
-        sutm['adjIF'] = sutm['adjIF'].astype(int)
     return sutm.set_index(['start1', 'start2'])
 
 
