@@ -11,12 +11,18 @@ import argparse
 import numpy as np
 import pandas as pd
 from typing import List
+from statsmodels.stats.multitest import fdrcorrection
 from utilities import setDefaults, createMainParent
+try:
+    from pandarallel import pandarallel
+except ModuleNotFoundError:
+    pass
+
 
 __version__ = '1.0.0'
 
 
-def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str, nSplits: int):
+def computeAdjM(adjIF1: str, adjIF2: str, nShadow: int, binSize: int, chrom: str, threads: int):
 
     adjIF1 = readSUTM(adjIF1, lower=True)
     adjIF2 = readSUTM(adjIF2, lower=True)
@@ -25,60 +31,34 @@ def computeAdjM(adjIF1: str, adjIF2: str, adjM_out: str, merge_out: str, nSplits
     adjM = pd.merge(
         adjIF1, adjIF2, how='inner',
         left_index=True, right_index=True)
-    # Write merged data to pickle for fast access later
-    adjM.to_pickle(merge_out)
+    adjM = adjM.loc[adjM['adjIF_x'] != adjM['adjIF_y']]
 
+    adjM['diff'] = (adjM['adjIF_x'] - adjM['adjIF_y']).apply(getDirection)
 
-    adjM[0] = (adjM['adjIF_x'] - adjM['adjIF_y']).apply(getDirection)
-
-    # Sum values across bins and save to pickle
-    adjM = (adjM.groupby('start1')[0].apply(rle).to_frame()
-        .melt(ignore_index=False, var_name='shadow', value_name='logFC')
-        .sort_values('start1'))
-
-    # Write data in groups sorted by start positions. This allows chunksize
-    # processing of data during permution test to save memory. Must match
-    # the number of splits used in shadowSUTM.py
-    adjM['split'] = splitData(len(adjM), 1, nSplits)
-    with open(adjM_out,'wb') as fh:
-        for split, splitGroup in adjM.groupby('split'):
-            pickle.dump(splitGroup.drop('split', axis=1), fh)
-
-
-def splitData(size, nShadow, nSplits):
-    """ Split start positions as evenly as possible"""
-    uniqueStart = int(size / nShadow)
-    # Cannot split more than unique start as shadows must be grouped
-    assert nSplits <= uniqueStart
-    if nSplits == 1:
-        return np.repeat(1, size)
+    if (threads > 1) and ('pandarallel' in sys.modules):
+        pandarallel.initialize(nb_workers=5, verbose=0)
+        permuted = adjM.groupby('start1').parallel_apply(permuteTest, nShadow)
     else:
-        splitSize = uniqueStart // nSplits
-        evenSplits = np.repeat(np.arange(1, nSplits), splitSize)
-        # Create final split with remainder
-        remaining = uniqueStart - (splitSize * (nSplits - 1))
-        finalSplits = np.ones(remaining) * nSplits
-        # Merge even with remainder
-        splits = np.append(evenSplits, finalSplits)
-    return np.repeat(splits, nShadow)
+        permuted = adjM.groupby('start1').apply(permuteTest, nShadow)
+    permuted = permuted.reset_index().rename({0: 'p'}, axis=1)
+
+    permuted['fdr'] =  fdrcorrection(permuted['p'])[1]
+    permuted['chrom'] = chrom
+    permuted['end'] = permuted['start1'] + binSize
+    columns = ['chrom', 'start1', 'end', 'p', 'fdr']
+    permuted = permuted.loc[permuted['fdr'] < 0.01]
+    permuted[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
 
-def readSUTM(sutm, lower=False):
-    sutm = pd.read_csv(sutm, names=['start1', 'start2', 'adjIF'], sep=' ')
-    if lower:
-        sltm = sutm.loc[sutm['start1'] != sutm['start2']].rename(
-            {'start1': 'start2', 'start2': 'start1'}, axis=1)
-        sutm  = pd.concat([sutm, sltm])
-    return sutm.sort_values(['start1', 'start2']).set_index(['start1', 'start2'])
-
-
-def getDirection(x):
-    if x < 0:
-        return -1
-    elif x > 0:
-        return 1
-    else:
-        return 0
+def permuteTest(x, nShadow):
+    length = rle(np.array([x['diff'].values]))
+    boolRand = np.random.random((nShadow, len(x))) > 0.5
+    randRLE = rle(boolRand)
+    totalAbove = (randRLE <= length).sum()
+    p = (totalAbove / nShadow)
+    if p == 0:
+        p += (1 / nShadow)
+    return p
 
 
 def rle(inarray):
@@ -91,10 +71,26 @@ def rle(inarray):
     if n == 0:
         return None
     else:
-        y = ia[1:] != ia[:-1]               # pairwise unequal (string safe)
-        i = np.append(np.where(y), n - 1)   # must include last element posi
-        z = np.diff(np.append(-1, i))       # run lengths
-        return len(z)
+        y = ia[...,1:] != ia[..., :-1]               # pairwise unequal (string safe)
+        a = np.append(y, np.ones((len(y), 1)), 1)
+        x = np.where(a)[1]
+        indexes = np.where(x == y.shape[1])[0] + 1
+        splits = np.split(x, indexes)[:-1]
+        return np.array([len(np.diff(x)) + 1 for x in splits])
+
+
+def readSUTM(sutm, lower=False):
+    sutm = pd.read_csv(sutm, names=['start1', 'start2', 'adjIF'], sep=' ')
+    if lower:
+        sltm = sutm.loc[sutm['start1'] != sutm['start2']].rename(
+            {'start1': 'start2', 'start2': 'start1'}, axis=1)
+        sutm  = pd.concat([sutm, sltm])
+    return sutm.sort_values(['start1', 'start2']).set_index(['start1', 'start2'])
+
+
+def getDirection(x):
+    """ Return sign of number, 0s are not expected """
+    return -1 if x < 0 else 1
 
 
 def parseArgs():
@@ -108,13 +104,15 @@ def parseArgs():
     parser.add_argument(
         'adjIF2', help='Sparse upper triangular matrix file, group 2.')
     parser.add_argument(
-        '--adjM_out',
-        help='Pickled output for absolute sum logFC.')
+        '--nShadow', default=1000, type=int,
+        help='Number of random permutations (default: %(default)s)')
     parser.add_argument(
-        '--merge_out', help='Pickled output of merged per-bin counts.')
+        '--threads', default=1, type=int,
+        help='Threads for parallel processing (default: %(default)s)')
     parser.add_argument(
-        '--nSplits', default=1, type=int,
-        help='Number of splits to save pickled data (default: %(default)s)')
+        '--chrom', help='Reference of correponding matrices.')
+    parser.add_argument(
+        '--binSize', type=int, help='Bin size of corresponding matrices')
     parser.set_defaults(function=computeAdjM)
 
     return setDefaults(parser)

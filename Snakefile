@@ -2097,61 +2097,23 @@ rule computeAdjM:
         m1 = rules.HiCcompare.output.adjIF1sutm,
         m2 = rules.HiCcompare.output.adjIF2sutm
     output:
-        adjM = 'dat/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-adjM.pkl',
-        merged = 'data/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-merged.pkl'
+        'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
     params:
-        nSplits = config['permuteTest']['nSplits']
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        nShadow = config['permuteTest']['nShadow']
     group:
         'shuffleCompare'
     log:
         'logs/computeAdjM/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
-        f'{ENVS}/python3.yaml'
+        f'{ENVS}/permutationTest.yaml'
+    threads:
+        THREADS
     shell:
         'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
-        '--adjM_out {output.adjM} --merge_out {output.merged} '
-        '--nSplits {params.nSplits} &> {log}'
+        '--binSize {wildcards.bin} --chrom {params.chr} '
+        '--nShadow {params.nShadow} --threads {threads} > {output} 2> {log}'
 
-
-rule shadowSUTM:
-    input:
-        rules.computeAdjM.output.merged
-    output:
-        'dat/permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-shadow{x}-adjM.pkl',
-    params:
-        seed = lambda wc: shadowSeeds[int(wc.x)],
-        nShadow =  lambda wc: shadowCount[int(wc.x)],
-        nSplits = config['permuteTest']['nSplits'],
-    group:
-        'shuffleCompare'
-    log:
-        'logs/shadowSUTM/{group1}-vs-{group2}-{region}-{bin}-{x}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/shadowSUTM.py {input} --out {output} '
-        '--seed {params.seed} --nShadow {params.nShadow} '
-        '--nSplits {params.nSplits} &> {log}'
-
-
-rule permutationTest:
-    input:
-        real = rules.computeAdjM.output.adjM,
-        allShadow = expand('dat/permuteTest/{{bin}}/{{group1}}-vs-{{group2}}-{{region}}-{{pm}}-{{bin}}-shadow{x}-adjM.pkl',
-            x=range(len(shadowCount)))
-    output:
-        'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
-    params:
-        chr = lambda wc: REGIONS['chr'][wc.region]
-    group:
-        'shuffleCompare'
-    log:
-        'logs/permutationTest/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/permutationTest.py {input.real} {input.allShadow} '
-        '--binSize {wildcards.bin} --chrom {params.chr} > {output} 2> {log}'
 
 ####
 rule HiCsubtract:
