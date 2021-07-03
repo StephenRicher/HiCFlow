@@ -22,7 +22,9 @@ except ModuleNotFoundError:
 __version__ = '1.0.0'
 
 
-def computeAdjM(adjIF1: str, adjIF2: str, nShadow: int, binSize: int, chrom: str, threads: int):
+def computeAdjM(
+        adjIF1: str, adjIF2: str, fdr: float, nShadow: int,
+        rawOut: str, binSize: int, chrom: str, threads: int):
 
     adjIF1 = readSUTM(adjIF1, lower=True)
     adjIF2 = readSUTM(adjIF2, lower=True)
@@ -46,7 +48,9 @@ def computeAdjM(adjIF1: str, adjIF2: str, nShadow: int, binSize: int, chrom: str
     permuted['chrom'] = chrom
     permuted['end'] = permuted['start1'] + binSize
     columns = ['chrom', 'start1', 'end', 'p', 'fdr']
-    permuted = permuted.loc[permuted['fdr'] < 0.01]
+    if rawOut:
+        permuted.to_csv(rawOut, index=False, header=False, sep='\t')
+    permuted = permuted.loc[permuted['fdr'] < fdr]
     permuted[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
 
@@ -103,6 +107,11 @@ def parseArgs():
         'adjIF1', help='Sparse upper triangular matrix file, group 1.')
     parser.add_argument(
         'adjIF2', help='Sparse upper triangular matrix file, group 2.')
+    parser.add_argument(
+        '--fdr', default=0.1, type=float,
+        help='FDR significance threshold (default: %(default)s)')
+    parser.add_argument(
+        '--rawOut', help='Output file for unfiltered results')
     parser.add_argument(
         '--nShadow', default=1000, type=int,
         help='Number of random permutations (default: %(default)s)')

@@ -203,7 +203,7 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.bed',
+    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}-sig.bed',
         region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
@@ -1972,7 +1972,7 @@ rule createCompareConfig:
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
         changeScore = rules.computeChangeScore.output.bed,
-        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
+        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-sig.bed'
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
@@ -2097,8 +2097,10 @@ rule computeAdjM:
         m1 = rules.HiCcompare.output.adjIF1sutm,
         m2 = rules.HiCcompare.output.adjIF2sutm
     output:
-        'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
+        sig = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-sig.bed',
+        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-all.bed'
     params:
+        fdr = 0.1,
         chr = lambda wc: REGIONS['chr'][wc.region],
         nShadow = config['permuteTest']['nShadow']
     group:
@@ -2112,7 +2114,8 @@ rule computeAdjM:
     shell:
         'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
         '--binSize {wildcards.bin} --chrom {params.chr} '
-        '--nShadow {params.nShadow} --threads {threads} > {output} 2> {log}'
+        '--nShadow {params.nShadow} --threads {threads} '
+        '--fdr {params.fdr} --rawOut {output.raw} > {output.sig} 2> {log}'
 
 
 ####
