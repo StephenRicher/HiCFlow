@@ -34,7 +34,9 @@ def computeAdjM(
     adjIF1 = readSUTM(adjIF1, lower=True)
     adjIF2 = readSUTM(adjIF2, lower=True)
 
-    adjM = pd.merge(adjIF1, adjIF2, how='inner', left_index=True, right_index=True)
+    adjM = (pd.merge(
+        adjIF1, adjIF2, how='inner', left_index=True, right_index=True)
+        .sort_values(['start1', 'start2']))
     # Removal uninformative bins where IF is equal
     adjM = adjM.loc[adjM['adjIF_x'] != adjM['adjIF_y']]
 
@@ -123,9 +125,9 @@ def directionPreference(x):
 
 
 def patternSum(x, axis=1):
-    """ Given a sequence of 1s and 0s compute the cumulative
-        sum of its differences. Same as previous scores +1
-        different scores -1 """
+    """ Given a sequence of 1s and 0s compute the cumulative sum
+        of its differences. If same as previous score (e.g 1,1)
+        then +1, if different from previous (e.g. 1,0) then -1. """
     # Find positions of change (e.g. +1 or -1)
     diff = np.diff(x, axis)
     # Score no change as 1, change as -1
@@ -149,7 +151,7 @@ def readSUTM(sutm, lower=False):
         sltm = sutm.loc[sutm['start1'] != sutm['start2']].rename(
             {'start1': 'start2', 'start2': 'start1'}, axis=1)
         sutm  = pd.concat([sutm, sltm])
-    return sutm.sort_values(['start1', 'start2']).set_index(['start1', 'start2'])
+    return sutm.set_index(['start1', 'start2'])
 
 
 def getDirection(x):
@@ -181,7 +183,7 @@ def parseArgs():
         help='Matplotlib divering colourmap for colouring '
              'Wilcoxon bed track (default: %(default)s)')
     parser.add_argument(
-        '--chrom', help='Reference of correponding matrices.')
+        '--chrom', help='Reference of corresponding matrices.')
     parser.add_argument(
         '--binSize', type=int, help='Bin size of corresponding matrices')
     parser.add_argument(
