@@ -170,21 +170,6 @@ mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
-def processShadow(nShadow, nShadowPerJob, seed=42):
-    """ Get seeds and shadows per job """
-    random.seed(seed)
-    shadowReps = math.ceil(nShadow / nShadowPerJob)
-    shadowCount = [nShadowPerJob] * shadowReps
-    remainder = nShadow % nShadowPerJob
-    if remainder != 0:
-        shadowCount[-1] = remainder
-    shadowSeeds = [random.randint(1, 1e9) for i in range(shadowReps)]
-    return shadowSeeds, shadowCount
-
-shadowSeeds, shadowCount = processShadow(
-    config['permuteTest']['nShadow'],
-    config['permuteTest']['shadowPerJob'])
-
 
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
@@ -2101,6 +2086,7 @@ rule computeAdjM:
         raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-all.bed'
     params:
         fdr = 0.1,
+        seed = 42,
         chr = lambda wc: REGIONS['chr'][wc.region],
         nShadow = config['permuteTest']['nShadow']
     group:

@@ -24,7 +24,9 @@ __version__ = '1.0.0'
 
 def computeAdjM(
         adjIF1: str, adjIF2: str, fdr: float, nShadow: int,
-        rawOut: str, binSize: int, chrom: str, threads: int):
+        rawOut: str, binSize: int, chrom: str, seed: int, threads: int):
+
+    np.random.seed(seed)
 
     adjIF1 = readSUTM(adjIF1, lower=True)
     adjIF2 = readSUTM(adjIF2, lower=True)
@@ -42,45 +44,49 @@ def computeAdjM(
         permuted = adjM.groupby('start1').parallel_apply(permuteTest, nShadow)
     else:
         permuted = adjM.groupby('start1').apply(permuteTest, nShadow)
-    permuted = permuted.reset_index().rename({0: 'p'}, axis=1)
+    permuted = permuted.reset_index().rename(
+        {0: 'p', 1: 'score', 2: 'length'}, axis=1)
 
-    permuted['fdr'] =  fdrcorrection(permuted['p'])[1]
+    permuted['fdr'] = fdrcorrection(permuted['p'])[1]
+    permuted['pScore'] = -np.log10(permuted['p'])
     permuted['chrom'] = chrom
     permuted['end'] = permuted['start1'] + binSize
-    columns = ['chrom', 'start1', 'end', 'p', 'fdr']
+    columns = ['chrom', 'start1', 'end', 'p', 'pScore']
     if rawOut:
         permuted.to_csv(rawOut, index=False, header=False, sep='\t')
-    permuted = permuted.loc[permuted['fdr'] < fdr]
+    # Remove sequences of length 1 (score = na)
+    permuted = permuted.loc[permuted['length'] > 1]
+    #permuted = permuted.loc[permuted['fdr'] < fdr]
     permuted[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
 
 def permuteTest(x, nShadow):
-    length = rle(np.array([x['diff'].values]))
-    boolRand = np.random.random((nShadow, len(x))) > 0.5
-    randRLE = rle(boolRand)
-    totalAbove = (randRLE <= length).sum()
+    values = x['diff'].values
+    score = float(patternSum(np.array([values])))
+    boolRand = (np.random.random((nShadow, len(x))) > 0.5).astype(int)
+    randRLE = patternSum(boolRand)
+    totalAbove = (randRLE >= score).sum()
     p = (totalAbove / nShadow)
     if p == 0:
         p += (1 / nShadow)
-    return p
+    return pd.Series([p, score, len(values)])
 
 
-def rle(inarray):
-    """ run length encoding. Partial credit to R rle function.
-        Multi datatype arrays catered for including non Numpy
-        returns: tuple (runlengths, startpositions, values) """
-    # https://stackoverflow.com/questions/1066758/find-length-of-sequences-of-identical-values-in-a-numpy-array-run-length-encodi
-    ia = np.asarray(inarray)
-    n = len(ia)
-    if n == 0:
-        return None
-    else:
-        y = ia[...,1:] != ia[..., :-1]               # pairwise unequal (string safe)
-        a = np.append(y, np.ones((len(y), 1)), 1)
-        x = np.where(a)[1]
-        indexes = np.where(x == y.shape[1])[0] + 1
-        splits = np.split(x, indexes)[:-1]
-        return np.array([len(np.diff(x)) + 1 for x in splits])
+def patternSum(x, axis=1):
+    """ Given a sequence of 1s and 0s compute the cumulative
+        sum of its differences. Same as previous scores +1
+        different scores -1 """
+    # Find positions of change (e.g. +1 or -1)
+    diff = np.diff(x, axis)
+    # Score no change as 1, change as -1
+    scores = np.where(diff != 0, -1, 1)
+    sumScores = scores.sum(axis)
+    # Rescale between 0 and 1
+    size = np.size(x, axis)
+    maxScore = (size - 1) # e.g. all same sequence
+    minScore = -maxScore # e.g. alternating sequence
+    scaleScores = (sumScores - minScore) /  (maxScore - minScore)
+    return scaleScores
 
 
 def readSUTM(sutm, lower=False):
@@ -116,12 +122,15 @@ def parseArgs():
         '--nShadow', default=1000, type=int,
         help='Number of random permutations (default: %(default)s)')
     parser.add_argument(
-        '--threads', default=1, type=int,
-        help='Threads for parallel processing (default: %(default)s)')
-    parser.add_argument(
         '--chrom', help='Reference of correponding matrices.')
     parser.add_argument(
         '--binSize', type=int, help='Bin size of corresponding matrices')
+    parser.add_argument(
+        '--threads', default=1, type=int,
+        help='Threads for parallel processing (default: %(default)s)')
+    parser.add_argument(
+        '--seed', type=int,
+        help='Seed for random number generator (default: %(default)s)')
     parser.set_defaults(function=computeAdjM)
 
     return setDefaults(parser)
