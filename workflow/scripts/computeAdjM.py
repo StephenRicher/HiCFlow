@@ -11,6 +11,9 @@ import argparse
 import numpy as np
 import pandas as pd
 from typing import List
+from matplotlib import cm
+from scipy.stats import wilcoxon
+from matplotlib.colors import to_hex
 from statsmodels.stats.multitest import fdrcorrection
 from utilities import setDefaults, createMainParent
 try:
@@ -23,7 +26,7 @@ __version__ = '1.0.0'
 
 
 def computeAdjM(
-        adjIF1: str, adjIF2: str, fdr: float, nShadow: int,
+        adjIF1: str, adjIF2: str, nShadow: int, fdr: float, cmap: str,
         rawOut: str, binSize: int, chrom: str, seed: int, threads: int):
 
     np.random.seed(seed)
@@ -31,12 +34,15 @@ def computeAdjM(
     adjIF1 = readSUTM(adjIF1, lower=True)
     adjIF2 = readSUTM(adjIF2, lower=True)
 
-    # Compute absolute logFC
-    adjM = pd.merge(
-        adjIF1, adjIF2, how='inner',
-        left_index=True, right_index=True)
+    adjM = pd.merge(adjIF1, adjIF2, how='inner', left_index=True, right_index=True)
+    # Removal uninformative bins where IF is equal
     adjM = adjM.loc[adjM['adjIF_x'] != adjM['adjIF_y']]
 
+    # Perform Wilcoxon between adjIF
+    direction = adjM.groupby('start1').apply(directionPreference).rename(
+        {0: 'p_Wilcoxon', 1: 'direction'}, axis=1)
+
+    # Get per-bin direction and set to -1 or 1
     adjM['diff'] = (adjM['adjIF_x'] - adjM['adjIF_y']).apply(getDirection)
 
     if (threads > 1) and ('pandarallel' in sys.modules):
@@ -44,20 +50,56 @@ def computeAdjM(
         permuted = adjM.groupby('start1').parallel_apply(permuteTest, nShadow)
     else:
         permuted = adjM.groupby('start1').apply(permuteTest, nShadow)
-    permuted = permuted.reset_index().rename(
-        {0: 'p', 1: 'score', 2: 'length'}, axis=1)
+    permuted = permuted.rename(
+        {0: 'p_Permute', 1: 'score', 2: 'length'}, axis=1)
 
-    permuted['fdr'] = fdrcorrection(permuted['p'])[1]
-    permuted['pScore'] = -np.log10(permuted['p'])
+    # Merge permutation stats with Wilcoxon
+    permuted = pd.merge(permuted, direction, left_index=True, right_index=True).reset_index()
+
+    permuted['p(adj)_Wilcoxon'] = fdrcorrection(permuted['p_Wilcoxon'])[1]
+    permuted['p(adj)_Permute'] = fdrcorrection(permuted['p_Permute'])[1]
+    permuted['pScore'] = -np.log10(permuted['p_Permute'])
+
+    # Compute minimum p-value of permutation test
+    maxScore = -np.log10(1 / nShadow)
+    permuted['colour'] = permuted.apply(
+        getColour, args=(maxScore, fdr, cmap), axis=1)
     permuted['chrom'] = chrom
     permuted['end'] = permuted['start1'] + binSize
-    columns = ['chrom', 'start1', 'end', 'p', 'pScore']
     if rawOut:
         permuted.to_csv(rawOut, index=False, header=False, sep='\t')
+
+    # Write direction score as a BED file
+    permuted['name'] = '.'
+    permuted['strand'] = '.'
+    permuted['thickStart'] = permuted['start1']
+    permuted['thickEnd'] = permuted['end']
+    columns = ([
+        'chrom', 'start1', 'end', 'name', 'pScore', 'strand',
+        'thickStart', 'thickEnd', 'colour'])
     # Remove sequences of length 1 (score = na)
     permuted = permuted.loc[permuted['length'] > 1]
-    #permuted = permuted.loc[permuted['fdr'] < fdr]
     permuted[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
+
+
+def getColour(x, maxScore, fdr, colourmap):
+    """ Define RGB colours based on significance of Wilcoxon result.
+        Non-significant bins are coloured on a binary scale according
+        to their pScore. Bins with significance directional preference
+        are also coloured according to direction. """
+    # Scale pScores between 0 and 1 for indexing cmap
+    pScore_scale = scale01(x['pScore'], 0, maxScore)
+    if x['p(adj)_Wilcoxon'] <= fdr:
+        if x['direction'] == 1:
+            i = (pScore_scale * 0.5)  + 0.5
+        else:
+            i = (1 - pScore_scale) * 0.5
+        colour = to_hex(cm.get_cmap(colourmap, 100)(i))[1:]
+    else:
+        i = pScore_scale
+        colour = to_hex(cm.get_cmap('binary', 100)(i))[1:]
+    colour = f'{int(colour[:2], 16)},{int(colour[2:4], 16)},{int(colour[4:], 16)}'
+    return colour
 
 
 def permuteTest(x, nShadow):
@@ -70,6 +112,14 @@ def permuteTest(x, nShadow):
     if p == 0:
         p += (1 / nShadow)
     return pd.Series([p, score, len(values)])
+
+
+def directionPreference(x):
+    _, p = wilcoxon(x['adjIF_x'], x['adjIF_y'], alternative='two-sided')
+    # Find which median is greater to determine direction
+    direction = x['adjIF_x'].median() < x['adjIF_y'].median()
+    direction = 1 if direction else -1
+    return pd.Series([p, direction])
 
 
 def patternSum(x, axis=1):
@@ -85,8 +135,12 @@ def patternSum(x, axis=1):
     size = np.size(x, axis)
     maxScore = (size - 1) # e.g. all same sequence
     minScore = -maxScore # e.g. alternating sequence
-    scaleScores = (sumScores - minScore) /  (maxScore - minScore)
-    return scaleScores
+    return scale01(sumScores, minScore, maxScore)
+
+
+def scale01(x, minX, maxX):
+    """ Scale x between 0 and 1 """
+    return (x - minX) / (maxX - minX)
 
 
 def readSUTM(sutm, lower=False):
@@ -114,13 +168,18 @@ def parseArgs():
     parser.add_argument(
         'adjIF2', help='Sparse upper triangular matrix file, group 2.')
     parser.add_argument(
-        '--fdr', default=0.1, type=float,
-        help='FDR significance threshold (default: %(default)s)')
-    parser.add_argument(
         '--rawOut', help='Output file for unfiltered results')
     parser.add_argument(
         '--nShadow', default=1000, type=int,
         help='Number of random permutations (default: %(default)s)')
+    parser.add_argument(
+        '--fdr', default=0.05, type=float,
+        help='FDR threshold for determing Wilcoxon '
+             'significance (default: %(default)s)')
+    parser.add_argument(
+        '--cmap', default='bwr',
+        help='Matplotlib divering colourmap for colouring '
+             'Wilcoxon bed track (default: %(default)s)')
     parser.add_argument(
         '--chrom', help='Reference of correponding matrices.')
     parser.add_argument(

@@ -2088,7 +2088,8 @@ rule computeAdjM:
         fdr = 0.1,
         seed = 42,
         chr = lambda wc: REGIONS['chr'][wc.region],
-        nShadow = config['permuteTest']['nShadow']
+        nShadow = config['permuteTest']['nShadow'],
+        cmap = config['compareMatrices']['colourmap']
     group:
         'shuffleCompare'
     log:
@@ -2101,7 +2102,8 @@ rule computeAdjM:
         'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
         '--binSize {wildcards.bin} --chrom {params.chr} '
         '--nShadow {params.nShadow} --threads {threads} '
-        '--fdr {params.fdr} --rawOut {output.raw} > {output.sig} 2> {log}'
+        '--fdr {params.fdr} --cmap {params.cmap} '
+        '--rawOut {output.raw} > {output.sig} 2> {log}'
 
 
 ####
