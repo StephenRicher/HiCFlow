@@ -2104,8 +2104,8 @@ rule computeAdjM:
 ####
 rule HiCsubtract:
     input:
-        m1 = 'dat/matrix/{region}/{bin}/KR/{group1}-{region}-{bin}-{pm}.h5',
-        m2 = 'dat/matrix/{region}/{bin}/KR/{group2}-{region}-{bin}-{pm}.h5'
+        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
     output:
         'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{pm}.h5'
     group:
@@ -2115,7 +2115,8 @@ rule HiCsubtract:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/simpleCompareHomer.py {input} --outFileName {output} &> {log}'
+        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        '--outFileName {output} &> {log}'
 
 
 rule createSubtractConfig:
@@ -2128,8 +2129,8 @@ rule createSubtractConfig:
         depth = getDepth,
         colourmap = config['compareMatrices']['colourmap'],
         tracks = getTracks,
-        vMin = config['compareMatrices']['vMin'],
-        vMax = config['compareMatrices']['vMax'],
+        vMin = -2, #config['compareMatrices']['vMin'],
+        vMax = 2, #config['compareMatrices']['vMax'],
         vLines = getVlinesParams
     group:
         'plotHiCsubtract'
@@ -2164,10 +2165,8 @@ rule plotSubtract:
         THREADS
     shell:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
-        '--region {params.region} '
-        '--outFileName {output} '
-        '--title {params.title} '
-        '--dpi {params.dpi} &> {log}'
+        '--region {params.region} --outFileName {output} '
+        '--title {params.title} --dpi {params.dpi} &> {log}'
 
 
 if not ALLELE_SPECIFIC:
