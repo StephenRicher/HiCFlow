@@ -26,7 +26,7 @@ __version__ = '1.0.0'
 
 
 def computeAdjM(
-        adjIF1: str, adjIF2: str, nShadow: int, fdr: float, cmap: str,
+        adjIF1: str, adjIF2: str, nPermute: int, fdr: float, cmap: str,
         rawOut: str, binSize: int, chrom: str, seed: int, threads: int):
 
     np.random.seed(seed)
@@ -49,9 +49,9 @@ def computeAdjM(
 
     if (threads > 1) and ('pandarallel' in sys.modules):
         pandarallel.initialize(nb_workers=5, verbose=0)
-        permuted = adjM.groupby('start1').parallel_apply(permuteTest, nShadow)
+        permuted = adjM.groupby('start1').parallel_apply(permuteTest, nPermute)
     else:
-        permuted = adjM.groupby('start1').apply(permuteTest, nShadow)
+        permuted = adjM.groupby('start1').apply(permuteTest, nPermute)
     permuted = permuted.rename(
         {0: 'p_Permute', 1: 'score', 2: 'length'}, axis=1)
 
@@ -63,13 +63,13 @@ def computeAdjM(
     permuted['pScore'] = -np.log10(permuted['p_Permute'])
 
     # Compute minimum p-value of permutation test
-    maxScore = -np.log10(1 / nShadow)
+    maxScore = -np.log10(1 / nPermute)
     permuted['colour'] = permuted.apply(
         getColour, args=(maxScore, fdr, cmap), axis=1)
     permuted['chrom'] = chrom
     permuted['end'] = permuted['start1'] + binSize
     if rawOut:
-        permuted.to_csv(rawOut, index=False, header=False, sep='\t')
+        permuted.to_pickle(rawOut)
 
     # Write direction score as a BED file
     permuted['name'] = '.'
@@ -104,15 +104,17 @@ def getColour(x, maxScore, fdr, colourmap):
     return colour
 
 
-def permuteTest(x, nShadow):
+def permuteTest(x, nPermute):
     values = x['diff'].values
+    if len(values) == 1:
+        return pd.Series([np.nan, np.nan, 1])
     score = float(patternSum(np.array([values])))
-    boolRand = (np.random.random((nShadow, len(x))) > 0.5).astype(int)
+    boolRand = (np.random.random((nPermute, len(x))) > 0.5).astype(int)
     randRLE = patternSum(boolRand)
     totalAbove = (randRLE >= score).sum()
-    p = (totalAbove / nShadow)
+    p = (totalAbove / nPermute)
     if p == 0:
-        p += (1 / nShadow)
+        p += (1 / nPermute)
     return pd.Series([p, score, len(values)])
 
 
@@ -170,9 +172,9 @@ def parseArgs():
     parser.add_argument(
         'adjIF2', help='Sparse upper triangular matrix file, group 2.')
     parser.add_argument(
-        '--rawOut', help='Output file for unfiltered results')
+        '--rawOut', help='Output pickle file for unfiltered results.')
     parser.add_argument(
-        '--nShadow', default=1000, type=int,
+        '--nPermute', default=1000, type=int,
         help='Number of random permutations (default: %(default)s)')
     parser.add_argument(
         '--fdr', default=0.05, type=float,

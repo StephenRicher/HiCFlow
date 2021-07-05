@@ -58,12 +58,8 @@ default_config = {
          'tads'          : None         ,
          'allPairs'      : False        ,
          'simpleCompare' : False        ,
-
+         'nPermute'       : 1000         ,
          'absChangeTitle': 'Difference score'},
-    'permuteTest':
-        {'nShadow'       : 1000         ,
-         'shadowPerJob'  : 100          ,
-         'nSplits'       : 10           ,},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -144,7 +140,6 @@ wildcard_constraints:
     sample = rf'{"|".join(HiC.samples(all=True))}',
     all = rf'{"|".join(HiC.samples() + list(HiC.groups()))}',
     combo = r'alt_alt|alt_both-ref|both-ref_both-ref|ref_alt|ref_both-ref|ref_ref',
-    x = rf'{"|".join([str(i) for i in range(config["permuteTest"]["nShadow"])])}'
 
 
 # Generate dictionary of plot coordinates, may be multple per region
@@ -188,7 +183,7 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}-sig.bed',
+    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.bed',
         region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
@@ -1957,7 +1952,7 @@ rule createCompareConfig:
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
         changeScore = rules.computeChangeScore.output.bed,
-        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-sig.bed'
+        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
@@ -2082,14 +2077,14 @@ rule computeAdjM:
         m1 = rules.HiCcompare.output.adjIF1sutm,
         m2 = rules.HiCcompare.output.adjIF2sutm
     output:
-        sig = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-sig.bed',
-        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-all.bed'
+        sig = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
+        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-all.pkl'
     params:
         fdr = 0.1,
         seed = 42,
         chr = lambda wc: REGIONS['chr'][wc.region],
-        nShadow = config['permuteTest']['nShadow'],
-        cmap = config['compareMatrices']['colourmap']
+        cmap = config['compareMatrices']['colourmap'],
+        nPermute = config['compareMatrices']['nPermute']
     group:
         'shuffleCompare'
     log:
@@ -2101,7 +2096,7 @@ rule computeAdjM:
     shell:
         'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
         '--binSize {wildcards.bin} --chrom {params.chr} '
-        '--nShadow {params.nShadow} --threads {threads} '
+        '--nPermute {params.nPermute} --threads {threads} '
         '--fdr {params.fdr} --cmap {params.cmap} '
         '--rawOut {output.raw} > {output.sig} 2> {log}'
 
