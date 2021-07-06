@@ -42,21 +42,23 @@ def computeAdjM(
 
     if (threads > 1) and ('pandarallel' in sys.modules):
         pandarallel.initialize(nb_workers=5, verbose=0)
-        permuted = adjM.groupby('start1').parallel_apply(permuteTest, nPermute)
+        permuted = adjM.groupby(['start1', 'orientation']).parallel_apply(permuteTest, nPermute)
     else:
-        permuted = adjM.groupby('start1').apply(permuteTest, nPermute)
+        permuted = adjM.groupby(['start1', 'orientation']).apply(permuteTest, nPermute)
     permuted = permuted.rename(
         {0: 'p_Permute', 1: 'score', 2: 'length'}, axis=1).reset_index()
 
-    permuted['chrom'] = chrom
-    permuted['end'] = permuted['start1'] + binSize
     if rawOut:
+        permuted.attrs['binSize'] = binSize
+        permuted.attrs['nPermute'] = nPermute
         permuted.to_pickle(rawOut)
 
     # Remove NA bins (bins with length = 1 )
     permuted = permuted.loc[permuted['p_Permute'].notna()]
     # Perform FDR and convert to pScore
     permuted['p(adj)_Permute'] = fdrcorrection(permuted['p_Permute'])[1]
+    # Retrieve the minimum p value across both directions
+    permuted = permuted.groupby('start1')['p(adj)_Permute'].min().reset_index()
     permuted['pScore'] = -np.log10(permuted['p(adj)_Permute'])
     # Scale pScore between 0 and 1
     maxScore = -np.log10(1 / nPermute)
@@ -65,6 +67,8 @@ def computeAdjM(
     permuted = permuted.loc[permuted['p(adj)_Permute'] < fdr]
     # Write score as a BED file
     permuted['name'] = '.'
+    permuted['chrom'] = chrom
+    permuted['end'] = permuted['start1'] + binSize
     columns = ['chrom', 'start1', 'end', 'name', 'pScoreScale']
     # Remove sequences of length 1 (score = na)
 
@@ -108,11 +112,12 @@ def scale01(x, minX, maxX):
 
 def readSUTM(sutm, lower=False):
     sutm = pd.read_csv(sutm, names=['start1', 'start2', 'adjIF'], sep=' ')
+    sutm['orientation'] = 1
     if lower:
-        sltm = sutm.loc[sutm['start1'] != sutm['start2']].rename(
-            {'start1': 'start2', 'start2': 'start1'}, axis=1)
+        sltm = sutm.rename({'start1': 'start2', 'start2': 'start1'}, axis=1)
+        sltm['orientation'] = -1
         sutm  = pd.concat([sutm, sltm])
-    return sutm.set_index(['start1', 'start2'])
+    return sutm.set_index(['start1', 'start2', 'orientation'])
 
 
 def getDirection(x):
