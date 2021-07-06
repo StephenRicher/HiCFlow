@@ -1834,7 +1834,8 @@ rule insulationDifference:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/subtractInsulation.py {input} > {output} 2> {log}'
+        'python {SCRIPTS}/subtractInsulation.py {input} '
+        '> {output} 2> {log} || touch {output}'
 
 
 if config['compareMatrices']['tads'] is not None:
@@ -2083,7 +2084,6 @@ rule computeAdjM:
         fdr = 0.1,
         seed = 42,
         chr = lambda wc: REGIONS['chr'][wc.region],
-        cmap = config['compareMatrices']['colourmap'],
         nPermute = config['compareMatrices']['nPermute']
     group:
         'shuffleCompare'
@@ -2097,7 +2097,7 @@ rule computeAdjM:
         'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
         '--binSize {wildcards.bin} --chrom {params.chr} '
         '--nPermute {params.nPermute} --threads {threads} '
-        '--fdr {params.fdr} --cmap {params.cmap} '
+        '--fdr {params.fdr} '
         '--rawOut {output.raw} > {output.sig} 2> {log}'
 
 
