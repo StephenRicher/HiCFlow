@@ -26,7 +26,7 @@ def simpleSubtract(matrices: List, outFileName: str):
 
     nan_bins = set(hic1.nan_bins)
     nan_bins = nan_bins.union(hic2.nan_bins)
-    new_matrix = hic1.matrix - hic2.matrix
+    new_matrix = hic2.matrix - hic1.matrix
     hic1.setMatrixValues(new_matrix)
     hic1.maskBins(sorted(nan_bins))
     hic1.save(outFileName)
