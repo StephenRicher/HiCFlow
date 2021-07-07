@@ -2164,13 +2164,24 @@ rule createSubtractConfig:
         '> {output} 2> {log}'
 
 
+def setSubtractTitle(wc):
+    if config['build'] is not None:
+        build = config['build'].replace('"', '') # Double quotes disallowed
+        build = f' ({build})'
+    else:
+        build = ''
+    title = (f'"{wc.group1} vs {wc.group2} - {wc.region}{build} at '
+             f'{wc.bin} bin size - obs/exp difference - {wc.pm}"')
+    return title
+
+
 rule plotSubtract:
     input:
         rules.createSubtractConfig.output
     output:
         'plots/{region}/{bin}/HiCsubtract/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}-{mini}.{type}'
     params:
-        title = setCompareTitle,
+        title = setSubtractTitle,
         region = setRegion,
         dpi = 600
     group:
