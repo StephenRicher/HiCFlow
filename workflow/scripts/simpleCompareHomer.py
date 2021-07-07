@@ -27,14 +27,14 @@ def simpleSubtract(matrices: List, outFileName: str):
     hic1.matrix.data =  hic1.matrix.data.astype(float) / hic1.matrix.data.sum()
     hic2.matrix.data =  hic2.matrix.data.astype(float) / hic2.matrix.data.sum()
 
+    nan_bins = set(hic1.nan_bins)
+    nan_bins = nan_bins.union(hic2.nan_bins)
+
     hic2.matrix.data = float(1) / hic2.matrix.data
     new_matrix = hic1.matrix.multiply(hic2.matrix)
     # just in case
     new_matrix.eliminate_zeros()
 
-    nan_bins = set(hic1.nan_bins)
-    nan_bins = nan_bins.union(hic2.nan_bins)
-    new_matrix = hic2.matrix - hic1.matrix
     hic1.setMatrixValues(new_matrix)
     hic1.maskBins(sorted(nan_bins))
     hic1.save(outFileName)
