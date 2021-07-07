@@ -14,7 +14,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def simpleSubtract(matrices: List, outFileName: str):
+def simpleSubtract(matrices: List, outFileName: str, mode: str):
 
     hic1 = hm.hiCMatrix(matrices[0])
     hic2 = hm.hiCMatrix(matrices[1])
@@ -24,9 +24,24 @@ def simpleSubtract(matrices: List, outFileName: str):
                  "the same resolution and created using the same parameters. "
                  "Check the matrix values using the tool `hicInfo`.")
 
-    nan_bins = set(hic1.nan_bins)
-    nan_bins = nan_bins.union(hic2.nan_bins)
-    new_matrix = hic2.matrix - hic1.matrix
+    if mode in ['LOESSdiff', 'KRdiff']:
+        nan_bins = set(hic1.nan_bins)
+        nan_bins = nan_bins.union(hic2.nan_bins)
+        new_matrix = hic2.matrix - hic1.matrix
+    elif mode in ['KRlog2', 'KRratio', 'LOESSlog2']:
+        # normalize by total matrix sum
+        hic1.matrix.data = hic1.matrix.data.astype(float) / hic1.matrix.data.sum()
+        hic2.matrix.data = hic2.matrix.data.astype(float) / hic2.matrix.data.sum()
+        nan_bins = set(hic1.nan_bins)
+        nan_bins = nan_bins.union(hic2.nan_bins)
+        hic1.matrix.data = float(1) / hic1.matrix.data
+        new_matrix = hic2.matrix.multiply(hic1.matrix)
+        new_matrix.eliminate_zeros()
+        if mode in ['KRlog2', 'LOESSlog2']:
+            new_matrix.data = np.log2(new_matrix.data)
+            new_matrix.eliminate_zeros()
+
+
     hic1.setMatrixValues(new_matrix)
     hic1.maskBins(sorted(nan_bins))
     hic1.save(outFileName)
@@ -42,7 +57,7 @@ def parseArgs():
     parser.set_defaults(function=simpleSubtract)
     parser.add_argument('matrices', nargs=2, help='HiC matrix in homer format.')
     parser.add_argument('--outFileName', help='HiC matrix in homer format.')
-
+    parser.add_argument('--mode', help='Mode for subtraction comparison.')
 
     return setDefaults(parser)
 

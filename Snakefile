@@ -170,9 +170,9 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
-    ([expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{pm}-{mini}.{type}',
+    ([expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{subtractMode}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin]
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini, subtractMode=['KRratio', 'KRlog2', 'KRdiff', 'LOESSdiff', 'LOESSlog2']) for region in regionBin]
         if config['compareMatrices']['simpleCompare'] else []),
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
@@ -2120,45 +2120,136 @@ rule distanceNormaliseNormIF:
         '&> {log} || touch {output}'
 
 
-rule HiCsubtract:
+rule HiCsubtract1:
     input:
         m1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-obsExp-{pm}.h5',
         m2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-obsExp-{pm}.h5'
     output:
-        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{pm}.h5'
+        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-{pm}.h5'
+    params:
+        mode = 'LOESSdiff'
     group:
         'plotHiCsubtract'
     log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-{pm}.log'
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-LOESSdiff-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
-        '--outFileName {output} &> {log}'
+        '--outFileName {output} --mode {params.mode} &> {log}'
 
+
+rule HiCsubtract2:
+    input:
+        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
+    output:
+        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-KRdiff-{pm}.h5'
+    params:
+        mode = 'KRdiff'
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-KRdiff-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        '--outFileName {output} --mode {params.mode} &> {log}'
+
+
+rule HiCsubtract3:
+    input:
+        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
+    output:
+        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-KRlog2-{pm}.h5'
+    params:
+        mode = 'KRlog2'
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-KRlog2-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        '--outFileName {output} --mode {params.mode} &> {log}'
+
+
+rule HiCsubtract4:
+    input:
+        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
+    output:
+        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-KRratio-{pm}.h5'
+    params:
+        mode = 'KRratio'
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-KRratio-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        '--outFileName {output} --mode {params.mode} &> {log}'
+
+
+rule HiCsubtract5:
+    input:
+        m1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.h5',
+        m2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.h5'
+    output:
+        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSlog2-{pm}.h5'
+    params:
+        mode = 'LOESSlog2'
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-LOESSdiff-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        '--outFileName {output} --mode {params.mode} &> {log}'
+
+def setVmin(wc):
+    if wc.subtractMode == 'KRratio':
+        return 0
+    elif wc.subtractMode in ['KRdiff', 'LOESSdiff']:
+        return -1
+    else:
+        return -2
+
+def setVmax(wc):
+    if wc.subtractMode == 'KRratio':
+        return 2
+    elif wc.subtractMode in ['KRdiff', 'LOESSdiff']:
+        return 1
+    else:
+        return 2
 
 rule createSubtractConfig:
     input:
-        mat = rules.HiCsubtract.output,
-        vLines = config['plotParams']['vLines'],
+        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}.h5'
     output:
-        'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{pm}-{mini}.ini',
+        'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{pm}-{mini}.ini',
     params:
         depth = getDepth,
         colourmap = config['compareMatrices']['colourmap'],
         tracks = getTracks,
-        vMin = -2, #config['compareMatrices']['vMin'],
-        vMax = 2, #config['compareMatrices']['vMax'],
-        vLines = getVlinesParams
+        vMin = setVmin,
+        vMax = setVmax
     group:
         'plotHiCsubtract'
     log:
-        'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{pm}-{mini}.log'
+        'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{pm}-{mini}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
-        '--matrix {input.mat} {params.vLines} {params.tracks} '
+        '--matrix {input} {params.tracks} '
         '--vMin {params.vMin} --vMax {params.vMax} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '> {output} 2> {log}'
@@ -2171,7 +2262,7 @@ def setSubtractTitle(wc):
     else:
         build = ''
     title = (f'"{wc.group1} vs {wc.group2} - {wc.region}{build} at '
-             f'{wc.bin} bin size - obs/exp difference - {wc.pm}"')
+             f'{wc.bin} bin size - {wc.subtractMode} - {wc.pm}"')
     return title
 
 
@@ -2179,7 +2270,7 @@ rule plotSubtract:
     input:
         rules.createSubtractConfig.output
     output:
-        'plots/{region}/{bin}/HiCsubtract/{group1}-vs-{group2}-{region}-{coord}-{bin}-{pm}-{mini}.{type}'
+        'plots/{region}/{bin}/HiCsubtract/{group1}-vs-{group2}-{region}-{coord}-{bin}-{subtractMode}-{pm}-{mini}.{type}'
     params:
         title = setSubtractTitle,
         region = setRegion,
@@ -2189,7 +2280,7 @@ rule plotSubtract:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotSubtract/{group1}-{group2}-{bin}-{region}-{coord}-{pm}-{mini}-{type}.log'
+        'logs/plotSubtract/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{pm}-{mini}-{type}.log'
     threads:
         THREADS
     shell:
