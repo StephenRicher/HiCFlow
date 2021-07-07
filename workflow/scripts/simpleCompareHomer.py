@@ -23,6 +23,14 @@ def simpleSubtract(matrices: List, outFileName: str):
         sys.exit("The two matrices have different size. Use matrices having "
                  "the same resolution and created using the same parameters. "
                  "Check the matrix values using the tool `hicInfo`.")
+    # normalize by total matrix sum
+    hic1.matrix.data =  hic1.matrix.data.astype(float) / hic1.matrix.data.sum()
+    hic2.matrix.data =  hic2.matrix.data.astype(float) / hic2.matrix.data.sum()
+
+    hic2.matrix.data = float(1) / hic2.matrix.data
+    new_matrix = hic1.matrix.multiply(hic2.matrix)
+    # just in case
+    new_matrix.eliminate_zeros()
 
     nan_bins = set(hic1.nan_bins)
     nan_bins = nan_bins.union(hic2.nan_bins)

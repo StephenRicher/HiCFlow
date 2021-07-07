@@ -2122,8 +2122,8 @@ rule distanceNormaliseNormIF:
 
 rule HiCsubtract:
     input:
-        m1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-obsExp-{pm}.h5',
-        m2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-obsExp-{pm}.h5'
+        m1 = 'dat/matrix/{region}/{bin}/KR/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/KR/{group2}-{region}-{bin}-{pm}.h5',
     output:
         'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{pm}.h5'
     group:
