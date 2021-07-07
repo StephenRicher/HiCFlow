@@ -119,11 +119,11 @@ def make_config(insulations, matrix, log, tads, loops,
 
     if notEmpty(changeScore):
         writeChangeScore(changeScore, title=changeScore_title)
-    print('[spacer]')
+        print('[spacer]')
 
     if notEmpty(permuteScore):
         writePermuteScore(permuteScore)
-    print('[spacer]')
+        print('[spacer]')
 
     for i, insulation in enumerate(insulations):
         if notEmpty(insulation):
