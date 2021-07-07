@@ -34,6 +34,8 @@ def simpleSubtract(matrices: List, outFileName: str):
     new_matrix = hic1.matrix.multiply(hic2.matrix)
     # just in case
     new_matrix.eliminate_zeros()
+    new_matrix.data = np.log2(new_matrix.data)
+    new_matrix.eliminate_zeros()
 
     hic1.setMatrixValues(new_matrix)
     hic1.maskBins(sorted(nan_bins))
