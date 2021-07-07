@@ -86,6 +86,28 @@ outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.homer'
 outIF1SUTM = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1-', suffix, '.sutm', sep = '')
 outIF2SUTM = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.sutm', sep = '')
 
+### LOESS with Partial Zero ###
+data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr, include.zeros = TRUE)
+hic.table <- hic_loess(data.table, Plot=FALSE, Plot.smooth=FALSE)
+hic.table = as.data.frame(hic.table)
+
+# Write adjusted IF1 values
+writeMatrix(hic.table, outIF1, chr, start, end, binsize, 'adj.IF1')
+
+# Write adjusted IF2 values
+writeMatrix(hic.table, outIF2, chr, start, end, binsize, 'adj.IF2')
+
+# Write adjusted IF to SUTM
+write.table(
+  hic.table[, c('start1', 'start2', 'adj.IF1')],
+  outIF1SUTM, sep=' ', quote=FALSE, row.names=FALSE, col.names=FALSE)
+
+write.table(
+  hic.table[, c('start1', 'start2', 'adj.IF2')],
+  outIF2SUTM, sep=' ', quote=FALSE, row.names=FALSE, col.names=FALSE)
+
+
+### LOESS with HiCcompare and adj.M computation ###
 data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr)
 
 png(loess_plot)
@@ -109,24 +131,9 @@ hic.table = as.data.frame(hic.table)
 # Write matrix of logFC values
 writeMatrix(hic.table, out_matrix, chr, start, end, binsize, 'adj.M')
 
-# Write adjusted IF1 values
-writeMatrix(hic.table, outIF1, chr, start, end, binsize, 'adj.IF1')
-
-# Write adjusted IF2 values
-writeMatrix(hic.table, outIF2, chr, start, end, binsize, 'adj.IF2')
-
 hic.table$abs.adj.M = abs(hic.table$adj.M)
 hic.table$score = (hic.table$abs.adj.M / max(abs(hic.table$adj.M))) * 1000
 
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'abs.adj.M', 'score', 'adj.M', 'p.adj')],
   out_links, quote=FALSE, row.names=FALSE, col.names=FALSE, sep='\t')
-
-# Finally write adjusted IF to SUTM
-write.table(
-  hic.table[, c('start1', 'start2', 'adj.IF1')],
-  outIF1SUTM, sep=' ', quote=FALSE, row.names=FALSE, col.names=FALSE)
-
-write.table(
-  hic.table[, c('start1', 'start2', 'adj.IF2')],
-  outIF2SUTM, sep=' ', quote=FALSE, row.names=FALSE, col.names=FALSE)

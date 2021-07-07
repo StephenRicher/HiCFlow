@@ -2102,10 +2102,28 @@ rule computeAdjM:
 
 
 ####
+rule distanceNormaliseNormIF:
+    input:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+    output:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-obsExp-{pm}.h5'
+    params:
+        method = 'obs_exp'
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/distanceNormaliseNormIF/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicTransform -m {input} --method {params.method} -o {output} '
+        '&> {log} || touch {output}'
+
+
 rule HiCsubtract:
     input:
-        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
-        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
+        m1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-obsExp-{pm}.h5',
+        m2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-obsExp-{pm}.h5'
     output:
         'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{pm}.h5'
     group:
