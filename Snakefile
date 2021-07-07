@@ -1953,7 +1953,7 @@ rule createCompareConfig:
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
         changeScore = rules.computeChangeScore.output.bed,
-        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
+        #permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
@@ -1976,7 +1976,7 @@ rule createCompareConfig:
         #'--insulations {input.insulations}  '
         '--changeScore_title {params.changeScore_title} '
         '--changeScore {input.changeScore} '
-        '--permuteScore {input.permuteScore} '
+        #'--permuteScore {input.permuteScore} '
         '{params.vLines} {params.tracks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
