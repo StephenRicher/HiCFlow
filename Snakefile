@@ -183,8 +183,8 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.bed',
-        region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
+    #[expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.bed',
+    #    region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=pm,
@@ -878,7 +878,7 @@ rule buildBaseMatrix:
         '{params.skipDuplicationCheck} --binSize {params.bin} '
         '--outFileName {output.hic} '
         '--QCfolder {output.qc} --threads {threads} '
-        '--outBam {output.bam} ' if config['HiCParams']['makeBam'] else ''
+        f'{"--outBam {{output.bam}} " if config["HiCParams"]["makeBam"] else ""}'
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
