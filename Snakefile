@@ -47,6 +47,7 @@ default_config = {
          'keepSelfCircles':      False,
          'skipDuplicationCheck': False,
          'nofill':               False,
+         'makeBam':              True ,
          'threads':              4    ,
          'multiplicativeValue':  10000,},
     'compareMatrices':
@@ -94,7 +95,6 @@ default_config = {
     'fastq_screen':      None,
     'runQC':             True,
     'phase':             True,
-    'createValidBam':    False,
     'runHiCRep':         True,
     'multiQCconfig':     None,
     'rescalePKL':        False,
@@ -238,7 +238,7 @@ rule all:
          if config['runHiCRep'] else []),
         (expand('dat/mapped/{sample}-validHiC-{pm}.bam',
             sample=HiC.samples(), pm=pm)
-         if (config['createValidBam'] and regionBin) else []),
+         if (config['HiCParams']['makeBam'] and regionBin) else []),
         rescalePKL if config['rescalePKL'] else []
 
 
@@ -797,7 +797,7 @@ rule splitPairedReads:
 def getRestSites(wc):
     """ Retrieve restSite files associated with sample wildcard """
     if config['microC']:
-        return 'dat/genome/restSites-empty.bed'
+        return ['dat/genome/restSites-empty.bed']
     try:
         sample = wc.sample
     except AttributeError:
@@ -822,6 +822,13 @@ def getDanglingSequences(wc):
     return ' '.join(sequences)
 
 
+def outBam():
+    if config['HiCParams']['makeBam']:
+        return 'dat/matrix/{region}/{sample}-{region}-{pm}.bam'
+    else:
+        return []
+
+
 rule buildBaseMatrix:
     input:
         bams = ancient(expand('dat/mapped/split/{{sample}}-{read}-{{pm}}.bam', read=['R1', 'R2'])),
@@ -829,7 +836,7 @@ rule buildBaseMatrix:
         chromSizes = getChromSizes
     output:
         hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
-        bam = 'dat/matrix/{region}/{sample}-{region}-{pm}.bam',
+        bam = outBam(),
         qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC'),
         qc_table = f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt'
     params:
@@ -869,26 +876,10 @@ rule buildBaseMatrix:
         '--chromosomeSizes {input.chromSizes} '
         '{params.keepSelfCircles} '
         '{params.skipDuplicationCheck} --binSize {params.bin} '
-        '--outFileName {output.hic} --outBam {output.bam} '
+        '--outFileName {output.hic} '
         '--QCfolder {output.qc} --threads {threads} '
+        '--outBam {output.bam} ' if config['HiCParams']['makeBam'] else ''
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
-
-
-rule mergeValidHiC:
-    input:
-        expand('dat/matrix/{region}/{{sample}}-{region}-{{pm}}.bam',
-            region=regionBin.keys())
-    output:
-        'dat/mapped/{sample}-validHiC-{pm}.bam'
-    log:
-        'logs/mergeValidHiC/{sample}-{pm}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools merge -@ {threads} {output} {input} '
-        '2> {log} || touch {output}'
 
 
 def nonEmpty(wc, output, input):
@@ -1628,45 +1619,6 @@ rule mergeBamByReplicate:
         'samtools merge -@ {threads} {output} {params.nonEmpty} 2> {log}'
 
 
-rule reformatPre:
-    input:
-        'dat/matrix/{region}/{all}-{region}.bam'
-    output:
-        'dat/matrix/{region}/base/raw/{all}-{region}.pre.tsv'
-    group:
-        'bam2hic'
-    log:
-        'logs/reformatPre/{region}/{all}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        '(samtools view -@ {threads} {input} '
-        '| awk -f {SCRIPTS}/bam2pre.awk > {output}) 2> {log} '
-
-
-rule juicerPre:
-    input:
-        tsv = 'dat/matrix/{region}/base/raw/{all}-{region}.pre.tsv',
-        chrom_sizes = getChromSizes
-    output:
-        'UCSCcompatible/{region}/{all}-{region}.hic'
-    params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        resolutions = ','.join([str(bin) for bin in config['resolution']['bins']])
-    group:
-        'bam2hic'
-    log:
-        'logs/juicerPre/{region}/{all}.log'
-    conda:
-        f'{ENVS}/openjdk.yaml'
-    shell:
-        'java -jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
-        '-c {params.chr} -r {params.resolutions} '
-        '{input.tsv} {output} {input.chrom_sizes} &> {log}'
-
-
 rule reformatSUTM:
     input:
         'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.gz'
@@ -2262,6 +2214,62 @@ rule plotSubtract:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
         '--region {params.region} --outFileName {output} '
         '--title {params.title} --dpi {params.dpi} &> {log}'
+
+
+rule mergeValidHiC:
+    input:
+        expand('dat/matrix/{region}/{{sample}}-{region}-{{pm}}.bam',
+            region=regionBin.keys())
+    output:
+        'dat/mapped/{sample}-validHiC-{pm}.bam'
+    log:
+        'logs/mergeValidHiC/{sample}-{pm}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        'samtools merge -@ {threads} {output} {input} '
+        '2> {log} || touch {output}'
+
+
+rule reformatPre:
+    input:
+        'dat/matrix/{region}/{all}-{region}.bam'
+    output:
+        'dat/matrix/{region}/base/raw/{all}-{region}.pre.tsv'
+    group:
+        'bam2hic'
+    log:
+        'logs/reformatPre/{region}/{all}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
+    shell:
+        '(samtools view -@ {threads} {input} '
+        '| awk -f {SCRIPTS}/bam2pre.awk > {output}) 2> {log} '
+
+
+rule juicerPre:
+    input:
+        tsv = 'dat/matrix/{region}/base/raw/{all}-{region}.pre.tsv',
+        chrom_sizes = getChromSizes
+    output:
+        'UCSCcompatible/{region}/{all}-{region}.hic'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        resolutions = ','.join([str(bin) for bin in config['resolution']['bins']])
+    group:
+        'bam2hic'
+    log:
+        'logs/juicerPre/{region}/{all}.log'
+    conda:
+        f'{ENVS}/openjdk.yaml'
+    shell:
+        'java -jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
+        '-c {params.chr} -r {params.resolutions} '
+        '{input.tsv} {output} {input.chrom_sizes} &> {log}'
 
 
 if not ALLELE_SPECIFIC:
