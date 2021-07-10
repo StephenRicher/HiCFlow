@@ -1875,12 +1875,12 @@ rule computeChangeScore:
 rule createCompareConfig:
     input:
         mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
-        insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
         changeScore = rules.computeChangeScore.output.bed,
-        #permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed'
+        #permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
+        #insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
     output:
         'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
     params:
@@ -1900,10 +1900,9 @@ rule createCompareConfig:
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
-        #'--insulations {input.insulations}  '
         '--changeScore_title {params.changeScore_title} '
         '--changeScore {input.changeScore} '
-        #'--permuteScore {input.permuteScore} '
+        #'--permuteScore {input.permuteScore} --insulations {input.insulations} '
         '{params.vLines} {params.tracks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
@@ -2157,17 +2156,23 @@ def setVmax(wc):
     else:
         return 2
 
+
+
 rule createSubtractConfig:
     input:
-        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}.h5'
+        mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}.h5',
+        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
+        vLines = config['plotParams']['vLines'],
     output:
         'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{pm}-{mini}.ini',
     params:
-        depth = getDepth,
-        colourmap = config['compareMatrices']['colourmap'],
-        tracks = getTracks,
         vMin = setVmin,
-        vMax = setVmax
+        vMax = setVmax,
+        depth = getDepth,
+        tracks = getTracks,
+        vLines = getVlinesParams,
+        colourmap = config['compareMatrices']['colourmap']
     group:
         'plotHiCsubtract'
     log:
@@ -2176,10 +2181,10 @@ rule createSubtractConfig:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
-        '--matrix {input} {params.tracks} '
-        '--vMin {params.vMin} --vMax {params.vMax} '
+        '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
         '--depth {params.depth} --colourmap {params.colourmap} '
-        '> {output} 2> {log}'
+        '--vMin {params.vMin} --vMax {params.vMax} '
+        '{params.vLines} {params.tracks} > {output} 2> {log}'
 
 
 def setSubtractTitle(wc):
