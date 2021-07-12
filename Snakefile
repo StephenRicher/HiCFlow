@@ -982,10 +982,10 @@ rule TADinsulation:
         rules.correctMatrix.output
     output:
         expand(
-            'dat/matrix/{{region}}/{{bin}}/tads/{{all}}-{{region}}-{{bin}}-{{pm}}{ext}',
+            'dat/tads/{{region}}/{{bin}}/{{all}}-{{region}}-{{bin}}-{{pm}}{ext}',
             ext = ['_boundaries.bed', '_boundaries.gff', '_domains.bed',
                    '_score.bedgraph', '_zscore_matrix.h5']),
-        score = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-{pm}_tad_score.bm'
+        score = 'dat/tads/{region}/{bin}/{all}-{region}-{bin}-{pm}_tad_score.bm'
     params:
         method = 'fdr',
         bin = lambda wc: wc.bin,
@@ -993,7 +993,7 @@ rule TADinsulation:
         all = lambda wc: wc.all,
         min_depth = lambda wc: int(wc.bin) * 3,
         max_depth = lambda wc: int(wc.bin) * 10,
-        prefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-{pm}'
+        prefix = 'dat/tads/{region}/{bin}/{all}-{region}-{bin}-{pm}'
     group:
         'processHiC'
     threads:
@@ -1013,7 +1013,7 @@ rule TADinsulation:
 rule rescaleTADinsulation:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}-{{pm}}_score.bedgraph',
+            'dat/tads/{region}/{{bin}}/{{all}}-{region}-{{bin}}-{{pm}}_score.bedgraph',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
@@ -1037,7 +1037,7 @@ rule rescaleTADinsulation:
 rule rescaleTADdomains:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}-{{pm}}-ontad_domains.bed',
+            'dat/tads/{region}/{{bin}}/{{all}}-{region}-{{bin}}-{{pm}}-ontad_domains.bed',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
@@ -1060,7 +1060,7 @@ rule rescaleTADdomains:
 rule rescaleTADboundaries:
     input:
         bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/tads/{{all}}-{region}-{{bin}}-{{pm}}-ontad_boundaries.bed',
+            'dat/tads/{region}/{{bin}}/{{all}}-{region}-{{bin}}-{{pm}}-ontad_boundaries.bed',
             region=binRegion[wc.bin]),
         chromSizes = getChromSizes
     output:
@@ -1084,7 +1084,7 @@ rule detectLoops:
     input:
         rules.correctMatrix.output
     output:
-        'dat/matrix/{region}/{bin}/loops/unmod/{all}-{region}-{bin}-{pm}.bedgraph'
+        'dat/loops/{region}/{bin}/unmod/{all}-{region}-{bin}-{pm}.bedgraph'
     params:
         peakWidth = 6,
         windowSize = 10,
@@ -1118,7 +1118,7 @@ rule clampLoops:
     input:
         rules.detectLoops.output
     output:
-        'dat/matrix/{region}/{bin}/loops/{all}-{region}-{bin}-{pm}.bedgraph'
+        'dat/loops/{region}/{bin}/{all}-{region}-{bin}-{pm}.bedgraph'
     params:
         minPos = lambda wc: REGIONS['start'][wc.region],
         maxPos = lambda wc: REGIONS['end'][wc.region]
@@ -1253,12 +1253,12 @@ rule OnTAD:
     input:
         rules.reformatNxN.output
     output:
-        bed = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad-{pm}.bed',
-        tad = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad-{pm}.tad'
+        bed = 'dat/tads/{region}/{bin}/{all}-{region}-{bin}-ontad-{pm}.bed',
+        tad = 'dat/tads/{region}/{bin}/{all}-{region}-{bin}-ontad-{pm}.tad'
     params:
         chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         length = lambda wc: REGIONS['length'][wc.region],
-        outprefix = 'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-ontad-{pm}'
+        outprefix = 'dat/tads/{region}/{bin}/{all}-{region}-{bin}-ontad-{pm}'
     group:
         'processHiC'
     log:
@@ -1280,7 +1280,7 @@ rule reformatDomains:
     input:
         rules.OnTAD.output.bed
     output:
-        'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-{pm}-ontad_domains.bed'
+        'dat/tads/{region}/{bin}/{all}-{region}-{bin}-{pm}-ontad_domains.bed'
     params:
         scale = lambda wc: REGIONS['start'][wc.region] - int(wc.bin),
         trimChr = setTrim
@@ -1299,7 +1299,7 @@ rule domain2boundaries:
     input:
         rules.reformatDomains.output
     output:
-        'dat/matrix/{region}/{bin}/tads/{all}-{region}-{bin}-{pm}-ontad_boundaries.bed'
+        'dat/tads/{region}/{bin}/{all}-{region}-{bin}-{pm}-ontad_boundaries.bed'
     group:
         'processHiC'
     log:
@@ -1383,9 +1383,9 @@ def getDepth(wc):
 rule createConfig:
     input:
         matrix = getMatrix,
-        loops = 'dat/matrix/{region}/{bin}/loops/{group}-{region}-{bin}-{pm}.bedgraph',
-        insulations = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-{pm}_tad_score.bm',
-        tads = 'dat/matrix/{region}/{bin}/tads/{group}-{region}-{bin}-{pm}-ontad_domains.bed',
+        loops = 'dat/loops/{region}/{bin}/{group}-{region}-{bin}-{pm}.bedgraph',
+        insulations = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-{pm}_tad_score.bm',
+        tads = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-{pm}-ontad_domains.bed',
         pca = getPCAinput,
         vLines = config['plotParams']['vLines']
     output:
@@ -1804,7 +1804,7 @@ def setDomains(wc):
         group = wc.group1
     else:
         group = wc.group2
-    return f'dat/matrix/{{region}}/{{bin}}/tads/{group}-{{region}}-{{bin}}-{{pm}}-ontad_domains.bed'
+    return f'dat/tads/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-{{pm}}-ontad_domains.bed'
 
 
 rule differentialTAD:
