@@ -3,7 +3,7 @@
 import os
 import argparse
 import numpy as np
-
+from hicmatrix import HiCMatrix as hm
 
 def main():
 
@@ -104,6 +104,12 @@ def make_config(insulations, matrix, log, tads, loops,
 
     print('[spacer]')
     if notEmpty(matrix):
+        # Set custom vMin, vMax for comparison matrices
+        if compare and (vMin is None) and (vMax is None):
+            threshold = computeThreshold(
+                matrix, increment=0.01, propValues=0.99)
+            vMin = -threshold
+            vMax = threshold
         write_matrix(matrix, cmap=colourmap, depth=depth,
             vMin=vMin, vMax=vMax, log=log)
 
@@ -158,6 +164,19 @@ def notEmpty(path):
         return False
     else:
         return os.path.exists(path) and os.path.getsize(path) > 0
+
+
+def computeThreshold(matrix, increment=0.01, propValues=0.99):
+    """ Iteratively compute an appropriate vMin, vMax threshold to
+        capture a proportion of non-zero elements """
+    hic = hm.hiCMatrix(matrix)
+    totalNonZero = len(hic.matrix.data)
+    threshold = 0
+    while True:
+        withinThreshold = (abs(hic.matrix.data) < threshold).sum()
+        if withinThreshold / totalNonZero > propValues:
+            return threshold
+        threshold += increment
 
 
 def write_matrix(

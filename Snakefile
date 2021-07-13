@@ -2053,6 +2053,7 @@ rule HiCsubtract1:
     output:
         'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-{pm}.h5'
     params:
+        size = config['compareMatrices']['size'],
         mode = 'LOESSdiff'
     group:
         'plotHiCsubtract'
@@ -2061,8 +2062,9 @@ rule HiCsubtract1:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
-        '--outFileName {output} --mode {params.mode} &> {log}'
+        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
+        '--outFileName {output} --mode {params.mode} --size {params.size} '
+        '&> {log}'
 
 
 rule HiCsubtract2:
@@ -2080,7 +2082,7 @@ rule HiCsubtract2:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
         '--outFileName {output} --mode {params.mode} &> {log}'
 
 
@@ -2099,7 +2101,7 @@ rule HiCsubtract3:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
         '--outFileName {output} --mode {params.mode} &> {log}'
 
 
@@ -2118,7 +2120,7 @@ rule HiCsubtract4:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
         '--outFileName {output} --mode {params.mode} &> {log}'
 
 
@@ -2137,25 +2139,8 @@ rule HiCsubtract5:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/simpleCompareHomer.py {input.m1} {input.m2} '
+        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
         '--outFileName {output} --mode {params.mode} &> {log}'
-
-def setVmin(wc):
-    if wc.subtractMode == 'KRratio':
-        return 0
-    elif wc.subtractMode in ['KRdiff', 'LOESSdiff']:
-        return -1
-    else:
-        return -2
-
-def setVmax(wc):
-    if wc.subtractMode == 'KRratio':
-        return 2
-    elif wc.subtractMode in ['KRdiff', 'LOESSdiff']:
-        return 1
-    else:
-        return 2
-
 
 
 rule createSubtractConfig:
@@ -2167,8 +2152,6 @@ rule createSubtractConfig:
     output:
         'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{pm}-{mini}.ini',
     params:
-        vMin = setVmin,
-        vMax = setVmax,
         depth = getDepth,
         tracks = getTracks,
         vLines = getVlinesParams,
@@ -2178,12 +2161,11 @@ rule createSubtractConfig:
     log:
         'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{pm}-{mini}.log'
     conda:
-        f'{ENVS}/python3.yaml'
+        f'{ENVS}/hicexplorer.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
         '--depth {params.depth} --colourmap {params.colourmap} '
-        '--vMin {params.vMin} --vMax {params.vMax} '
         '{params.vLines} {params.tracks} > {output} 2> {log}'
 
 

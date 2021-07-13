@@ -7,14 +7,16 @@ import sys
 import argparse
 import numpy as np
 from typing import List
+from scipy.sparse import csr_matrix
 from hicmatrix import HiCMatrix as hm
+from scipy.ndimage import median_filter
 from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
 
 
-def simpleSubtract(matrices: List, outFileName: str, mode: str):
+def simpleSubtract(matrices: List, outFileName: str, size: int, mode: str):
 
     hic1 = hm.hiCMatrix(matrices[0])
     hic2 = hm.hiCMatrix(matrices[1])
@@ -41,6 +43,8 @@ def simpleSubtract(matrices: List, outFileName: str, mode: str):
             new_matrix.data = np.log2(new_matrix.data)
             new_matrix.eliminate_zeros()
 
+    if size > 1:
+        new_matrix = csr_matrix(median_filter(new_matrix.todense(), size=size))
 
     hic1.setMatrixValues(new_matrix)
     hic1.maskBins(sorted(nan_bins))
@@ -58,6 +62,9 @@ def parseArgs():
     parser.add_argument('matrices', nargs=2, help='HiC matrix in homer format.')
     parser.add_argument('--outFileName', help='HiC matrix in homer format.')
     parser.add_argument('--mode', help='Mode for subtraction comparison.')
+    parser.add_argument(
+        '--size', type=int, default=1,
+        help='Window size of median filter. (default: %(default)s)')
 
     return setDefaults(parser)
 
