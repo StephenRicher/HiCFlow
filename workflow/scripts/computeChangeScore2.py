@@ -64,8 +64,8 @@ def permutationTest(x, nShadow):
     """ Compare shadow abs(score) against normal matrix """
     shadowScores = x.loc[~x['real'], 'abs(score)']
     normalScore = float(x.loc[x['real'], 'abs(score)'])
-    totalAbove = (shadowScores > normalScore).sum()
-    return totalAbove / nShadow
+    totalAbove = (shadowScores >= normalScore).sum()
+    return (totalAbove / nShadow) + (1 / nShadow)
 
 
 def parseArgs():
