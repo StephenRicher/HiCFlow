@@ -97,7 +97,7 @@ def readBed(file: str):
                'name': str, 'score': str, 'strand': str}
     bed = pd.read_csv(
         file, sep='\t', comment='#', header=None,
-        usecols=range(6), dtype=columns, names=columns.keys())
+        dtype=columns, names=columns.keys())
     bed['name'] = bed.apply(addName, axis=1)
     return bed
 
