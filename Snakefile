@@ -58,7 +58,6 @@ default_config = {
          'size'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
-         'simpleCompare' : False        ,
          'nPermute'       : 1000         ,
          'absChangeTitle': 'Difference score'},
     'gatk':
@@ -97,7 +96,6 @@ default_config = {
     'phase':             True,
     'runHiCRep':         True,
     'multiQCconfig':     None,
-    'rescalePKL':        False,
     'groupJobs':         False,
     'microC':            False,
 }
@@ -167,10 +165,10 @@ pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
 
 HiC_mode = ([
-    ([expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{subtractMode}-{pm}-{mini}.{type}',
+    [expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{subtractMode}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini, subtractMode=['KRratio', 'KRlog2', 'KRdiff', 'LOESSdiff', 'LOESSlog2']) for region in regionBin]
-        if config['compareMatrices']['simpleCompare'] else []),
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
+        subtractMode=['KRratio', 'KRlog2', 'KRdiff', 'LOESSdiff', 'LOESSlog2']) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -195,10 +193,6 @@ if config['plotParams']['runPCA']:
     methods = ['PCA', 'TADinsulation', 'TADboundaries', 'TADdomains']
 else:
     methods = ['TADinsulation', 'TADboundaries', 'TADdomains']
-rescalePKL = ([
-    expand('intervals/{all}-{bin}-{method}-{pm}.pkl',
-            all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
-            bin=binRegion.keys(), pm=pm, method=methods)])
 
 
 def getChromSizes(wc):
@@ -236,7 +230,6 @@ rule all:
         (expand('dat/mapped/{sample}-validHiC-{pm}.bam',
             sample=HiC.samples(), pm=pm)
          if (config['HiCParams']['makeBam'] and regionBin) else []),
-        rescalePKL if config['rescalePKL'] else []
 
 
 if ALLELE_SPECIFIC:
@@ -1007,76 +1000,6 @@ rule TADinsulation:
         '--numberOfProcessors {threads} &> {log} || touch {output}'
 
 
-rule rescaleTADinsulation:
-    input:
-        bedgraphs = lambda wc: expand(
-            'dat/tads/{region}/{{bin}}/{{all}}-{region}-{{bin}}-{{pm}}_score.bedgraph',
-            region=binRegion[wc.bin]),
-        chromSizes = getChromSizes
-    output:
-        'intervals/{all}-{bin}-TADinsulation-{pm}.pkl'
-    params:
-        regions = config['regions'],
-        name = lambda wc: f'{wc.all}-{wc.bin}-TADinsulation',
-    group:
-        'rescaleBedgraphs'
-    log:
-        'logs/rescaleTADinsulations/{all}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum --name {params.name} '
-        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
-        '--filetype bedgraph {input.chromSizes} <(cat {input.bedgraphs}) '
-        '&> {log}'
-
-
-rule rescaleTADdomains:
-    input:
-        bedgraphs = lambda wc: expand(
-            'dat/tads/{region}/{{bin}}/{{all}}-{region}-{{bin}}-{{pm}}-ontad_domains.bed',
-            region=binRegion[wc.bin]),
-        chromSizes = getChromSizes
-    output:
-        'intervals/{all}-{bin}-TADdomains-{pm}.pkl'
-    params:
-        name = lambda wc: f'{wc.all}-{wc.bin}-TADdomains',
-        regions = config['regions']
-    group:
-        'rescaleBedgraphs'
-    log:
-        'logs/rescaleTADdomains/{all}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count --name {params.name} '
-        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
-        '{input.chromSizes} <(cat {input.bedgraphs}) &> {log}'
-
-
-rule rescaleTADboundaries:
-    input:
-        bedgraphs = lambda wc: expand(
-            'dat/tads/{region}/{{bin}}/{{all}}-{region}-{{bin}}-{{pm}}-ontad_boundaries.bed',
-            region=binRegion[wc.bin]),
-        chromSizes = getChromSizes
-    output:
-        'intervals/{all}-{bin}-TADboundaries-{pm}.pkl'
-    params:
-        name = lambda wc: f'{wc.all}-{wc.bin}-TADboundaries',
-        regions = config['regions']
-    group:
-        'rescaleBedgraphs'
-    log:
-        'logs/rescaleTADboundaries/{all}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/rescaleBedgraph.py count --name {params.name} '
-        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
-        '{input.chromSizes} <(cat {input.bedgraphs}) &> {log}'
-
-
 rule detectLoops:
     input:
         rules.correctMatrix.output
@@ -1167,30 +1090,6 @@ rule fixBedgraph:
     shell:
         'python {SCRIPTS}/fixBedgraph.py {input} --pos {params.pos} '
         '> {output} 2> {log}'
-
-
-rule rescalePCA:
-    input:
-        bedgraphs = lambda wc: expand(
-            'dat/matrix/{region}/{{bin}}/PCA/{{all}}-{region}-{{bin}}-fix-{{pm}}.bedgraph',
-            region=binRegion[wc.bin]),
-        chromSizes = getChromSizes
-    output:
-        'intervals/{all}-{bin}-PCA-{pm}.pkl'
-    params:
-        regions = config['regions'],
-        name = lambda wc: f'{wc.all}-{wc.bin}-PCA',
-    group:
-        'rescaleBedgraphs'
-    log:
-        'logs/rescalePCA/{all}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/rescaleBedgraph.py sum --name {params.name} '
-        '--out {output} --binSize {wildcards.bin} --regions {params.regions} '
-        '--filetype bedgraph {input.chromSizes} <(cat {input.bedgraphs}) '
-        '&> {log}'
 
 
 rule reformatHomer:
