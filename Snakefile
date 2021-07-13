@@ -167,9 +167,6 @@ pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
 
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/HiCcompare/logFC/{compare}-{region}-{coords}-{bin}-logFC-{pm}-{mini}.{type}',
-        region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
     ([expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{subtractMode}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini, subtractMode=['KRratio', 'KRlog2', 'KRdiff', 'LOESSdiff', 'LOESSlog2']) for region in regionBin]
@@ -1666,42 +1663,6 @@ rule HiCcompare:
         '{wildcards.bin} {params.suffix} {input} &> {log}'
 
 
-rule applyMedianFilter:
-    input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer'
-    output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-logFC-{pm}.homer'
-    params:
-        size = config['compareMatrices']['size']
-    group:
-        'HiCcompare'
-    log:
-        'logs/applyMedianFilter/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/smoothHiC.py {input} --size {params.size} '
-        '> {output} 2> {log}'
-
-
-rule directionPreference:
-    input:
-        rules.applyMedianFilter.output
-    output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-direction-{pm}.bed'
-    params:
-        threshold = config['compareMatrices']['fdr']
-    group:
-        'HiCcompare'
-    log:
-        'logs/directionPreference/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/directionPreferenceHiC.py '
-        '--threshold {params.threshold} {input} > {output} 2> {log}'
-
-
 rule homerToH5:
     input:
         'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.homer'
@@ -1716,53 +1677,6 @@ rule homerToH5:
     shell:
         '(hicConvertFormat --matrices {input} --outFileName {output} '
         '--inputFormat homer --outputFormat h5 || touch {output})  &> {log}'
-
-# Compute TAD insulation of HiCcompare adjIF
-rule TADinsulation2:
-    input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
-    output:
-        expand(
-            'dat/HiCcompare/{{region}}/{{bin}}/tads/{{group1}}-vs-{{group2}}-{{set}}-{{pm}}_{ext}',
-            ext = ['boundaries.bed', 'boundaries.gff', 'domains.bed',
-                   'score.bedgraph', 'zscore_matrix.h5']),
-        score = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{set}-{pm}_tad_score.bm'
-    params:
-        method = 'fdr',
-        min_depth = lambda wc: int(wc.bin) * 3,
-        max_depth = lambda wc: int(wc.bin) * 10,
-        prefix = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{set}-{pm}'
-    group:
-        'HiCcompare'
-    threads:
-        THREADS
-    log:
-        'logs/TADinsulation2/HiCcompare-{region}-{bin}-{group1}-vs-{group2}-{set}-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicFindTADs --matrix {input} '
-        '--minDepth {params.min_depth} --maxDepth {params.max_depth} '
-        '--step {wildcards.bin} --outPrefix {params.prefix} '
-        '--correctForMultipleTesting {params.method} '
-        '--numberOfProcessors {threads} &> {log} || touch {output}'
-
-
-rule insulationDifference:
-    input:
-        adjIF1 = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-adjIF1-{pm}_tad_score.bm',
-        adjIF2 = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-adjIF2-{pm}_tad_score.bm'
-    output:
-        'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm'
-    group:
-        'HiCcompare'
-    log:
-        'logs/insulationDifference/HiCcompare-{region}-{bin}-{group1}-vs-{group2}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/subtractInsulation.py {input} '
-        '> {output} 2> {log} || touch {output}'
 
 
 if config['compareMatrices']['tads'] is not None:
@@ -1870,90 +1784,6 @@ rule computeChangeScore:
         'python {SCRIPTS}/computeChangeScore.py  --outData {output.all} '
         '--fdr {params.fdr}  --colourmap {params.colourmap} {input} '
         '> {output.bed} 2> {log}'
-
-
-rule createCompareConfig:
-    input:
-        mat = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5',
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
-        vLines = config['plotParams']['vLines'],
-        changeScore = rules.computeChangeScore.output.bed,
-        #permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
-        #insulations = 'dat/HiCcompare/{region}/{bin}/tads/{group1}-vs-{group2}-{pm}_tad_score.bm',
-    output:
-        'plots/{region}/{bin}/HiCcompare/configs/{group1}-vs-{group2}-{coord}-HiCcompare-{set}-{pm}-{mini}.ini',
-    params:
-        depth = getDepth,
-        colourmap = config['compareMatrices']['colourmap'],
-        tracks = getTracks,
-        changeScore_title = f'"{config["compareMatrices"]["absChangeTitle"]}"',
-        vMin = config['compareMatrices']['vMin'],
-        vMax = config['compareMatrices']['vMax'],
-        vLines = getVlinesParams
-    group:
-        'plotHiCcompare'
-    log:
-        'logs/createCompareConfig/HiCcompare/{region}/{bin}/{group1}-{group2}-{coord}-{set}-{pm}-{mini}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/generate_config.py --compare '
-        '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
-        '--changeScore_title {params.changeScore_title} '
-        '--changeScore {input.changeScore} '
-        #'--permuteScore {input.permuteScore} --insulations {input.insulations} '
-        '{params.vLines} {params.tracks} '
-        '--depth {params.depth} --colourmap {params.colourmap} '
-        '--vMin {params.vMin} --vMax {params.vMax} > {output} 2> {log}'
-
-
-def round_down(wc):
-    start = REGIONS['start'][wc.region]
-    bin = int(wc.bin)
-    return start - (start%bin)
-
-
-def round_up(wc):
-    end = REGIONS['end'][wc.region]
-    bin = int(wc.bin)
-    return end - (end%bin) + bin
-
-
-def setCompareTitle(wc):
-    if config['build'] is not None:
-        build = config['build'].replace('"', '') # Double quotes disallowed
-        build = f' ({build})'
-    else:
-        build = ''
-    title = (f'"{wc.group1} vs {wc.group2} - {wc.region}{build} at '
-             f'{wc.bin} bin size - adj. logFC - {wc.pm}"')
-    return title
-
-
-rule plotCompare:
-    input:
-        rules.createCompareConfig.output
-    output:
-        'plots/{region}/{bin}/HiCcompare/{set}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{set}-{pm}-{mini}.{type}'
-    params:
-        title = setCompareTitle,
-        region = setRegion,
-        dpi = 600
-    group:
-        'plotHiCcompare'
-    conda:
-        f'{ENVS}/pygenometracks.yaml'
-    log:
-        'logs/plotAnalysis/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{coord}-{set}-{pm}-{mini}-{type}.log'
-    threads:
-        THREADS
-    shell:
-        'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
-        '--region {params.region} '
-        '--outFileName {output} '
-        '--title {params.title} '
-        '--dpi {params.dpi} &> {log}'
 
 
 rule runCompareViewpoint:
@@ -2149,13 +1979,16 @@ rule createSubtractConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
+        changeScore = rules.computeChangeScore.output.bed,
+        #permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
     output:
         'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{pm}-{mini}.ini',
     params:
         depth = getDepth,
         tracks = getTracks,
         vLines = getVlinesParams,
-        colourmap = config['compareMatrices']['colourmap']
+        colourmap = config['compareMatrices']['colourmap'],
+        changeScore_title = f'"{config["compareMatrices"]["absChangeTitle"]}"'
     group:
         'plotHiCsubtract'
     log:
@@ -2165,6 +1998,9 @@ rule createSubtractConfig:
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
+        #'--permuteScore {input.permuteScore} '
+        '--changeScore_title {params.changeScore_title} '
+        '--changeScore {input.changeScore} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.vLines} {params.tracks} > {output} 2> {log}'
 
