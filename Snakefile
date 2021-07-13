@@ -53,8 +53,8 @@ default_config = {
     'compareMatrices':
         {'colourmap'    : 'bwr'         ,
          'fdr'           : 0.05         ,
-         'vMin'          : -4           ,
-         'vMax'          : 4            ,
+         'vMin'          : -0.5         ,
+         'vMax'          : 0.5          ,
          'size'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
@@ -1886,6 +1886,8 @@ rule createSubtractConfig:
         depth = getDepth,
         tracks = getTracks,
         vLines = getVlinesParams,
+        vMin = config['compareMatrices']['vMin'],
+        vMax = config['compareMatrices']['vMax'],
         colourmap = config['compareMatrices']['colourmap'],
         changeScore_title = f'"{config["compareMatrices"]["absChangeTitle"]}"'
     group:
@@ -1898,6 +1900,7 @@ rule createSubtractConfig:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
         #'--permuteScore {input.permuteScore} '
+        '--vMin {params.vMin} --vMax {params.vMax} '
         '--changeScore_title {params.changeScore_title} '
         '--changeScore {input.changeScore} '
         '--depth {params.depth} --colourmap {params.colourmap} '
