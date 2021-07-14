@@ -55,7 +55,6 @@ default_config = {
          'fdr'           : 0.05         ,
          'vMin'          : -0.5         ,
          'vMax'          : 0.5          ,
-         'size'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
          'nPermute'      : 1000         ,
@@ -130,6 +129,7 @@ wildcard_constraints:
     pm = r'SNPsplit' if ALLELE_SPECIFIC else r'full',
     set = r'logFC|adjIF1|adjIF2',
     adjIF = r'adjIF1|adjIF2',
+    filter = r'noFilter|medianFilter',
     compare = r'HiCcompare',
     type = rf'{config["plotParams"]["filetype"]}',
     group = rf'{"|".join(HiC.groups())}',
@@ -165,8 +165,8 @@ pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
 
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{subtractMode}-{pm}-{mini}.{type}',
-        region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
+    [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}',
+        region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
         subtractMode=['LOESSdiff']) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
@@ -1805,9 +1805,9 @@ rule HiCsubtract1:
         m1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-obsExp-{pm}.h5',
         m2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-obsExp-{pm}.h5'
     output:
-        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-{pm}.h5'
+        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-noFilter-{pm}.h5',
+        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-medianFilter-{pm}.h5',
     params:
-        size = config['compareMatrices']['size'],
         mode = 'LOESSdiff'
     group:
         'plotHiCsubtract'
@@ -1817,8 +1817,8 @@ rule HiCsubtract1:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outFileName {output} --mode {params.mode} --size {params.size} '
-        '&> {log}'
+        '--outMatrix {output.out} --outMatrixFilter {output.outFilt} '
+        '--mode {params.mode} &> {log}'
 
 
 rule HiCsubtract2:
@@ -1908,7 +1908,7 @@ def getSNPcoverage(wc):
 
 rule createSubtractConfig:
     input:
-        mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}.h5',
+        mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
@@ -1916,7 +1916,7 @@ rule createSubtractConfig:
         permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
         SNPcoverage = getSNPcoverage
     output:
-        'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{pm}-{mini}.ini',
+        'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.ini',
     params:
         depth = getDepth,
         tracks = getTracks,
@@ -1928,7 +1928,7 @@ rule createSubtractConfig:
     group:
         'plotHiCsubtract'
     log:
-        'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{pm}-{mini}.log'
+        'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1957,7 +1957,7 @@ rule plotSubtract:
     input:
         rules.createSubtractConfig.output
     output:
-        'plots/{region}/{bin}/HiCsubtract/{group1}-vs-{group2}-{region}-{coord}-{bin}-{subtractMode}-{pm}-{mini}.{type}'
+        'plots/{region}/{bin}/HiCsubtract/{filter}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}'
     params:
         title = setSubtractTitle,
         region = setRegion,
@@ -1967,7 +1967,7 @@ rule plotSubtract:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotSubtract/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{pm}-{mini}-{type}.log'
+        'logs/plotSubtract/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{filter}-{pm}-{mini}-{type}.log'
     threads:
         THREADS
     shell:

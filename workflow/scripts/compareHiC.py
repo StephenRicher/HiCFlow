@@ -16,7 +16,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def simpleSubtract(matrices: List, outFileName: str, size: int, mode: str):
+def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: str):
 
     hic1 = hm.hiCMatrix(matrices[0])
     hic2 = hm.hiCMatrix(matrices[1])
@@ -43,13 +43,14 @@ def simpleSubtract(matrices: List, outFileName: str, size: int, mode: str):
             new_matrix.data = np.log2(new_matrix.data)
             new_matrix.eliminate_zeros()
 
-    if size > 1:
-        new_matrix = csr_matrix(median_filter(new_matrix.todense(), size=size))
-
-    hic1.setMatrixValues(new_matrix)
-    hic1.maskBins(sorted(nan_bins))
-    hic1.save(outFileName)
-
+    for i, out in enumerate([outMatrix, outMatrixFilter]):
+        if i == 1:
+            hic1.setMatrixValues(
+                csr_matrix(median_filter(new_matrix.todense(), size=3)))
+        else:
+            hic1.setMatrixValues(new_matrix)
+        hic1.maskBins(sorted(nan_bins))
+        hic1.save(out)
 
 
 def parseArgs():
@@ -60,11 +61,14 @@ def parseArgs():
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=simpleSubtract)
     parser.add_argument('matrices', nargs=2, help='HiC matrix in homer format.')
-    parser.add_argument('--outFileName', help='HiC matrix in homer format.')
     parser.add_argument('--mode', help='Mode for subtraction comparison.')
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument(
+        '--outMatrix', required=True,
+        help='HiC matrix in h5 format.')
     parser.add_argument(
-        '--size', type=int, default=1,
-        help='Window size of median filter. (default: %(default)s)')
+        '--outMatrixFilter',required=True,
+        help='Median filtered HiC matrix in h5 format.')
 
     return setDefaults(parser)
 
