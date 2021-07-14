@@ -10,6 +10,7 @@ from typing import List
 from scipy.sparse import csr_matrix
 from hicmatrix import HiCMatrix as hm
 from scipy.ndimage import median_filter
+from sklearn.preprocessing import minmax_scale
 from utilities import setDefaults, createMainParent
 
 
@@ -29,7 +30,7 @@ def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: s
     if mode in ['LOESSdiff', 'KRdiff']:
         nan_bins = set(hic1.nan_bins)
         nan_bins = nan_bins.union(hic2.nan_bins)
-        new_matrix = hic2.matrix - hic1.matrix
+        newMatrix = hic2.matrix - hic1.matrix
     elif mode in ['KRlog2', 'KRratio', 'LOESSlog2']:
         # normalize by total matrix sum
         hic1.matrix.data = hic1.matrix.data.astype(float) / hic1.matrix.data.sum()
@@ -37,18 +38,24 @@ def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: s
         nan_bins = set(hic1.nan_bins)
         nan_bins = nan_bins.union(hic2.nan_bins)
         hic1.matrix.data = float(1) / hic1.matrix.data
-        new_matrix = hic2.matrix.multiply(hic1.matrix)
-        new_matrix.eliminate_zeros()
+        newMatrix = hic2.matrix.multiply(hic1.matrix)
+        newMatrix.eliminate_zeros()
         if mode in ['KRlog2', 'LOESSlog2']:
-            new_matrix.data = np.log2(new_matrix.data)
-            new_matrix.eliminate_zeros()
+            newMatrix.data = np.log2(newMatrix.data)
+            newMatrix.eliminate_zeros()
 
     for i, out in enumerate([outMatrix, outMatrixFilter]):
         if i == 1:
-            hic1.setMatrixValues(
-                csr_matrix(median_filter(new_matrix.todense(), size=3)))
+            # Rescale to match unfiltered matrix
+            filtered = median_filter(newMatrix.todense(), size=3)
+            minV = newMatrix.min()
+            maxV = newMatrix.max()
+            shape = newMatrix.shape
+            filtered = minmax_scale(
+                filtered.flatten(), feature_range=(minV, maxV)).reshape(shape)
+            hic1.setMatrixValues(csr_matrix(filtered))
         else:
-            hic1.setMatrixValues(new_matrix)
+            hic1.setMatrixValues(newMatrix)
         hic1.maskBins(sorted(nan_bins))
         hic1.save(out)
 

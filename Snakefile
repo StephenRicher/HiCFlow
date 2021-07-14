@@ -53,8 +53,8 @@ default_config = {
     'compareMatrices':
         {'colourmap'    : 'bwr'         ,
          'fdr'           : 0.05         ,
-         'vMin'          : -0.5         ,
-         'vMax'          : 0.5          ,
+         'vMin'          : -1           ,
+         'vMax'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
          'nPermute'      : 1000         ,

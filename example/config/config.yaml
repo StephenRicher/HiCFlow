@@ -64,6 +64,7 @@ HiCParams:
     skipDuplicationCheck: False
     nofill:               False
     threads:              4
+    makeBam:              False
     multiplicativeValue:  10000 # HiC counts are normalised to this value
 
 plotParams:
@@ -89,17 +90,10 @@ bed :
     Genes : ../genome/BDGP6.28.99.genes.bed
 
 compareMatrices:
-    minZ:  2    # Z-score threshold for defining a HiCcompare 'peak'.
-    vMin: -2 # Mimimum logFC value for colour scale.
-    vMax: 2  # Maximum logFC value for colour scale.
-    size: 3     # Size of median filter to denoise comparison matrix.
+    vMin: -0.75 # Mimimum logFC value for colour scale.
+    vMax: 0.75  # Maximum logFC value for colour scale.
     allPairs: False # If True run '1 vs 2' AND '2 vs 1'
-    simpleSubtract: True
-
-permuteTest:
-    nShadow: 10000
-    shadowPerJob: 1000
-    nSplits: 10
+    nPermute: 1000 # Experimental option
 
 # GATK variant calling best practises for human data
 gatk:
