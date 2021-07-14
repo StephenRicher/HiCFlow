@@ -153,3 +153,18 @@ def getGroup(path):
 def getBin(pos: int, binSize: int, start: int):
     matrixBin = (pos - start) // binSize
     return start + (matrixBin * binSize)
+
+
+def readSUTM(sutm, lower=False, bothDiagonal=False):
+    sutm = pd.read_csv(sutm, names=['start1', 'start2', 'adjIF'], sep=' ')
+    sutm['orientation'] = 1
+    if lower:
+        # Remove the diagonal for the opposite orientation
+        if not bothDiagonal:
+            sltm = sutm.loc[sutm['start1'] != sutm['start2']]
+        else:
+            sltm = sutm.copy()
+        sltm = sltm.rename({'start1': 'start2', 'start2': 'start1'}, axis=1)
+        sltm['orientation'] = -1
+        sutm  = pd.concat([sutm, sltm])
+    return sutm.set_index(['start1', 'start2', 'orientation'])

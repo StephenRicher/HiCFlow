@@ -58,7 +58,7 @@ default_config = {
          'size'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
-         'nPermute'       : 1000         ,
+         'nPermute'      : 1000         ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -168,7 +168,7 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCsubtract/{compare}-{region}-{coords}-{bin}-{subtractMode}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
-        subtractMode=['KRratio', 'KRlog2', 'KRdiff', 'LOESSdiff', 'LOESSlog2']) for region in regionBin],
+        subtractMode=['LOESSdiff']) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -281,6 +281,22 @@ if ALLELE_SPECIFIC:
             f'{ENVS}/python3.yaml'
         shell:
             'python {SCRIPTS}/reformatSNPsplit.py {input} > {output} 2> {log}'
+
+
+    rule SNPcoverage:
+        input:
+            rules.filterHomozygous.output
+        output:
+            'dat/genome/SNPcoverage/{cellType}-{bin}-phasedHet.bedgraph'
+        group:
+            'prepareGenome'
+        log:
+            'logs/SNPcoverage/{cellType}-{bin}.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            'python {SCRIPTS}/SNPcoverage.py {input} --binSize {wildcards.bin} '
+            '> {output} 2> {log}'
 
 
 rule bgzipGenome:
@@ -1234,6 +1250,14 @@ def getTracks(wc):
     if isinstance(config['bed'], dict):
         for title, track in config['bed'].items():
             command += f'--bed {title},{track} '
+    if ALLELE_SPECIFIC:
+        try:
+            cellType = HiC.sample2Cell()[wc.group1]
+            bin = wc.bin
+            track = f'dat/genome/SNPcoverage/{cellType}-{bin}-phasedHet.bedgraph'
+            command += f'--bigWig SNPcoverage,{track} '
+        except AttributeError:
+            pass
     return command
 
 
@@ -1299,7 +1323,7 @@ rule createConfig:
     group:
         'processHiC'
     conda:
-        f'{ENVS}/python3.yaml'
+        f'{ENVS}/hicexplorer.yaml'
     log:
         'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{vis}-{pm}-{mini}.log'
     shell:
@@ -1532,6 +1556,7 @@ rule reformatSUTM:
         'python {SCRIPTS}/homer2sutm.py {input} --start {params.start} '
          '--binSize {wildcards.bin} > {output} 2> {log}'
 
+
 rule HiCcompare:
     input:
         'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-sutm.txt',
@@ -1728,7 +1753,7 @@ rule plotCompareViewpoint:
         '--dpi {params.dpi} {params.build} &> {log}'
 
 ###
-rule computeAdjM:
+rule permuteTest:
     input:
         m1 = rules.HiCcompare.output.adjIF1sutm,
         m2 = rules.HiCcompare.output.adjIF2sutm
@@ -1743,13 +1768,13 @@ rule computeAdjM:
     group:
         'shuffleCompare'
     log:
-        'logs/computeAdjM/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
+        'logs/permuteTest/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/permutationTest.yaml'
     threads:
         THREADS
     shell:
-        'python {SCRIPTS}/computeAdjM.py {input.m1} {input.m2} '
+        'python {SCRIPTS}/permuteTest.py {input.m1} {input.m2} '
         '--binSize {wildcards.bin} --chrom {params.chr} '
         '--nPermute {params.nPermute} --threads {threads} '
         '--fdr {params.fdr} '
@@ -1872,6 +1897,15 @@ rule HiCsubtract5:
         '--outFileName {output} --mode {params.mode} &> {log}'
 
 
+def getSNPcoverage(wc):
+    if ALLELE_SPECIFIC:
+        cellType = HiC.sample2Cell()[wc.group1]
+        bin = wc.bin
+        return f'dat/genome/SNPcoverage/{cellType}-{bin}-phasedHet.bedgraph'
+    else:
+        return []
+
+
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}.h5',
@@ -1879,7 +1913,8 @@ rule createSubtractConfig:
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
         changeScore = rules.computeChangeScore.output.bed,
-        #permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
+        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
+        SNPcoverage = getSNPcoverage
     output:
         'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{pm}-{mini}.ini',
     params:
@@ -1899,7 +1934,7 @@ rule createSubtractConfig:
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
-        #'--permuteScore {input.permuteScore} '
+        '--permuteScore {input.permuteScore} '
         '--vMin {params.vMin} --vMax {params.vMax} '
         '--changeScore_title {params.changeScore_title} '
         '--changeScore {input.changeScore} '

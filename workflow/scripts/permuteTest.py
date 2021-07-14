@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from typing import List
 from statsmodels.stats.multitest import fdrcorrection
-from utilities import setDefaults, createMainParent
+from utilities import setDefaults, createMainParent, readSUTM
 try:
     from pandarallel import pandarallel
 except ModuleNotFoundError:
@@ -28,11 +28,11 @@ def computeAdjM(
 
     np.random.seed(seed)
 
-    adjIF1 = readSUTM(adjIF1, lower=True)
-    adjIF2 = readSUTM(adjIF2, lower=True)
+    adjIF1 = readSUTM(adjIF1, lower=True, bothDiagonal=True)
+    adjIF2 = readSUTM(adjIF2, lower=True, bothDiagonal=True)
 
     adjM = (pd.merge(
-        adjIF1, adjIF2, how='inner', left_index=True, right_index=True)
+        adjIF1, adjIF2, how='outer', left_index=True, right_index=True)
         .sort_values(['start1', 'start2']))
     # Removal uninformative bins where IF is equal
     adjM = adjM.loc[adjM['adjIF_x'] != adjM['adjIF_y']]
@@ -41,7 +41,7 @@ def computeAdjM(
     adjM['diff'] = (adjM['adjIF_x'] - adjM['adjIF_y']).apply(getDirection)
 
     if (threads > 1) and ('pandarallel' in sys.modules):
-        pandarallel.initialize(nb_workers=5, verbose=0)
+        pandarallel.initialize(nb_workers=threads, verbose=0)
         permuted = adjM.groupby(['start1', 'orientation']).parallel_apply(permuteTest, nPermute)
     else:
         permuted = adjM.groupby(['start1', 'orientation']).apply(permuteTest, nPermute)
@@ -108,16 +108,6 @@ def patternSum(x, axis=1):
 def scale01(x, minX, maxX):
     """ Scale x between 0 and 1 """
     return (x - minX) / (maxX - minX)
-
-
-def readSUTM(sutm, lower=False):
-    sutm = pd.read_csv(sutm, names=['start1', 'start2', 'adjIF'], sep=' ')
-    sutm['orientation'] = 1
-    if lower:
-        sltm = sutm.rename({'start1': 'start2', 'start2': 'start1'}, axis=1)
-        sltm['orientation'] = -1
-        sutm  = pd.concat([sutm, sltm])
-    return sutm.set_index(['start1', 'start2', 'orientation'])
 
 
 def getDirection(x):
