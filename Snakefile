@@ -1908,6 +1908,22 @@ def getSNPcoverage(wc):
     return []
 
 
+def getVmin(wc):
+    vMin = config['compareMatrices']['vMin']
+    # Reduce vMin slightly to account for median filter
+    if wc.filter == 'medianFilter':
+        vMin *= 0.75
+    return vMin
+
+
+def getVmax(wc):
+    vMax = config['compareMatrices']['vMax']
+    # Reduce vMin slightly to account for median filter
+    if wc.filter == 'medianFilter':
+        vMax *= 0.75
+    return vMax
+
+
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
@@ -1923,8 +1939,8 @@ rule createSubtractConfig:
         depth = getDepth,
         tracks = getTracks,
         vLines = getVlinesParams,
-        vMin = config['compareMatrices']['vMin'],
-        vMax = config['compareMatrices']['vMax'],
+        vMin = getVmin,
+        vMax = getVmax,
         colourmap = config['compareMatrices']['colourmap'],
         changeScore_title = f'"{config["compareMatrices"]["absChangeTitle"]}"'
     group:
