@@ -46,13 +46,7 @@ def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: s
 
     for i, out in enumerate([outMatrix, outMatrixFilter]):
         if i == 1:
-            # Rescale to match unfiltered matrix
             filtered = median_filter(newMatrix.todense(), size=3)
-            minV = newMatrix.min()
-            maxV = newMatrix.max()
-            shape = newMatrix.shape
-            filtered = minmax_scale(
-                filtered.flatten(), feature_range=(minV, maxV)).reshape(shape)
             hic1.setMatrixValues(csr_matrix(filtered))
         else:
             hic1.setMatrixValues(newMatrix)
