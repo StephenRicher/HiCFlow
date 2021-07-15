@@ -1252,10 +1252,12 @@ def getTracks(wc):
             command += f'--bed {title},{track} '
     if ALLELE_SPECIFIC:
         try:
-            cellType = HiC.sample2Cell()[wc.group1]
+            cellType1 = HiC.sample2Cell()[wc.group1]
+            cellType2 = HiC.sample2Cell()[wc.group2]
             bin = wc.bin
-            track = f'dat/genome/SNPcoverage/{cellType}-{bin}-phasedHet.bedgraph'
-            command += f'--bigWig SNPcoverage,{track} '
+            if cellType1 == cellType2:
+                track = f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bedgraph'
+                command += f'--bigWig SNPcoverage,{track} '
         except AttributeError:
             pass
     return command
@@ -1898,12 +1900,12 @@ rule HiCsubtract5:
 
 
 def getSNPcoverage(wc):
-    if ALLELE_SPECIFIC:
-        cellType = HiC.sample2Cell()[wc.group1]
-        bin = wc.bin
-        return f'dat/genome/SNPcoverage/{cellType}-{bin}-phasedHet.bedgraph'
-    else:
-        return []
+    cellType1 = HiC.sample2Cell()[wc.group1]
+    cellType2 = HiC.sample2Cell()[wc.group2]
+    bin = wc.bin
+    if ALLELE_SPECIFIC and (cellType1 == cellType2):
+        return f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bedgraph'
+    return []
 
 
 rule createSubtractConfig:
