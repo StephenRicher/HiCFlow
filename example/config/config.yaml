@@ -64,7 +64,8 @@ HiCParams:
     skipDuplicationCheck: False
     nofill:               False
     threads:              4
-    makeBam:              False
+    makeBam:              True
+    compartmentScore:     False
     multiplicativeValue:  10000 # HiC counts are normalised to this value
 
 plotParams:

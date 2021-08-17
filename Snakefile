@@ -48,6 +48,7 @@ default_config = {
          'skipDuplicationCheck': False,
          'nofill':               False,
          'makeBam':              True ,
+         'compartmentScore':     True ,
          'threads':              4    ,
          'multiplicativeValue':  10000,},
     'compareMatrices':
@@ -215,10 +216,22 @@ def getChromSizes(wc):
                         'valid bedgraph rescaling of HiCcompare output.\n')
     return f'dat/genome/chrom_sizes/{cellType}.chrom.sizes',
 
+if config['HiCParams']['compartmentScore']:
+    if not config['HiCParams']['makeBam']:
+        config['HiCParams']['makeBam'] = True
+        print('"HiCParams - makeBam" must be True for compartment '
+              'score, switching on.', file=sys.stderr)
+    include: 'CscoreTool.snake'
+    compartmentOutput = expand(
+        'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz',
+       group=list(HiC.groups()), region=regionBin.keys(), pm=pm)
+else:
+    compartmentOutput = []
 
 rule all:
     input:
         HiC_mode,
+        compartmentOutput,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
          if PHASE_MODE is not None else []),
         ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
@@ -760,7 +773,7 @@ rule mergeSNPsplit:
         'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_G{allele}.bam',
         'dat/snpsplit/{preGroup}-{rep}.hic.G{allele}_UA.bam'
     output:
-        temp('dat/snpsplit/merged/{preGroup}_a{allele}-{rep}.hic.bam')
+        'dat/snpsplit/merged/{preGroup}_a{allele}-{rep}.hic.bam'
     group:
         'SNPsplit'
     log:
@@ -884,7 +897,7 @@ rule buildBaseMatrix:
         '{params.skipDuplicationCheck} --binSize {params.bin} '
         '--outFileName {output.hic} '
         '--QCfolder {output.qc} --threads {threads} '
-        f'{"--outBam {{output.bam}} " if config["HiCParams"]["makeBam"] else ""}'
+        f'{"--outBam {output.bam} " if config["HiCParams"]["makeBam"] else ""}'
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
 
 
@@ -1767,8 +1780,6 @@ rule permuteTest:
         seed = 42,
         chr = lambda wc: REGIONS['chr'][wc.region],
         nPermute = config['compareMatrices']['nPermute']
-    group:
-        'shuffleCompare'
     log:
         'logs/permuteTest/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
     conda:

@@ -1,0 +1,57 @@
+rule bam2sam:
+    input:
+        'dat/matrix/{region}/{sample}-{region}-{pm}.bam'
+    output:
+        pipe('dat/matrix/{region}/{sample}-{region}-{pm}.sam')
+    log:
+        'logs/bam2sam/{sample}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        max(1, THREADS - 2)
+    shell:
+        'samtools view -@ {threads} -f 64 {input} > {output} 2> {log}'
+
+
+rule bam2HiCsummary:
+    input:
+        rules.bam2sam.output
+    output:
+        'dat/matrix/{region}/{sample}-{region}-{pm}.HiCsummary.gz'
+    log:
+        'logs/bam2HiCSummary/{sample}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        2
+    shell:
+        'awk -f {SCRIPTS}/bam2hicSummary.awk {input} | gzip > {output} 2> {log}'
+
+
+rule mergeHiCsummary:
+    input:
+        lambda wc: expand(
+            'dat/matrix/{{region}}/{{group}}-{rep}-{{region}}-{{pm}}.HiCsummary.gz',
+            rep=HiC.groups()[wc.group]),
+    output:
+        'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz'
+    log:
+        'logs/mergeHiCsummary/{group}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'cat {input} > {output} 2> {log}'
+
+
+rule generateEqualLengthBed:
+    input:
+        config['regions']
+    output:
+        'dat/genome/equalLengthRegions-{bin}.bed'
+    log:
+        'logs/generateEqualLengthBed.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/generateEqualLengthBed.py {input} {wildcards.bin} '
+        '> {output} 2> {log}'
