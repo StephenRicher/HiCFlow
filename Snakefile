@@ -1285,16 +1285,16 @@ def getMatrix(wc):
     else:
         return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
 
-def getPCAinput(wc):
-    if config['plotParams']['runPCA']:
-        return 'dat/matrix/{region}/{bin}/PCA/{group}-{region}-{bin}-fix-{pm}.bedgraph'
+def getCscoreInput(wc):
+    if config['HiCParams']['compartmentScore']:
+        return f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bedgraph'
     else:
         return []
 
-def getPCAparams(wc):
-    if config['plotParams']['runPCA']:
-        pca = f'dat/matrix/{wc.region}/{wc.bin}/PCA/{wc.group}-{wc.region}-{wc.bin}-fix-{wc.pm}.bedgraph'
-        return f'--bigWig PCA1,{pca}'
+def getCscoreParams(wc):
+    if config['HiCParams']['compartmentScore']:
+        cscore = f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bedgraph'
+        return f'--bigWig CScore,{cscore}'
     else:
         return ''
 
@@ -1323,7 +1323,7 @@ rule createConfig:
         loops = 'dat/loops/{region}/{bin}/{group}-{region}-{bin}-{pm}.bedgraph',
         insulations = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-{pm}_tad_score.bm',
         tads = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-{pm}-ontad_domains.bed',
-        pca = getPCAinput,
+        cscore = getCscoreInput,
         vLines = config['plotParams']['vLines']
     output:
         'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coord}-{bin}-{vis}-{pm}-{mini}.ini'
@@ -1336,7 +1336,7 @@ rule createConfig:
         log = '' if config['plotParams']['distanceNorm'] else '--log',
         plain = lambda wc: '--plain' if wc.vis == 'plain' else '',
         vLines = getVlinesParams,
-        pca = getPCAparams
+        cscore = getCscoreParams
     group:
         'processHiC'
     conda:
@@ -1348,7 +1348,7 @@ rule createConfig:
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
         '--depth {params.depth} {params.vMin} {params.vMax} {params.plain} '
         '--insulations {input.insulations} --loops {input.loops} '
-        '{params.pca} {params.vLines} --tads {input.tads} > {output} 2> {log}'
+        '{params.cscore} {params.vLines} --tads {input.tads} > {output} 2> {log}'
 
 
 def setRegion(wc):
