@@ -88,15 +88,15 @@ rule CscoreTool:
             ext=['bias.txt', '_hh.txt', '_cscore.txt', '_cscore.bedgraph'])
     params:
         minDis = 1000000,
-        chromPrefix = getChrPrefix,
+        chrPrefix = getChrPrefix,
         chr = lambda wc: REGIONS['chr'][wc.region],
         prefix = lambda wc: f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore'
     group:
         'CscoreTool'
     threads:
-        2
+        THREADS
     log:
         'logs/CscoreTool/{group}-{region}-{bin}-{pm}.log'
     shell:
         '{SCRIPTS}/CscoreTool1.1 {input.windows} <(zcat {input.summary}) {params.prefix} '
-        '{threads} {params.minDis} {params.chromPrefix}{params.chr} &> {log}'
+        '{threads} {params.minDis} {params.chrPrefix}{params.chr} &> {log}'
