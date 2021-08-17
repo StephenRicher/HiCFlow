@@ -1707,7 +1707,7 @@ rule reformatDifferentialTAD:
 
 rule computeChangeScore:
     input:
-        expand('dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-logFC-{{pm}}.homer',
+        expand('dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}.homer',
             region=REGIONS.index),
     output:
         bed = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.bed',
