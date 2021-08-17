@@ -17,6 +17,9 @@ def generateEqualLengthBed(regions: str, window: int):
 
     with open(regions) as fh:
         for line in fh:
+            line = line.strip()
+            if not line:
+                continue
             chrom, start, end = line.strip().split()[:3]
             chrom = chrom if chrom.startswith('chr') else f'chr{chrom}'
             start = int(start)
