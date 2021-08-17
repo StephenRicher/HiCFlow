@@ -67,8 +67,6 @@ rule generateEqualLengthBed:
         config['regions']
     output:
         'dat/genome/equalLengthRegions-{bin}.bed'
-    group:
-        'CscoreTool'
     log:
         'logs/generateEqualLengthBed-{bin}.log'
     conda:
