@@ -47,8 +47,8 @@ default_config = {
          'keepSelfCircles':      False,
          'skipDuplicationCheck': False,
          'nofill':               False,
-         'makeBam':              True ,
-         'compartmentScore':     True ,
+         'makeBam':              False,
+         'compartmentScore':     False,
          'threads':              4    ,
          'multiplicativeValue':  10000,},
     'compareMatrices':
@@ -222,9 +222,11 @@ if config['HiCParams']['compartmentScore']:
         print('"HiCParams - makeBam" must be True for compartment '
               'score, switching on.', file=sys.stderr)
     include: 'CscoreTool.snake'
-    compartmentOutput = expand(
-        'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz',
-       group=list(HiC.groups()), region=regionBin.keys(), pm=pm)
+    compartmentOutput = (
+        [expand('dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore{ext}',
+            region=region, bin=regionBin[region], group=list(HiC.groups()),
+            pm=pm, ext=['bias.txt', '_hh.txt', '_cscore.txt', '_cscore.bedgraph'])
+        for region in regionBin])
 else:
     compartmentOutput = []
 

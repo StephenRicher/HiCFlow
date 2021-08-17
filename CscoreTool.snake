@@ -3,6 +3,8 @@ rule bam2sam:
         'dat/matrix/{region}/{sample}-{region}-{pm}.bam'
     output:
         pipe('dat/matrix/{region}/{sample}-{region}-{pm}.sam')
+    group:
+        'CscoreTool'
     log:
         'logs/bam2sam/{sample}-{region}-{pm}.log'
     conda:
@@ -13,11 +15,25 @@ rule bam2sam:
         'samtools view -@ {threads} -f 64 {input} > {output} 2> {log}'
 
 
+def getChrPrefix(wc):
+    """ Add 'chr' prefix if required since Cscore expects it. """
+    chrom = REGIONS['chr'][wc.region]
+    if not chrom.startswith('chr'):
+        prefix = 'chr'
+    else:
+        prefix = ''
+    return prefix
+
+
 rule bam2HiCsummary:
     input:
         rules.bam2sam.output
     output:
         'dat/matrix/{region}/{sample}-{region}-{pm}.HiCsummary.gz'
+    params:
+        prefix = getChrPrefix
+    group:
+        'CscoreTool'
     log:
         'logs/bam2HiCSummary/{sample}-{region}-{pm}.log'
     conda:
@@ -25,7 +41,8 @@ rule bam2HiCsummary:
     threads:
         2
     shell:
-        'awk -f {SCRIPTS}/bam2hicSummary.awk {input} | gzip > {output} 2> {log}'
+        'awk -f {SCRIPTS}/bam2hicSummary.awk -v prefix={params.prefix} '
+        '{input} | gzip > {output} 2> {log}'
 
 
 rule mergeHiCsummary:
@@ -35,6 +52,8 @@ rule mergeHiCsummary:
             rep=HiC.groups()[wc.group]),
     output:
         'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz'
+    group:
+        'CscoreTool'
     log:
         'logs/mergeHiCsummary/{group}-{region}-{pm}.log'
     conda:
@@ -48,10 +67,36 @@ rule generateEqualLengthBed:
         config['regions']
     output:
         'dat/genome/equalLengthRegions-{bin}.bed'
+    group:
+        'CscoreTool'
     log:
-        'logs/generateEqualLengthBed.log'
+        'logs/generateEqualLengthBed-{bin}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/generateEqualLengthBed.py {input} {wildcards.bin} '
-        '> {output} 2> {log}'
+        'python {SCRIPTS}/generateEqualLengthBed.py {input} '
+        '{wildcards.bin} > {output} 2> {log}'
+
+
+rule CscoreTool:
+    input:
+        windows = rules.generateEqualLengthBed.output,
+        summary = rules.mergeHiCsummary.output
+    output:
+        expand(
+            'dat/Cscore/{{region}}/{{bin}}/{{group}}-{{region}}-{{bin}}-{{pm}}-Cscore{ext}',
+            ext=['bias.txt', '_hh.txt', '_cscore.txt', '_cscore.bedgraph'])
+    params:
+        minDis = 1000000,
+        chromPrefix = getChrPrefix,
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        prefix = lambda wc: f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore'
+    group:
+        'CscoreTool'
+    threads:
+        2
+    log:
+        'logs/CscoreTool/{group}-{region}-{bin}-{pm}.log'
+    shell:
+        '{SCRIPTS}/CscoreTool1.1 {input.windows} <(zcat {input.summary}) {params.prefix} '
+        '{threads} {params.minDis} {params.chromPrefix}{params.chr} &> {log}'
