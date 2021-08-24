@@ -59,6 +59,7 @@ default_config = {
          'tads'          : None         ,
          'allPairs'      : False        ,
          'nPermute'      : 1000         ,
+         'rawDiff'       : False        ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -163,13 +164,14 @@ norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
+subtractMode = ['LOESSdiff', 'RAWdiff'] if config['compareMatrices']['rawDiff'] else ['LOESSdiff']
 
 
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
-        subtractMode=['LOESSdiff']) for region in regionBin],
+        subtractMode=['LOESSdiff', 'RAWdiff']) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -1823,7 +1825,7 @@ rule HiCsubtract1:
         out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-noFilter-{pm}.h5',
         outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-medianFilter-{pm}.h5',
     params:
-        mode = 'LOESSdiff'
+        mode = 'diff'
     group:
         'plotHiCsubtract'
     log:
@@ -1838,73 +1840,17 @@ rule HiCsubtract1:
 
 rule HiCsubtract2:
     input:
-        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
-        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
+        m1 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
     output:
-        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-KRdiff-{pm}.h5'
+        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWdiff-noFilter-{pm}.h5',
+        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWdiff-medianFilter-{pm}.h5'
     params:
-        mode = 'KRdiff'
+        mode = 'diff'
     group:
         'plotHiCsubtract'
     log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-KRdiff-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outFileName {output} --mode {params.mode} &> {log}'
-
-
-rule HiCsubtract3:
-    input:
-        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
-        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
-    output:
-        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-KRlog2-{pm}.h5'
-    params:
-        mode = 'KRlog2'
-    group:
-        'plotHiCsubtract'
-    log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-KRlog2-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outFileName {output} --mode {params.mode} &> {log}'
-
-
-rule HiCsubtract4:
-    input:
-        m1 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
-        m2 = 'dat/matrix/{region}/{bin}/KR/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
-    output:
-        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-KRratio-{pm}.h5'
-    params:
-        mode = 'KRratio'
-    group:
-        'plotHiCsubtract'
-    log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-KRratio-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outFileName {output} --mode {params.mode} &> {log}'
-
-
-rule HiCsubtract5:
-    input:
-        m1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.h5',
-        m2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.h5'
-    output:
-        'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSlog2-{pm}.h5'
-    params:
-        mode = 'LOESSlog2'
-    group:
-        'plotHiCsubtract'
-    log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-LOESSdiff-{pm}.log'
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-RAWdiff-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:

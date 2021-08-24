@@ -27,7 +27,7 @@ def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: s
                  "the same resolution and created using the same parameters. "
                  "Check the matrix values using the tool `hicInfo`.")
 
-    if mode in ['LOESSdiff', 'KRdiff']:
+    if mode == 'diff':
         nan_bins = set(hic1.nan_bins)
         nan_bins = nan_bins.union(hic2.nan_bins)
         newMatrix = hic2.matrix - hic1.matrix
