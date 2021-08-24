@@ -1855,7 +1855,7 @@ rule HiCsubtract2:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outFileName {output.out} --outMatrixFilter {output.outFilt} '
+        '--outMatrix {output.out} --outMatrixFilter {output.outFilt} '
         '--mode {params.mode} &> {log}'
 
 
