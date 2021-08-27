@@ -55,9 +55,9 @@ def restriction_seq(value):
     if value.count('^') != 1:
         raise argparse.ArgumentTypeError(
             f'Restriction site {value} must contain one "^" at cut site.')
-    elif re.search('[^ATCG^]', value, re.IGNORECASE):
+    elif re.search('[^ATCGN^]', value, re.IGNORECASE):
         raise argparse.ArgumentTypeError(
-            f'Restriction site {value} must only contain "ATCG^".')
+            f'Restriction site {value} must only contain "ATCGN^".')
     else:
         return value.upper()
 
