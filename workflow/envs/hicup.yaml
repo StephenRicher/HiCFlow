@@ -6,4 +6,4 @@ channel_priority:
   - true
 dependencies:
   - python >= 3.6
-  - hicup == 0.7.3
+  - hicup == 0.7.4
