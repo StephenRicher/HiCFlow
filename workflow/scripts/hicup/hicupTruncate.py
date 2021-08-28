@@ -36,9 +36,9 @@ def main(files, output, summary, nofill, re1, threads, **kwargs):
                    files[0], files[1]]
 
         if zip_out:
-            command.insert(1, '--zip')
+            command.insert(2, '--zip')
         if nofill:
-            command.insert(1, '--nofill')
+            command.insert(2, '--nofill')
 
         logging.info(' '.join(command))
         subprocess.run(command, check=True)
