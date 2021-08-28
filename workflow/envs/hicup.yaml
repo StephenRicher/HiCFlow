@@ -1,9 +1,10 @@
 channels:
   - conda-forge
   - bioconda
+  - anaconda
   - defaults
 channel_priority:
   - true
 dependencies:
   - python >= 3.6
-  - hicup == 0.7.4
+  - perl

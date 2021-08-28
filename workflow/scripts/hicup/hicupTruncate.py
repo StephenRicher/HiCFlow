@@ -31,8 +31,9 @@ def main(files, output, summary, nofill, re1, threads, **kwargs):
     # Write tempdir to same location as intended output to ensure enough space
     with TemporaryDirectory(dir=os.path.dirname(output[0])) as tempdir:
 
-        command = ['hicup_truncater', '--re1', re1, '--threads', str(threads),
-                   '--outdir', tempdir, files[0], files[1]]
+        command = ['perl', 'hicup_truncater', '--re1', re1,
+                   '--threads', str(threads), '--outdir', tempdir,
+                   files[0], files[1]]
 
         if zip_out:
             command.insert(1, '--zip')
