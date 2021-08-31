@@ -224,10 +224,6 @@ def getChromSizes(wc):
     return f'dat/genome/chrom_sizes/{cellType}.chrom.sizes',
 
 if config['HiCParams']['compartmentScore']:
-    if not config['HiCParams']['makeBam']:
-        config['HiCParams']['makeBam'] = True
-        print('"HiCParams - makeBam" must be True for compartment '
-              'score, switching on.', file=sys.stderr)
     include: 'CscoreTool.snake'
     compartmentOutput = (
         [expand('dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore{ext}',
@@ -248,10 +244,7 @@ rule all:
         ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}', region=region,
             bin=regionBin[region], pm=pm,
             type=config['plotParams']['filetype']) for region in regionBin]
-         if config['runHiCRep'] else []),
-        (expand('dat/mapped/{sample}-validHiC-{pm}.bam',
-            sample=HiC.samples(), pm=pm)
-         if (config['HiCParams']['makeBam'] and regionBin) else []),
+         if config['runHiCRep'] else [])
 
 
 if ALLELE_SPECIFIC:
@@ -1997,23 +1990,6 @@ rule plotSubtract:
         'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
         '--region {params.region} --outFileName {output} '
         '--title {params.title} --dpi {params.dpi} &> {log}'
-
-
-rule mergeValidHiC:
-    input:
-        expand('dat/matrix/{region}/{{sample}}-{region}-{{pm}}.bam',
-            region=regionBin.keys())
-    output:
-        'dat/mapped/{sample}-validHiC-{pm}.bam'
-    log:
-        'logs/mergeValidHiC/{sample}-{pm}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        THREADS
-    shell:
-        'samtools merge -@ {threads} {output} {input} '
-        '2> {log} || touch {output}'
 
 
 rule reformatPre:
