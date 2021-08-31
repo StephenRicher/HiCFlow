@@ -60,6 +60,7 @@ default_config = {
          'allPairs'      : False        ,
          'nPermute'      : 1000         ,
          'rawDiff'       : False        ,
+         'rawLog2'       : False        ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -164,14 +165,18 @@ norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
-subtractMode = ['LOESSdiff', 'RAWdiff'] if config['compareMatrices']['rawDiff'] else ['LOESSdiff']
+subtractMode = ['LOESSdiff']
+if config['compareMatrices']['rawDiff']:
+    subtractMode.append('RAWdiff')
+if config['compareMatrices']['rawLog2']:
+    subtractMode.append('RAWlog2')
 
 
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
-        subtractMode=['LOESSdiff', 'RAWdiff']) for region in regionBin],
+        subtractMode=subtractMode) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -1859,6 +1864,27 @@ rule HiCsubtract2:
         '--mode {params.mode} &> {log}'
 
 
+rule HiCsubtract3:
+    input:
+        m1 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
+        m2 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
+    output:
+        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWlog2-noFilter-{pm}.h5',
+        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWlog2-medianFilter-{pm}.h5'
+    params:
+        mode = 'log2'
+    group:
+        'plotHiCsubtract'
+    log:
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-RAWlog2-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
+        '--outMatrix {output.out} --outMatrixFilter {output.outFilt} '
+        '--mode {params.mode} &> {log}'
+
+
 def getSNPcoverage(wc):
     cellType1 = HiC.sample2Cell()[wc.group1]
     cellType2 = HiC.sample2Cell()[wc.group2]
@@ -1867,9 +1893,11 @@ def getSNPcoverage(wc):
         return f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bedgraph'
     return []
 
-
+# Manual overide of vMin vMax for testing
 def getVmin(wc):
     vMin = config['compareMatrices']['vMin']
+    if wc.subtractMode == 'RAWlog2':
+        vMin = -3
     # Reduce vMin slightly to account for median filter
     if wc.filter == 'medianFilter':
         vMin *= 0.75
@@ -1878,6 +1906,8 @@ def getVmin(wc):
 
 def getVmax(wc):
     vMax = config['compareMatrices']['vMax']
+    if wc.subtractMode == 'RAWlog2':
+        vMax = 3
     # Reduce vMin slightly to account for median filter
     if wc.filter == 'medianFilter':
         vMax *= 0.75

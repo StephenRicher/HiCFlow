@@ -27,22 +27,18 @@ def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: s
                  "the same resolution and created using the same parameters. "
                  "Check the matrix values using the tool `hicInfo`.")
 
+    nan_bins = set(hic1.nan_bins)
+    nan_bins = nan_bins.union(hic2.nan_bins)
+
     if mode == 'diff':
-        nan_bins = set(hic1.nan_bins)
-        nan_bins = nan_bins.union(hic2.nan_bins)
         newMatrix = hic2.matrix - hic1.matrix
-    elif mode in ['KRlog2', 'KRratio', 'LOESSlog2']:
-        # normalize by total matrix sum
-        hic1.matrix.data = hic1.matrix.data.astype(float) / hic1.matrix.data.sum()
-        hic2.matrix.data = hic2.matrix.data.astype(float) / hic2.matrix.data.sum()
-        nan_bins = set(hic1.nan_bins)
-        nan_bins = nan_bins.union(hic2.nan_bins)
+    elif mode == 'log2':
         hic1.matrix.data = float(1) / hic1.matrix.data
         newMatrix = hic2.matrix.multiply(hic1.matrix)
         newMatrix.eliminate_zeros()
-        if mode in ['KRlog2', 'LOESSlog2']:
-            newMatrix.data = np.log2(newMatrix.data)
-            newMatrix.eliminate_zeros()
+
+        newMatrix.data = np.log2(newMatrix.data)
+        newMatrix.eliminate_zeros()
 
     for i, out in enumerate([outMatrix, outMatrixFilter]):
         if i == 1:
