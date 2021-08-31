@@ -852,7 +852,7 @@ def getDanglingSequences(wc):
 
 def outBam():
     if config['HiCParams']['makeBam']:
-        return 'dat/matrix/{region}/{sample}-{region}-{pm}.bam'
+        return 'dat/matrix/{sample}-{pm}.bam'
     else:
         return []
 
@@ -863,15 +863,12 @@ rule buildBaseMatrix:
         restSites = getRestSites,
         chromSizes = getChromSizes
     output:
-        hic = f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5',
+        hic = f'dat/matrix/base/raw/{{sample}}.{BASE_BIN}-{{pm}}.h5',
         bam = outBam(),
-        qc = directory(f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC'),
-        qc_table = f'qc/hicexplorer/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt'
+        qc = directory(f'qc/hicexplorer/{{sample}}.{BASE_BIN}-{{pm}}_QC'),
+        qc_table = f'qc/hicexplorer/{{sample}}.{BASE_BIN}-{{pm}}_QC/QC_table.txt'
     params:
         bin = BASE_BIN,
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
         reSeqs = getRestrictionSeqs,
         inputBufferSize = 400000,
         danglingSequences = getDanglingSequences,
@@ -885,14 +882,13 @@ rule buildBaseMatrix:
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
     log:
-        'logs/buildBaseMatrix/{sample}-{region}-{pm}.log'
+        'logs/buildBaseMatrix/{sample}-{pm}.log'
     threads:
         max(2, config['HiCParams']['threads'])
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicBuildMatrix --samFiles {input.bams} '
-        '--region {params.chr}:{params.start}-{params.end} '
         '--restrictionCutFile {input.restSites} '
         '--restrictionSequence {params.reSeqs} '
         '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
@@ -908,6 +904,25 @@ rule buildBaseMatrix:
         '--QCfolder {output.qc} --threads {threads} '
         f'{"--outBam {output.bam} " if config["HiCParams"]["makeBam"] else ""}'
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
+
+
+rule adjustMatrix:
+    input:
+        rules.buildBaseMatrix.output.hic
+    output:
+        f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region]
+    log:
+        'logs/adjustMatrix/{sample}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicAdjustMatrix --matrix {input} --outFileName {output} '
+        '--regions <(echo -e \'{params.chr}\t{params.start}\t{params.end}\') '
+        '&> {log}'
 
 
 def nonEmpty(wc, output, input):
