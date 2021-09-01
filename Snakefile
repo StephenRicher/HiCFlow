@@ -583,7 +583,7 @@ rule hicupTruncate:
         f'{ENVS}/hicup.yaml'
     shell:
         'python {SCRIPTS}/hicup/hicupTruncate.py {params.fill} '
-        '--output {output.truncated} '
+        '--hicup {SCRIPTS}/hicup/hicup_truncater --output {output.truncated} '
         '--summary {output.summary} '
         '--re1 {params.re1} '
         '--threads {threads} {input} &> {log}'

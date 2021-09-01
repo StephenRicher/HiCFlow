@@ -19,7 +19,7 @@ from tempfile import TemporaryDirectory
 from general import get_filepath, move_file, set_zip, restriction_seq
 
 
-def main(files, output, summary, nofill, re1, threads, **kwargs):
+def main(files, hicup, output, summary, nofill, re1, threads, **kwargs):
 
     if output[0].endswith('.gz') != output[1].endswith('.gz'):
         logging.error(f'Output files {output} have '
@@ -31,7 +31,7 @@ def main(files, output, summary, nofill, re1, threads, **kwargs):
     # Write tempdir to same location as intended output to ensure enough space
     with TemporaryDirectory(dir=os.path.dirname(output[0])) as tempdir:
 
-        command = ['perl', 'hicup_truncater', '--re1', re1,
+        command = ['perl', hicup, '--re1', re1,
                    '--threads', str(threads), '--outdir', tempdir,
                    files[0], files[1]]
 
@@ -98,6 +98,9 @@ def parse_arguments():
     requiredNamed.add_argument(
         '--output', required=True, nargs=2, metavar='FASTQ',
         help='Truncated R1 and R2 FASTQ files.')
+    requiredNamed.add_argument(
+        '--hicup', required=True,
+        help='Path to hicup_truncater perl script.')
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)
