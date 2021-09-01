@@ -317,8 +317,9 @@ def load_regions(regions_file, adjust=1):
     if not regions.index.to_series().str.match(r'[^-\.\/]+').all():
         sys.exit(f'Invalid region definition in {regions_file}.\n'
             'Region names must not contain the following characters: - . /')
-
-    if anyOverlapping(regions):
+    elif len(regions.index.unique()) != len(regions.index):
+        sys.exit(f'Duplicate region names detected in {regions_file}.\n')
+    elif anyOverlapping(regions):
         sys.exit(f'Overlapping intervals detected in {regions_file}.\n')
 
     return regions

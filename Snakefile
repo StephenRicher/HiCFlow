@@ -43,7 +43,7 @@ default_config = {
          'minDistance':          300  ,
          'maxLibraryInsertSize': 1000 ,
          'minMappingQuality':    15   ,
-         'removeSelfLigation':   True ,
+         'keepSelfLigation':     False ,
          'keepSelfCircles':      False,
          'skipDuplicationCheck': False,
          'nofill':               False,
@@ -373,25 +373,6 @@ rule findRestSites:
     shell:
         'hicFindRestSite --fasta {input} --searchPattern {params.reSeq} '
         '--outFile {output} &> {log}'
-
-
-rule subsetRestSites:
-    input:
-        rules.findRestSites.output
-    output:
-        'dat/genome/{region}/{cellType}-{re}-restSites.bed'
-    params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region] + 1,
-        end = lambda wc: REGIONS['end'][wc.region],
-    group:
-        'prepareGenome'
-    log:
-        'logs/subsetRestSites/{cellType}-{re}-{region}.log'
-    shell:
-        'python {SCRIPTS}/subsetBED.py {input} '
-        '--region {params.chr}:{params.start}-{params.end} '
-        '> {output} 2> {log}'
 
 
 rule emptyRestSites:
@@ -823,12 +804,7 @@ def getRestSites(wc):
         sample = wc.sample
     except AttributeError:
         sample = wc.preSample
-    try:
-        region=f'{wc.region}/'
-    except AttributeError:
-        region=''
-    return expand('dat/genome/{region}{cellType}-{re}-restSites.bed',
-        region=region,
+    return expand('dat/genome/{cellType}-{re}-restSites.bed',
         cellType=HiC.sample2Cell()[sample],
         re=HiC.restrictionSeqs()[sample])
 
@@ -868,12 +844,14 @@ rule buildBaseMatrix:
         maxLibraryInsertSize = config['HiCParams']['maxLibraryInsertSize'],
         minMappingQuality = config['HiCParams']['minMappingQuality'],
         minDistance = config['HiCParams']['minDistance'],
-        removeSelfLigation = (
-            'True' if config['HiCParams']['removeSelfLigation'] else 'False'),
+        keepSelfLigation = (
+            '--keepSelfLigation' if config['HiCParams']['keepSelfLigation'] else ''),
         keepSelfCircles = (
             '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
         skipDuplicationCheck = (
             '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
+    group:
+        'buildBaseMatrix'
     log:
         'logs/buildBaseMatrix/{sample}-{pm}.log'
     threads:
@@ -887,11 +865,10 @@ rule buildBaseMatrix:
         '--maxLibraryInsertSize {params.maxLibraryInsertSize} '
         '--minDistance {params.minDistance} '
         '--minMappingQuality {params.minMappingQuality} '
-        '--removeSelfLigation {params.removeSelfLigation} '
         '--danglingSequence {params.danglingSequences} '
         '--inputBufferSize {params.inputBufferSize} '
         '--chromosomeSizes {input.chromSizes} '
-        '{params.keepSelfCircles} '
+        '{params.keepSelfCircles} {params.keepSelfLigation} '
         '{params.skipDuplicationCheck} --binSize {params.bin} '
         '--outFileName {output.hic} '
         '--QCfolder {output.qc} --threads {threads} '
@@ -908,6 +885,8 @@ rule adjustMatrix:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'buildBaseMatrix'
     log:
         'logs/adjustMatrix/{sample}-{region}-{pm}.log'
     conda:
@@ -2858,8 +2837,8 @@ rule multiqc:
             sample=HiC.originalSamples(), read=['R1', 'R2']) if config['fastq_screen'] else [],
          expand('qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt',
             region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []],
-         [expand('qc/hicexplorer/{sample}-{region}.{bin}-{pm}_QC', region=region,
-            sample=HiC.samples(), bin=BASE_BIN, pm=pm) for region in regionBin],
+         expand('qc/hicexplorer/{sample}.{bin}-{pm}_QC',
+            sample=HiC.samples(), bin=BASE_BIN, pm=pm),
     output:
         directory('qc/multiqc')
     params:
