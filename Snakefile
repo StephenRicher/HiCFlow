@@ -45,7 +45,6 @@ default_config = {
          'minMappingQuality':    15   ,
          'keepSelfLigation':     False ,
          'keepSelfCircles':      False,
-         'skipDuplicationCheck': False,
          'nofill':               False,
          'makeBam':              False,
          'compartmentScore':     False,
@@ -88,7 +87,6 @@ default_config = {
          'vLines'        : []       ,
          'miniMatrix'    : False    ,
          'miniHeight'    : 6        ,
-         'runPCA'        : True     ,
          'filetype'      : 'svg'    ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
@@ -196,11 +194,9 @@ HiC_mode = ([
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=regionBin.keys(), pm=pm, type=config['plotParams']['filetype']),
     'qc/hicup/.tmp.aggregatehicupTruncate' if not (config['microC'] or config['localAlignment']) else []])
-# Exclude PCA if not set
-if config['plotParams']['runPCA']:
-    methods = ['PCA', 'TADinsulation', 'TADboundaries', 'TADdomains']
-else:
-    methods = ['TADinsulation', 'TADboundaries', 'TADdomains']
+
+
+methods = ['TADinsulation', 'TADboundaries', 'TADdomains']
 
 
 def getChromSizes(wc):
@@ -690,7 +686,7 @@ rule fixmateBam:
     input:
         rules.collateBam.output
     output:
-        'dat/mapped/{preSample}.fixed.bam'
+        temp('dat/mapped/{preSample}.fixed.bam')
     group:
         'prepareBAM'
     log:
@@ -703,10 +699,66 @@ rule fixmateBam:
         'samtools fixmate -@ {threads} -mp {input} {output} 2> {log}'
 
 
-# Input to SNPsplit
-rule removeUnmapped:
+rule sortBam:
     input:
         rules.fixmateBam.output
+    output:
+        pipe('dat/mapped/{preSample}.sorted.bam')
+    params:
+        mem = '1G'
+    group:
+        'prepareBAM'
+    log:
+        'logs/sortBam/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        max(math.ceil(THREADS * 0.5), 1)
+    shell:
+        'samtools sort -@ {threads} -O bam,level=0 '
+        '-m {params.mem} {input} > {output} 2> {log}'
+
+
+rule deduplicate:
+    input:
+        rules.sortBam.output
+    output:
+        bam = 'dat/mapped/{preSample}.dedup.bam',
+        qc = 'qc/deduplicate/{preSample}.txt'
+    group:
+        'prepareBAM'
+    log:
+        'logs/deduplicate/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    threads:
+        max(math.floor(THREADS * 0.5), 1)
+    shell:
+        'samtools markdup -@ {threads} '
+        '-rsf {output.qc} {input} {output.bam} &> {log}'
+
+
+rule collateBam2:
+    input:
+        rules.deduplicate.output.bam
+    output:
+        pipe('dat/mapped/{preSample}-collate2.bam')
+    params:
+        # Add '/' to path if not present
+        tmpPrefix = os.path.join(config['tmpdir'], '')
+    group:
+        'prepareBAM'
+    log:
+        'logs/collateBam/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools collate -Ou {input} {params.tmpPrefix} > {output} 2> {log}'
+
+
+rule removeUnmapped:
+    input:
+        rules.collateBam2.output
     output:
         'dat/mapped/{preSample}.hic.bam'
     group:
@@ -716,7 +768,7 @@ rule removeUnmapped:
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
-        THREADS
+        THREADS - 1 if THREADS > 2 else 1
     shell:
         'samtools view -@ {threads} -b -F 12 {input} > {output} 2> {log}'
 
@@ -773,7 +825,7 @@ def splitInput(wc):
     if ALLELE_SPECIFIC:
         return 'dat/snpsplit/merged/{sample}.hic.bam'
     else:
-        return 'dat/mapped/{sample}.fixed.bam'
+        return 'dat/mapped/{sample}.hic.bam'
 
 
 rule splitPairedReads:
@@ -848,8 +900,6 @@ rule buildBaseMatrix:
             '--keepSelfLigation' if config['HiCParams']['keepSelfLigation'] else ''),
         keepSelfCircles = (
             '--keepSelfCircles' if config['HiCParams']['keepSelfCircles'] else ''),
-        skipDuplicationCheck = (
-            '--skipDuplicationCheck' if config['HiCParams']['skipDuplicationCheck'] else '')
     group:
         'buildBaseMatrix'
     log:
@@ -869,8 +919,8 @@ rule buildBaseMatrix:
         '--inputBufferSize {params.inputBufferSize} '
         '--chromosomeSizes {input.chromSizes} '
         '{params.keepSelfCircles} {params.keepSelfLigation} '
-        '{params.skipDuplicationCheck} --binSize {params.bin} '
-        '--outFileName {output.hic} '
+        '--binSize {params.bin} '
+        '--outFileName {output.hic} --skipDuplicationCheck '
         '--QCfolder {output.qc} --threads {threads} '
         f'{"--outBam {output.bam} " if config["HiCParams"]["makeBam"] else ""}'
         '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
@@ -1076,45 +1126,6 @@ rule clampLoops:
     shell:
         'python {SCRIPTS}/clampLoops.py '
         '{params.minPos} {params.maxPos} {input} > {output} 2> {log}'
-
-
-rule hicPCA:
-    input:
-        rules.correctMatrix.output
-    output:
-        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}-{pm}.bedgraph'
-    params:
-        method = "dist_norm",
-        format = 'bedgraph'
-    group:
-        'processHiC'
-    log:
-        'logs/hicPCA/{all}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicPCA --matrix {input} --outputFileName {output} '
-        '--format {params.format} '
-        '--numberOfEigenvectors 1 --method {params.method} '
-        '--ignoreMaskedBins &> {log} || touch {output} && touch {output} '
-
-
-rule fixBedgraph:
-    input:
-        rules.hicPCA.output
-    output:
-        'dat/matrix/{region}/{bin}/PCA/{all}-{region}-{bin}-fix-{pm}.bedgraph'
-    params:
-        pos = lambda wc: REGIONS['end'][wc.region]
-    group:
-        'processHiC'
-    log:
-        'logs/fixBedgraph/{all}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/fixBedgraph.py {input} --pos {params.pos} '
-        '> {output} 2> {log}'
 
 
 rule reformatHomer:
@@ -2011,45 +2022,6 @@ rule juicerPre:
 
 
 if not ALLELE_SPECIFIC:
-
-    rule sortBam:
-        input:
-            rules.fixmateBam.output
-        output:
-            pipe('dat/mapped/{preSample}.sorted.bam')
-        params:
-            mem = '1G'
-        group:
-            'deduplicate'
-        log:
-            'logs/sortBam/{preSample}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        threads:
-            max(math.ceil(THREADS * 0.5), 1)
-        shell:
-            'samtools sort -@ {threads} -O bam,level=0 '
-            '-m {params.mem} {input} > {output} 2> {log}'
-
-
-    rule deduplicate:
-        input:
-            rules.sortBam.output
-        output:
-            bam = temp('dat/mapped/{preSample}.dedup.bam'),
-            qc = 'qc/deduplicate/{preSample}.txt'
-        group:
-            'deduplicate'
-        log:
-            'logs/deduplicate/{preSample}.log'
-        conda:
-            f'{ENVS}/samtools.yaml'
-        threads:
-            max(math.floor(THREADS * 0.5), 1)
-        shell:
-            'samtools markdup -@ {threads} '
-            '-rsf {output.qc} {input} {output.bam} &> {log}'
-
 
     rule mergeBamByCellType:
         input:

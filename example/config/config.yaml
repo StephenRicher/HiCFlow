@@ -61,7 +61,6 @@ HiCParams:
     minMappingQuality:    15
     keepSelfLigation:     False
     keepSelfCircles:      False
-    skipDuplicationCheck: False
     nofill:               False
     threads:              4
     makeBam:              False
@@ -79,7 +78,6 @@ plotParams:
     viewpointRange: 150_000
     plotRep:        True
     vLines:         ../config/vlines.bed
-    runPCA:         True
 
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
