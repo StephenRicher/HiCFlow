@@ -1345,7 +1345,7 @@ rule createConfig:
     group:
         'processHiC'
     conda:
-        f'{ENVS}/hicexplorer.yaml'
+        f'{ENVS}/python3.yaml'
     log:
         'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{vis}-{pm}-{mini}.log'
     shell:
@@ -1936,7 +1936,7 @@ rule createSubtractConfig:
     log:
         'logs/createSubtractConfig/{group1}-{group2}-{bin}-{region}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.log'
     conda:
-        f'{ENVS}/hicexplorer.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
