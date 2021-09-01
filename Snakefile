@@ -749,7 +749,7 @@ rule collateBam2:
     group:
         'prepareBAM'
     log:
-        'logs/collateBam/{preSample}.log'
+        'logs/collateBam2/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -761,6 +761,8 @@ rule removeUnmapped:
         rules.collateBam2.output
     output:
         'dat/mapped/{preSample}.hic.bam'
+    params:
+        threads = max(THREADS - 3, 1)
     group:
         'prepareBAM'
     log:
@@ -768,9 +770,10 @@ rule removeUnmapped:
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
-        THREADS - 1 if THREADS > 2 else 1
+        THREADS - 1 if THREADS > 3 else 2
     shell:
-        'samtools view -@ {threads} -b -F 12 {input} > {output} 2> {log}'
+        'samtools view -h {input} | awk -f {SCRIPTS}/removeSingleton.awk '
+        '| samtools view -@ {params.threads} -b > {output} 2> {log}'
 
 
 def SNPsplitInput(wc):
