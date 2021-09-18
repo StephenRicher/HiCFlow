@@ -752,8 +752,11 @@ rule collateBam2:
         'logs/collateBam2/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
+    threads:
+        math.ceil(THREADS / 2)
     shell:
-        'samtools collate -Ou {input} {params.tmpPrefix} > {output} 2> {log}'
+        'samtools collate -@ {threads} -O --output-fmt=SAM '
+        '{input} {params.tmpPrefix} > {output} 2> {log}'
 
 
 rule removeUnmapped:
@@ -762,7 +765,7 @@ rule removeUnmapped:
     output:
         'dat/mapped/{preSample}.hic.bam'
     params:
-        threads = max(THREADS - 3, 1)
+        threads = max(math.floor(THREADS / 2), 2) - 1
     group:
         'prepareBAM'
     log:
@@ -770,9 +773,9 @@ rule removeUnmapped:
     conda:
         f'{ENVS}/samtools.yaml'
     threads:
-        THREADS - 1 if THREADS > 3 else 2
+        max(math.floor(THREADS / 2), 2)
     shell:
-        'samtools view -h {input} | awk -f {SCRIPTS}/removeSingleton.awk '
+        'awk -f {SCRIPTS}/removeSingleton.awk {input} '
         '| samtools view -@ {params.threads} -b > {output} 2> {log}'
 
 
