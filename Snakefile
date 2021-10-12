@@ -298,7 +298,7 @@ if ALLELE_SPECIFIC:
         input:
             rules.filterHomozygous.output
         output:
-            'dat/genome/SNPcoverage/{cellType}-{bin}-phasedHet.bedgraph'
+            'dat/genome/SNPcoverage/{cellType}-{bin}-phasedHet.bed'
         group:
             'prepareGenome'
         log:
@@ -1272,18 +1272,18 @@ def getTracks(wc):
     command = ''
     if isinstance(config['bigWig'], dict):
         for title, track in config['bigWig'].items():
-            command += f'--bigWig {title},{track} '
+            command += f'--bigWig {title},{track},3 '
     if isinstance(config['bed'], dict):
         for title, track in config['bed'].items():
-            command += f'--bed {title},{track} '
+            command += f'--bed {title},{track},3 '
     if ALLELE_SPECIFIC:
         try:
             cellType1 = HiC.sample2Cell()[wc.group1]
             cellType2 = HiC.sample2Cell()[wc.group2]
             bin = wc.bin
             if cellType1 == cellType2:
-                track = f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bedgraph'
-                command += f'--bigWig SNPcoverage,{track} '
+                track = f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bed'
+                command += f'--SNPdensity {track} '
         except AttributeError:
             pass
     return command
@@ -1305,7 +1305,7 @@ def getCscoreInput(wc):
 def getCscoreParams(wc):
     if config['HiCParams']['compartmentScore']:
         cscore = f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bedgraph'
-        return f'--bigWig CScore,{cscore}'
+        return f'--bigWig CScore,{cscore},3'
     else:
         return ''
 
@@ -1894,7 +1894,7 @@ def getSNPcoverage(wc):
     cellType2 = HiC.sample2Cell()[wc.group2]
     bin = wc.bin
     if ALLELE_SPECIFIC and (cellType1 == cellType2):
-        return f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bedgraph'
+        return f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bed'
     return []
 
 # Manual overide of vMin vMax for testing
@@ -2044,7 +2044,7 @@ if not ALLELE_SPECIFIC:
         threads:
             max(math.ceil(THREADS * 0.5), 1)
         shell:
-            'samtools merge -@ {threads} - {input} > {output} 2> {log}'
+            'samtools merge -u -@ {threads} - {input} > {output} 2> {log}'
 
 
     rule addReadGroup:
