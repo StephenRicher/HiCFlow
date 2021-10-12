@@ -27,7 +27,12 @@ def SNPcoverage(VCF: str, binSize: int):
     bedgraph = (pd.concat(bedgraph, axis=0).reset_index()
         .rename({'level_0': 'chrom', 'level_1': 'start', 0: 'count'}, axis=1))
     bedgraph['end'] = bedgraph['start'] + binSize
-    bedgraph[['chrom', 'start', 'end', 'count']].to_csv(
+    bedgraph['name'] = '.'
+    # Normalise score between 0 and 1, with 1 being 95th quantil
+    bedgraph['score'] = (bedgraph['count'] - bedgraph['count'].min()) / (bedgraph['count'].quantile(0.95) - bedgraph['count'].min())
+    # Truncate top values at 1
+    bedgraph['score'] = bedgraph['score'].apply(lambda x: min(1, x))
+    bedgraph[['chrom', 'start', 'end', 'name', 'score']].to_csv(
         sys.stdout, header=False, index=False, sep='\t')
 
 
