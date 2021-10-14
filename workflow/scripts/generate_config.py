@@ -28,7 +28,8 @@ def main():
         '--loops', nargs='*', default=[],
         help = 'Loop output.')
     parser.add_argument(
-        '--links', help = 'Links file to plot under track.')
+        '--links', nargs=2,
+        help = 'Plot 2 links files, up in diffTAD and down in diffTAD.')
     parser.add_argument(
         '--matrix',
         help = 'HiC matrix.')
@@ -149,6 +150,13 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
             print('[spacer]')
 
     print('# End Sample Specific')
+
+    if links is not None:
+        for i, link in enumerate(links):
+            if notEmpty(link):
+                writeLinks(link, i)
+        print('[spacer]')
+
     for title, file, size in bigWig:
         if notEmpty(file):
             if file.endswith('.bedgraph'):
@@ -158,9 +166,6 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
             write_bigwig(file=file, title=title, type=type, size=size)
         print('[spacer]')
 
-    if notEmpty(links):
-        writeLinks(links)
-        print('[spacer]')
 
     for title, file in collapsedBed:
         if notEmpty(file):
@@ -222,16 +227,19 @@ def write_loops(loops, i, compare=False):
           f'line_width = 5', sep = '\n')
 
 
-def writeLinks(links):
+def writeLinks(links, i):
+    colours = {0: 'Reds', 1: 'Blues'}
+    overlay = 'no' if i == 0 else 'share-y'
     print(f'[Links]',
-          f'file = {links}',
-          f'title = Loops',
-          f'links_type = arcs',
+          f'file = {links}', sep = '\n')
+    if i == 0:
+        print('title = Loops')
+    print(f'links_type = arcs',
           f'line_style = solid',
-          f'color = Reds',
+          f'color = {colours[i]}',
           f'height = 3',
           f'file_type = links',
-          f'line_width = 3', sep = '\n')
+          f'overlay_previous = {overlay}', sep = '\n')
 
 
 def writeTADs(tads, colour):
