@@ -54,9 +54,6 @@ def main():
         '--changeScore',
         help='Bed file of bins with directional preference.')
     parser.add_argument(
-        '--permuteScore',
-        help='Bed file of bins with permutation score.')
-    parser.add_argument(
         '--bed', metavar='TITLE,FILE,SIZE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
@@ -99,7 +96,7 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, tads, loops, SNPdensity,
-                bigWig, bed, collapsedBed, compare, permuteScore,
+                bigWig, bed, collapsedBed, compare,
                 changeScore_title, changeScore, depth, colourmap, vMin, vMax,
                 plain, vLines, links):
 
@@ -136,11 +133,6 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
 
     if notEmpty(SNPdensity):
         writeSNPdensity(SNPdensity)
-        print('[spacer]')
-
-
-    if notEmpty(permuteScore):
-        writePermuteScore(permuteScore)
         print('[spacer]')
 
     for i, insulation in enumerate(insulations):
@@ -321,21 +313,6 @@ def writeChangeScore(bed, title):
           f'labels = false',
           f'color = bed_rgb',
           f'border_color = none',
-          f'line_width = 0',
-          f'fontsize = 0',
-          f'height = 1.5',
-          f'display = collapsed', sep='\n')
-
-
-def writePermuteScore(bed):
-    print(f'[Permute Score]',
-          f'file = {bed}',
-          f'title = Permute score',
-          f'labels = false',
-          f'color = binary',
-          f'border_color = none',
-          f'min_value = 0',
-          f'max_value = 1',
           f'line_width = 0',
           f'fontsize = 0',
           f'height = 1.5',

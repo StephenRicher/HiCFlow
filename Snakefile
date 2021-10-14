@@ -57,9 +57,7 @@ default_config = {
          'vMax'          : 1            ,
          'tads'          : None         ,
          'allPairs'      : False        ,
-         'nPermute'      : 1000         ,
          'rawDiff'       : False        ,
-         'rawLog2'       : False        ,
          'absChangeTitle': 'Difference score'},
     'gatk':
         {'hapmap'      : None         ,
@@ -166,8 +164,6 @@ pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 subtractMode = ['LOESSdiff']
 if config['compareMatrices']['rawDiff']:
     subtractMode.append('RAWdiff')
-if config['compareMatrices']['rawLog2']:
-    subtractMode.append('RAWlog2')
 
 
 HiC_mode = ([
@@ -184,8 +180,6 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('permuteTest/{bin}/{compare}-{region}-{pm}-{bin}.bed',
-        region=region, pm=pm, compare=HiC.groupCompares(), bin=regionBin[region]) for region in regionBin],
     [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=pm,
@@ -1780,32 +1774,6 @@ rule plotCompareViewpoint:
         'python {SCRIPTS}/plotViewpoint.py {input} --out {output} '
         '--dpi {params.dpi} {params.build} &> {log}'
 
-###
-rule permuteTest:
-    input:
-        m1 = rules.HiCcompare.output.adjIF1sutm,
-        m2 = rules.HiCcompare.output.adjIF2sutm
-    output:
-        sig = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
-        raw = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}-all.pkl'
-    params:
-        fdr = 0.1,
-        seed = 42,
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        nPermute = config['compareMatrices']['nPermute']
-    log:
-        'logs/permuteTest/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/permutationTest.yaml'
-    threads:
-        THREADS
-    shell:
-        'python {SCRIPTS}/permuteTest.py {input.m1} {input.m2} '
-        '--binSize {wildcards.bin} --chrom {params.chr} '
-        '--nPermute {params.nPermute} --threads {threads} '
-        '--fdr {params.fdr} '
-        '--rawOut {output.raw} > {output.sig} 2> {log}'
-
 
 ####
 rule distanceNormaliseNormIF:
@@ -1868,27 +1836,6 @@ rule HiCsubtract2:
         '--mode {params.mode} &> {log}'
 
 
-rule HiCsubtract3:
-    input:
-        m1 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
-        m2 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
-    output:
-        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWlog2-noFilter-{pm}.h5',
-        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWlog2-medianFilter-{pm}.h5'
-    params:
-        mode = 'log2'
-    group:
-        'plotHiCsubtract'
-    log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-RAWlog2-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outMatrix {output.out} --outMatrixFilter {output.outFilt} '
-        '--mode {params.mode} &> {log}'
-
-
 def getSNPcoverage(wc):
     cellType1 = HiC.sample2Cell()[wc.group1]
     cellType2 = HiC.sample2Cell()[wc.group2]
@@ -1900,8 +1847,6 @@ def getSNPcoverage(wc):
 # Manual overide of vMin vMax for testing
 def getVmin(wc):
     vMin = config['compareMatrices']['vMin']
-    if wc.subtractMode == 'RAWlog2':
-        vMin = -3
     # Reduce vMin slightly to account for median filter
     if wc.filter == 'medianFilter':
         vMin *= 0.75
@@ -1910,8 +1855,6 @@ def getVmin(wc):
 
 def getVmax(wc):
     vMax = config['compareMatrices']['vMax']
-    if wc.subtractMode == 'RAWlog2':
-        vMax = 3
     # Reduce vMin slightly to account for median filter
     if wc.filter == 'medianFilter':
         vMax *= 0.75
@@ -1925,7 +1868,6 @@ rule createSubtractConfig:
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
         changeScore = rules.computeChangeScore.output.bed,
-        permuteScore = 'permuteTest/{bin}/{group1}-vs-{group2}-{region}-{pm}-{bin}.bed',
         SNPcoverage = getSNPcoverage
     output:
         'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.ini',
@@ -1946,7 +1888,6 @@ rule createSubtractConfig:
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
-        '--permuteScore {input.permuteScore} '
         '--vMin {params.vMin} --vMax {params.vMax} '
         '--changeScore_title {params.changeScore_title} '
         '--changeScore {input.changeScore} '
