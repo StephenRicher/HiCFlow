@@ -52,13 +52,13 @@ default_config = {
          'multiplicativeValue':  10000,},
     'compareMatrices':
         {'colourmap'    : 'bwr'         ,
-         'fdr'           : 0.05         ,
-         'vMin'          : -1           ,
-         'vMax'          : 1            ,
-         'tads'          : None         ,
-         'allPairs'      : False        ,
-         'rawDiff'       : False        ,
-         'absChangeTitle': 'Difference score'},
+         'alpha'        : 0.05         ,
+         'vMin'         : -1           ,
+         'vMax'         : 1            ,
+         'tads'         : None         ,
+         'loops'        : None         ,
+         'allPairs'     : False        ,
+         'rawDiff'      : False        ,},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -1270,16 +1270,6 @@ def getTracks(wc):
     if isinstance(config['bed'], dict):
         for title, track in config['bed'].items():
             command += f'--bed {title},{track},3 '
-    if ALLELE_SPECIFIC:
-        try:
-            cellType1 = HiC.sample2Cell()[wc.group1]
-            cellType2 = HiC.sample2Cell()[wc.group2]
-            bin = wc.bin
-            if cellType1 == cellType2:
-                track = f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bed'
-                command += f'--SNPdensity {track} '
-        except AttributeError:
-            pass
     return command
 
 
@@ -1714,22 +1704,73 @@ rule reformatDifferentialTAD:
 
 rule computeChangeScore:
     input:
-        expand('dat/HiCcompare/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{pm}}.homer',
+        expand('dat/HiCsubtract/{region}/{{bin}}/{{group1}}-vs-{{group2}}-LOESSdiff-medianFilter-{{pm}}.h5'
             region=REGIONS.index),
     output:
-        bed = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.bed',
-        all = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.tsv'
+        'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.tsv'
     params:
-        fdr = config['compareMatrices']['fdr'],
-        colourmap = config['compareMatrices']['colourmap']
+        alpha = config['compareMatrices']['alpha'],
+        colourmap = config['compareMatrices']['colourmap'],
+        maxDistance = 1000000,
+        nBins = 20
     log:
         'logs/computeChangeScore/{group1}-vs-{group2}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/computeChangeScore.py  --outData {output.all} '
-        '--fdr {params.fdr}  --colourmap {params.colourmap} {input} '
-        '> {output.bed} 2> {log}'
+        'python {SCRIPTS}/computeChangeScore.py '
+        '--alpha {params.alpha}  --colourmap {params.colourmap} '
+        '--nBins {params.nbins} --maxDistance {params.maxDistance} '
+        '{input} > {output} 2> {log}'
+
+
+def getLoopsInput(wc):
+    if config['compareMatrices']['loops'] is None:
+        loops = ([
+            'dat/loops/{region}/{bin}/{group1}-{region}-{bin}-{pm}.bedgraph',
+            'dat/loops/{region}/{bin}/{group2}-{region}-{bin}-{pm}.bedgraph'
+        ])
+    else:
+        loops = config['compareMatrices']['loops']
+    return loops
+
+
+rule scoreLoopDiff:
+    input:
+        loops = getLoopsInput,
+        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-medianFilter-{pm}.h5'
+    output:
+        'dat/loops/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{pm}-loopDiff.pkl'
+    log:
+        'logs/scoreLoopDiff/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/scoreLoopDiff.py {input.loops} '
+        '--matrix {input.matrix} --out {output} 2> {log}'
+
+
+rule mergeLoopDiff:
+    input:
+        expand('dat/loops/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{region}-{{bin}}-{{pm}}-loopDiff.pkl',
+            region=REGIONS.index),
+    output:
+        interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}.interact',
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}-linksUp.links',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}-linksDown.links'
+    params:
+        nBins = 20,
+        maxLineWidth = 3
+
+    log:
+        'logs/mergeLoopDiff/{group1}-vs-{group2}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/mergeLoopDiff.py {input} '
+        '--maxLineWidth {params.maxLineWidth} --nBins {params.nbins} '
+        '--interactOut {output.interactOut} --linksUp {output.linksUp} '
+        '--linksDown {output.linksDown} 2> {log}'
 
 
 rule runCompareViewpoint:
@@ -1844,6 +1885,17 @@ def getSNPcoverage(wc):
         return f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bed'
     return []
 
+
+def getSNPcommand(wc):
+    cellType1 = HiC.sample2Cell()[wc.group1]
+    cellType2 = HiC.sample2Cell()[wc.group2]
+    bin = wc.bin
+    command = ''
+    if ALLELE_SPECIFIC and (cellType1 == cellType2):
+        track = f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bed'
+        command += f'--SNPdensity {track} '
+    return command
+
 # Manual overide of vMin vMax for testing
 def getVmin(wc):
     vMin = config['compareMatrices']['vMin']
@@ -1851,7 +1903,6 @@ def getVmin(wc):
     if wc.filter == 'medianFilter':
         vMin *= 0.75
     return vMin
-
 
 def getVmax(wc):
     vMax = config['compareMatrices']['vMax']
@@ -1864,21 +1915,24 @@ def getVmax(wc):
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
+        linksUp = rules.mergeLoopDiff.output.linksUp,
+        linksDown = rules.mergeLoopDiff.output.linksDown,
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}-linksDown.links',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        changeScore = rules.computeChangeScore.output.bed,
+        changeScore = rules.computeChangeScore.output,
         SNPcoverage = getSNPcoverage
     output:
         'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.ini',
     params:
         depth = getDepth,
+        SNPcoverage = getSNPcommand,
         tracks = getTracks,
         vLines = getVlinesParams,
         vMin = getVmin,
         vMax = getVmax,
         colourmap = config['compareMatrices']['colourmap'],
-        changeScore_title = f'"{config["compareMatrices"]["absChangeTitle"]}"'
     group:
         'plotHiCsubtract'
     log:
@@ -1887,9 +1941,9 @@ rule createSubtractConfig:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
-        '--matrix {input.mat} --tads {input.tads1} {input.tads2} '
-        '--vMin {params.vMin} --vMax {params.vMax} '
-        '--changeScore_title {params.changeScore_title} '
+        '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
+        '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
+        '--links {input.linksUp} {input.linksDown} '
         '--changeScore {input.changeScore} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.vLines} {params.tracks} > {output} 2> {log}'

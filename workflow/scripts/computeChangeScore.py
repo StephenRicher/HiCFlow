@@ -7,58 +7,70 @@ import sys
 import argparse
 import numpy as np
 import pandas as pd
-from scipy import stats
 from typing import List
+from scipy import stats
 from matplotlib import cm
-from matplotlib.colors import to_hex
 from collections import defaultdict
+from matplotlib.colors import to_hex
+from hicmatrix import HiCMatrix as hm
+from sklearn.preprocessing import KBinsDiscretizer
 from statsmodels.stats.multitest import fdrcorrection
-from utilities import setDefaults, createMainParent, readHomer
+from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
 
 
-def computeASAP(matrices: List, outData: str, colourmap: str, fdr: float):
+def computeChangeScore(matrices: List, colourmap: str, alpha: float,
+                       maxDistance: int, nBins: int):
 
-    scalingFactor = computeScalingFactor(matrices)
     allRegions = []
     allDirection = []
+    est = KBinsDiscretizer(n_bins=nBins, encode='ordinal', strategy='kmeans')
     for matrix in matrices:
-        mat = readHomer(matrix, diagonal=True, sparse=False)
-        chrom = mat.attrs['chrom']
-        binSize = mat.attrs['binSize']
-        binDirection = directionPreference(mat, chrom, binSize)
-        allDirection.append(binDirection)
+        hic = hm.hiCMatrix(matrix)
+        binSize = hic.getBinSize()
+        chrom = hic.getChrNames()[0]
+
+        nonzeroIdx = hic.matrix.nonzero()
+        nonzeroValues = hic.matrix[nonzeroIdx].tolist()[0]
+        mat = pd.DataFrame({
+            'start' : nonzeroIdx[0],
+            'start2': nonzeroIdx[1],
+            'value' : nonzeroValues
+        })
+        # Associtate bin ID with genomic position
+        mat['start'] = mat['start'].apply(lambda x: hic.getBinPos(x)[1])
+        mat['start2'] = mat['start2'].apply(lambda x: hic.getBinPos(x)[1])
+        mat.columns = ['start', 'start2', 'score']
         mat['seperation'] = (mat['start'] - mat['start2']).abs()
-        mat = pd.merge(mat, scalingFactor, left_on='seperation', right_on='seperation')
-        mat['score'] = mat['score'] * mat['scale']
         mat['abs(score)'] = abs(mat['score'])
+        mat = mat.loc[mat['seperation'] <= maxDistance]
+
+        binDirection = directionPreference(mat, chrom, binSize)
+
+        # FDR correction by chromosome
+        validP = binDirection['p'].notna()
+        binDirection['p(adj)'] = np.nan
+        binDirection.loc[validP, 'p(adj)'] = fdrcorrection(
+            binDirection.loc[validP, 'p'])[1]
+        allDirection.append(binDirection)
+
         summed = mat.groupby('start')[['abs(score)']].sum().reset_index()
         summed['chrom'] = chrom
+        summed['quantScore'] = est.fit_transform(summed['abs(score)'].to_numpy().reshape(-1,1)) / nBins
         allRegions.append(summed)
 
-    # Combine and shuffle rows to avoid bias in ranking
-    allRegions = pd.concat(allRegions).set_index(['chrom', 'start']).sample(frac=1)
-    allRegions['quantScore'] = pd.qcut(
-        allRegions['abs(score)'].rank(method='first'), 20, labels=np.linspace(0, 1, 20))
+    allRegions = pd.concat(allRegions).set_index(['chrom', 'start'])
     allDirection = pd.concat(allDirection).set_index(['chrom', 'start'])
 
     allRegions = allRegions.merge(
         allDirection, left_index=True, right_index=True).reset_index()
     allRegions['end'] = allRegions['start'] + binSize
-    validP = allRegions['p'].notna()
-    allRegions['p(adj)'] = np.nan
-    allRegions.loc[validP, 'p(adj)'] = fdrcorrection(allRegions.loc[validP, 'p'])[1]
 
-    #allRegions['p(adj)'] = fdrcorrection(allRegions['p'])[1]
-    allRegions['colour'] = allRegions.apply(getColour, args=(fdr, colourmap), axis=1)
+    allRegions['colour'] = allRegions.apply(
+        getColour, args=(alpha, colourmap), axis=1)
 
-    if outData is not None:
-        allRegions.to_csv(
-            outData, index=False, header=True, sep='\t')
-
-    # Write direction score as a BED file
     allRegions['name'] = '.'
     allRegions['strand'] = '.'
     allRegions['thickStart'] = allRegions['start']
@@ -66,39 +78,11 @@ def computeASAP(matrices: List, outData: str, colourmap: str, fdr: float):
     columns = ([
         'chrom', 'start', 'end', 'name', 'abs(score)', 'strand',
         'thickStart', 'thickEnd', 'colour'])
-    allRegions[columns].to_csv(
-        sys.stdout, index=False, header=False, sep='\t')
+    allRegions[columns].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
 
-def computeScalingFactor(matrices: List):
-    """ Read all matrices to obtain for range of bin seperations.
-        Apply a power law scaling factor between 0 and 1 to downweight
-        more distant interactions """
-
-    allBinSizes = set()
-    allSeperations = set()
-    for matrix in matrices:
-        with open(matrix) as fh:
-            header = fh.readline().strip().split('\t')[2:]
-            header = pd.Series([int(pos.split('-')[1]) for pos in header])
-            try:
-                binSize = int(header.diff().dropna().unique())
-            except TypeError:
-                sys.exit(f'Bin sizes in {matrix} are not all equal.')
-            allBinSizes.add(binSize)
-            binRange = header.iloc[-1] - header.iloc[0]
-            allSeperations.update(list(range(0, binRange + 1, binSize)))
-    assert len(allBinSizes) == 1, 'Binsizes must be equal across matrices'
-    allSeperations = list(sorted(allSeperations))
-    scalingFactor = np.linspace(1.0, 0.0, num=len(allSeperations))
-    scalingFactor = pd.DataFrame(
-        {'seperation': allSeperations, 'scale': scalingFactor})
-
-    return scalingFactor
-
-
-def getColour(x, fdr, colourmap):
-    if x['p(adj)'] <= fdr:
+def getColour(x, alpha, colourmap, p='p(adj)'):
+    if x[p] <= alpha:
         if x['direction'] == 1:
             i = (x['quantScore'] * 0.5)  + 0.5
         else:
@@ -141,20 +125,24 @@ def parseArgs():
     mainParent = createMainParent(verbose=False, version=__version__)
     parser = argparse.ArgumentParser(
         epilog=epilog, description=__doc__, parents=[mainParent])
-    parser.set_defaults(function=computeASAP)
+    parser.set_defaults(function=computeChangeScore)
     parser.add_argument(
-        'matrices', nargs='*', help='HiC matrix in homer format.')
+        'matrices', nargs='+', help='HiC matrix in homer format.')
     parser.add_argument(
-        '--outData', default=None,
-        help='File to write all relevant difference score information '
-             '(default: %(default)s)')
-    parser.add_argument(
-        '--fdr', type=float, default=0.05,
+        '--alpha', type=float, default=0.05,
         help='False discovery rate threshold for directional '
              'bias sigificance (default: %(default)s)')
     parser.add_argument(
         '--colourmap', default='bwr',
         help='Colour map for directional change (default: %(default)s)')
+    parser.add_argument(
+        '--maxDistance', type=int, default=1e6,
+        help='Maximum interaction distance (bp) to compute '
+             'change score (default: %(default)s)')
+    parser.add_argument(
+        '--nBins', type=int, default=20,
+        help='Number of clusters to group change '
+             'score (default: %(default)s)')
 
 
     return setDefaults(parser)
