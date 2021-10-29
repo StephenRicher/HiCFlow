@@ -16,7 +16,8 @@ def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int):
 
     #sns.set(font_scale=1.5)
     sns.set_style('whitegrid')
-    data = pd.concat([pd.read_csv(file, sep='\t') for file in files])
+    data = [pd.read_csv(file, sep='\t') for file in files]
+    data = pd.concat(data).reset_index(drop=True)
 
     data['group'] = data['sample'].apply(lambda x: x.split('-')[0])
     data['rep'] = data['sample'].apply(lambda x: x.split('-')[1])

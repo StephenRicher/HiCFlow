@@ -5,6 +5,7 @@
 import os
 import sys
 import argparse
+import contextlib
 import numpy as np
 import pandas as pd
 from typing import List
@@ -18,7 +19,10 @@ __version__ = '1.0.0'
 def computeChangeScore(loops: List, maxLineWidth: int, nBins: int,
                        interactOut: str, linksUp: str, linksDown: str):
     loops = pd.concat([pd.read_pickle(loop) for loop in loops])
+    # Ensure bins does not exceeding number of loops
+    nBins = min(nBins, len(loops))
     est = KBinsDiscretizer(n_bins=nBins, encode='ordinal', strategy='kmeans')
+    print(loops.shape, file=sys.stderr)
     loops['score'] = est.fit_transform(
         loops['rawScore'].to_numpy().reshape(-1,1)).astype(int)
     loops['empty'] = '.'
@@ -40,7 +44,7 @@ def computeChangeScore(loops: List, maxLineWidth: int, nBins: int,
     maxScore = (maxLineWidth * 2) ** 2
     loops['score'] = (loops['score'] / loops['score'].max()) * maxScore
 
-    writeLinks(loops.loc[(loops['direction'] == 1)], linkUp)
+    writeLinks(loops.loc[(loops['direction'] == 1)], linksUp)
     writeLinks(loops.loc[(loops['direction'] == -1)], linksDown)
 
 

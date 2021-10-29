@@ -29,7 +29,7 @@ def plotCompareViewpoint(bedgraphs: List, out: str, build: str, dpi: int):
             logging.error('Viewpoints do not match between files.')
             raise ValueError
         prevViewpoint = pathInfo['viewpoint']
-    allData = pd.concat(allData)
+    allData = pd.concat(allData).reset_index(drop=True)
     allData['mid'] = (allData['end'] + allData['start']) / 2
     allData['viewMid'] = (allData['viewEnd'] + allData['viewStart']) / 2
     allData['distance'] = allData['mid'] - allData['viewMid']

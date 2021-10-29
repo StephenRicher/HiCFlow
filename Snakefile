@@ -1704,10 +1704,10 @@ rule reformatDifferentialTAD:
 
 rule computeChangeScore:
     input:
-        expand('dat/HiCsubtract/{region}/{{bin}}/{{group1}}-vs-{{group2}}-LOESSdiff-medianFilter-{{pm}}.h5'
+        expand('dat/HiCsubtract/{region}/{{bin}}/{{group1}}-vs-{{group2}}-LOESSdiff-medianFilter-{{pm}}.h5',
             region=REGIONS.index),
     output:
-        'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.tsv'
+        'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.bed'
     params:
         alpha = config['compareMatrices']['alpha'],
         colourmap = config['compareMatrices']['colourmap'],
@@ -1720,7 +1720,7 @@ rule computeChangeScore:
     shell:
         'python {SCRIPTS}/computeChangeScore.py '
         '--alpha {params.alpha}  --colourmap {params.colourmap} '
-        '--nBins {params.nbins} --maxDistance {params.maxDistance} '
+        '--nBins {params.nBins} --maxDistance {params.maxDistance} '
         '{input} > {output} 2> {log}'
 
 
@@ -1752,7 +1752,7 @@ rule scoreLoopDiff:
 
 rule mergeLoopDiff:
     input:
-        expand('dat/loops/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{region}-{{bin}}-{{pm}}-loopDiff.pkl',
+        expand('dat/loops/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{region}-{{bin}}-{{pm}}-loopDiff.pkl',
             region=REGIONS.index),
     output:
         interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}.interact',
@@ -1761,14 +1761,13 @@ rule mergeLoopDiff:
     params:
         nBins = 20,
         maxLineWidth = 3
-
     log:
         'logs/mergeLoopDiff/{group1}-vs-{group2}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/mergeLoopDiff.py {input} '
-        '--maxLineWidth {params.maxLineWidth} --nBins {params.nbins} '
+        '--maxLineWidth {params.maxLineWidth} --nBins {params.nBins} '
         '--interactOut {output.interactOut} --linksUp {output.linksUp} '
         '--linksDown {output.linksDown} 2> {log}'
 
@@ -1917,7 +1916,6 @@ rule createSubtractConfig:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
         linksUp = rules.mergeLoopDiff.output.linksUp,
         linksDown = rules.mergeLoopDiff.output.linksDown,
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}-linksDown.links',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],

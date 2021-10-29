@@ -19,10 +19,10 @@ def scoreLoopDiff(loops: List, matrix: str, out: str):
 
     loops = readLoops(loops)
     matrix = hm.hiCMatrix(matrix)
-    chrom = hic.getChrNames()[0]
+    chrom = matrix.getChrNames()[0]
     # Remove non-specific loops
     loops = loops.loc[loops['chrom1'] == chrom]
-    loops[['score', 'direction']] = loops.apply(
+    loops[['rawScore', 'direction']] = loops.apply(
         scoreLoops, axis=1, args=(matrix,), result_type='expand')
     loops.dropna().to_pickle(out)
 
@@ -50,7 +50,7 @@ def readLoops(paths):
         loops.append(
             pd.read_csv(file, sep='\t', usecols=[0,1,2,3,4,5],
             names=names.keys(), dtype=names))
-    loops = pd.concat(loops).unique()
+    loops = pd.concat(loops).drop_duplicates()
     loops = loops.loc[loops['chrom1'] == loops['chrom2']]
     return loops
 
