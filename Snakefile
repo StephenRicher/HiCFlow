@@ -1553,11 +1553,9 @@ rule mergeBamByReplicate:
 
 rule reformatSUTM:
     input:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.gz'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.h5'
     output:
         'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}-sutm.txt'
-    params:
-        start = lambda wc: REGIONS['start'][wc.region]
     group:
         'HiCcompare'
     log:
@@ -1565,8 +1563,7 @@ rule reformatSUTM:
     conda:
          f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/homer2sutm.py {input} --start {params.start} '
-         '--binSize {wildcards.bin} > {output} 2> {log}'
+        'python {SCRIPTS}/h52sutm.py {input} > {output} 2> {log}'
 
 
 rule HiCcompare:

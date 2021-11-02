@@ -1,39 +1,18 @@
 rule makeHiCsummary:
     input:
-        f'dat/matrix/{{region}}/base/raw/{{sample}}-{{region}}.{BASE_BIN}-{{pm}}.h5'
-    output:
-        'dat/matrix/{region}/{sample}-{region}-{pm}.HiCsummary.gz'
-    params:
-        chrom = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region],
-        binSize = BASE_BIN
-    group:
-        'CscoreTool'
-    log:
-        'logs/makeHiCsummary/{sample}-{region}-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/makeHiCsummary.py --chrom {params.chrom} '
-        '--start {params.start} --binSize {params.binSize} {input} '
-        '| gzip > {output} 2> {log}'
-
-
-rule mergeHiCsummary:
-    input:
         lambda wc: expand(
-            'dat/matrix/{{region}}/{{group}}-{rep}-{{region}}-{{pm}}.HiCsummary.gz',
-            rep=HiC.groups()[wc.group]),
+            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}.h5',
+            rep=HiC.groups()[wc.group], BASE_BIN=BASE_BIN)
     output:
         'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz'
     group:
         'CscoreTool'
     log:
-        'logs/mergeHiCsummary/{group}-{region}-{pm}.log'
+        'logs/makeHiCsummary/{group}-{region}-{pm}.log'
     conda:
-        f'{ENVS}/samtools.yaml'
+        f'{ENVS}/hicexplorer.yaml'
     shell:
-        'cat {input} > {output} 2> {log}'
+        'python {SCRIPTS}/makeHiCsummary.py {input} | gzip > {output} 2> {log}'
 
 
 rule generateEqualLengthBed:
@@ -63,7 +42,7 @@ def getChrPrefix(wc):
 rule CscoreTool:
     input:
         windows = rules.generateEqualLengthBed.output,
-        summary = rules.mergeHiCsummary.output
+        summary = rules.makeHiCsummary.output
     output:
         expand(
             'dat/Cscore/{{region}}/{{bin}}/{{group}}-{{region}}-{{bin}}-{{pm}}-Cscore{ext}',
