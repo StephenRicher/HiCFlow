@@ -20,6 +20,11 @@ def h52sutm(matrix):
         'start2': nonzeroIdx[1],
         'value' : nonzeroValues
     })
+    # Adj bin position
+    bin0pos = hic.getBinPos(0)[1]
+    binAdj = bin0pos // hic.getBinSize()
+    mat['start'] = mat['start'] + binAdj
+    mat['start2'] = mat['start2'] + binAdj
     mat = mat.loc[mat['start'] >= mat['start2']]
     mat.to_csv(sys.stdout, header=False, index=False, sep='\t')
 
