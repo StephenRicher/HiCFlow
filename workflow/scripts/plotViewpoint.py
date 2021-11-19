@@ -4,6 +4,7 @@
     of HiCFlow rule 'plotCompareViewpoint' """
 
 import sys
+import logging
 import argparse
 import numpy as np
 import pandas as pd
@@ -16,8 +17,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def plotCompareViewpoint(bedgraphs: List, out: str, build: str, dpi: int):
-
+def plotCompareViewpoint(bedgraphs: List, out: str, build: str, title: str, dpi: int):
     allData = []
     names=['viewRef', 'viewStart', 'viewEnd', 'chrom', 'start', 'end', 'score']
     for i, file in enumerate(bedgraphs):
@@ -33,11 +33,11 @@ def plotCompareViewpoint(bedgraphs: List, out: str, build: str, dpi: int):
     allData['mid'] = (allData['end'] + allData['start']) / 2
     allData['viewMid'] = (allData['viewEnd'] + allData['viewStart']) / 2
     allData['distance'] = allData['mid'] - allData['viewMid']
-
     viewpoint = reformatCoordinates(pathInfo['viewpoint'])
-    title = f'{pathInfo["region"]} at {pathInfo["binSize"]} binsize'
+
     fig, ax = plt.subplots()
     alpha = 1 if len(bedgraphs) == 1 else 0.5
+    ax.axvline(x=0, linestyle='--', alpha=0.5)
     sns.lineplot(x='distance', y='score', hue='sample', alpha=alpha,
                  ci=None, data=allData, ax=ax)
     ax.set_ylabel('Interactions')
@@ -45,7 +45,9 @@ def plotCompareViewpoint(bedgraphs: List, out: str, build: str, dpi: int):
     if build is not None:
         xlabel += f' ({build})'
     ax.set_xlabel(xlabel)
-    ax.set_title(title, loc='left')
+
+    if title is not None:
+        ax.set_title(title, loc='left')
     fig.tight_layout()
     fig.savefig(out, dpi=dpi, bbox_inches='tight')
 
@@ -84,14 +86,13 @@ def parseArgs():
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=plotCompareViewpoint)
     parser.add_argument(
-        'bedgraphs', nargs='+',
-        help='Viewpoint bedgraphs.')
+        'bedgraphs', nargs='+', help='Viewpoint bedgraphs.')
     parser.add_argument(
-        '--build',
-        help='Reference build label (default: %(default)s)')
+        '--build', help='Reference build label (default: %(default)s)')
     parser.add_argument(
         '--dpi', type=int, default=300,
         help='Resolution for plot (default: %(default)s)')
+    parser.add_argument('--title', help='Optional title for plot')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--out', required=True,
