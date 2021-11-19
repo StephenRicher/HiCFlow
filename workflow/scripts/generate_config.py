@@ -48,13 +48,17 @@ def main():
         help='Add title and bigWig files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--changeScore_title', default='Change score',
-        help='Title for sumLogFC track')
-    parser.add_argument(
-        '--changeScore',
-        help='Bed file of bins with directional preference.')
+        '--rgbBed', metavar='TITLE,FILE,SIZE', default=[],
+        type=commaPair, action='append',
+        help='Add title and rgb BED files as comma seperated pairs.'
+        'Call multiple times to add more files.')
     parser.add_argument(
         '--bed', metavar='TITLE,FILE,SIZE', default=[],
+        type=commaPair, action='append',
+        help='Add title and bed files as comma seperated pairs.'
+        'Call multiple times to add more files.')
+    parser.add_argument(
+        '--genes', metavar='TITLE,FILE,SIZE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
         'Call multiple times to add more files.')
@@ -62,6 +66,10 @@ def main():
         '--collapsedBed', metavar='TITLE,FILE', default=[],
         type=commaPair, action='append',
         help='Add unlablled non-overlapping BED intervals.')
+    parser.add_argument(
+        '--switchScore', help='BED file of Cscore switch probability')
+    parser.add_argument(
+        '--CScore', help='BED file of Cscore')
     parser.add_argument(
         '--SNPdensity',
         help='BED file of SNP density per interval')
@@ -96,9 +104,9 @@ def commaPair(value):
 
 
 def make_config(insulations, matrix, log, tads, loops, SNPdensity,
-                bigWig, bed, collapsedBed, compare,
-                changeScore_title, changeScore, depth, colourmap, vMin, vMax,
-                plain, vLines, links):
+                bigWig, bed, collapsedBed, compare, rgbBed,
+                depth, colourmap, vMin, vMax, switchScore,
+                genes, plain, vLines, links, CScore):
 
     if plain:
         loops = []
@@ -127,12 +135,21 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
 
     #print('[spacer]')
 
-    if notEmpty(changeScore):
-        writeChangeScore(changeScore, title=changeScore_title)
+    for title, file, size in rgbBed:
+        if notEmpty(file):
+            writeRBGBed(file, title, size)
         print('[spacer]')
 
     if notEmpty(SNPdensity):
         writeSNPdensity(SNPdensity)
+        print('[spacer]')
+
+    if notEmpty(CScore):
+        writeCScore(CScore)
+        print('[spacer]')
+
+    if notEmpty(switchScore):
+        writeSwitchScore(switchScore)
         print('[spacer]')
 
     for i, insulation in enumerate(insulations):
@@ -162,6 +179,11 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
     for title, file in collapsedBed:
         if notEmpty(file):
             writeCollapsedBed(file, title)
+        print('[spacer]')
+
+    for title, file, size in genes:
+        if notEmpty(file):
+            writeGenes(file=file, title=title, size=size)
         print('[spacer]')
 
     for title, file, size in bed:
@@ -290,6 +312,16 @@ def write_bed(file, title, size):
           f'file_type = bed',
           f'labels = true', sep = '\n')
 
+def writeGenes(file, title, size):
+    print(f'[rgb BED]',
+          f'file = {file}',
+          f'title = {title}',
+          f'color = bed_rgb',
+          f'border_color = none',
+          f'height = {size}',
+          f'type = genes',
+          f'file_type = bed',
+          f'labels = true', sep='\n')
 
 def writeHline(y):
     print(f'[Hlines overlayed]',
@@ -306,13 +338,43 @@ def writeVlines(bed):
           f'type = vlines', sep='\n')
 
 
-def writeChangeScore(bed, title):
-    print(f'[sumLogFCBed]',
+def writeRBGBed(bed, title, size):
+    print(f'[rgb BED]',
           f'file = {bed}',
           f'title = {title}',
           f'labels = false',
           f'color = bed_rgb',
           f'border_color = none',
+          f'line_width = 0',
+          f'fontsize = 0',
+          f'height = {size}',
+          f'display = collapsed', sep='\n')
+
+
+def writeSwitchScore(bed):
+    print(f'[Switch Score]',
+          f'file = {bed}',
+          f'title = Switch score',
+          f'labels = false',
+          f'color = binary',
+          f'border_color = none',
+          f'min_value = 0',
+          f'max_value = 1',
+          f'line_width = 0',
+          f'fontsize = 0',
+          f'height = 1.5',
+          f'display = collapsed', sep='\n')
+
+
+def writeCScore(bed):
+    print(f'[C Score]',
+          f'file = {bed}',
+          f'title = Cscore',
+          f'labels = false',
+          f'color = bwr',
+          f'border_color = none',
+          f'min_value = -1',
+          f'max_value = 1',
           f'line_width = 0',
           f'fontsize = 0',
           f'height = 1.5',
@@ -335,13 +397,13 @@ def writeSNPdensity(bed):
 
 
 def writeCollapsedBed(bed, title):
-        print(f'[SNP density]',
-              f'file = {bed}',
-              f'title = {title}',
-              f'labels = false',
-              f'fontsize = 0',
-              f'height = 1.5',
-              f'display = collapsed', sep='\n')
+    print(f'[Collapsed Bed]',
+          f'file = {bed}',
+          f'title = {title}',
+          f'labels = false',
+          f'fontsize = 0',
+          f'height = 1.5',
+          f'display = collapsed', sep='\n')
 
 
 if __name__ == "__main__":
