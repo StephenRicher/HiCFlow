@@ -784,12 +784,8 @@ rule SNPsplit:
         bam = rules.removeUnmapped.output,
         snps = SNPsplitInput
     output:
-        expand('dat/snpsplit/{{preSample}}.hic.{ext}',
-            ext = ['SNPsplit_report.txt', 'SNPsplit_sort.txt']),
-        bam = expand('dat/snpsplit/{{preSample}}.hic.{ext}',
-            ext = ['G1_G1.bam', 'G1_UA.bam',
-                   'G2_G2.bam', 'G2_UA.bam',
-                   'G1_G2.bam', 'UA_UA.bam'])
+        report = 'dat/snpsplit/{preSample}.hic.SNPsplit_report.txt',
+        bam = 'dat/snpsplit/{preSample}.hic.allele_flagged.bam'
     params:
         outdir = 'dat/snpsplit/'
     group:
@@ -800,7 +796,29 @@ rule SNPsplit:
         f'{ENVS}/snpsplit.yaml'
     shell:
         'SNPsplit {input.bam} --snp_file {input.snps} '
-        '--hic --output_dir {params.outdir} &> {log}'
+        '--hic -skip_tag2sort --output_dir {params.outdir} '
+        '&> {log}'
+
+
+rule tag2sort:
+    input:
+        rules.SNPsplit.output.bam
+    output:
+        report = 'dat/snpsplit/{preSample}.hic.SNPsplit_sort.txt',
+        bam = expand('dat/snpsplit/{{preSample}}.hic.{ext}',
+            ext = ['G1_G1.bam', 'G1_UA.bam', 'G2_G2.bam',
+                   'G2_UA.bam', 'G1_G2.bam', 'UA_UA.bam'])
+    params:
+        outdir = 'dat/snpsplit/',
+        bam = lambda wc: f'{wc.preSample}.hic.allele_flagged.bam'
+    group:
+        'SNPsplit'
+    log:
+        'logs/tag2sort/tag2sort-{preSample}.log'
+    conda:
+        f'{ENVS}/snpsplit.yaml'
+    shell:
+        'tag2sort {params.bam} --hic --output_dir {params.outdir} &> {log}'
 
 
 rule mergeSNPsplit:
@@ -1571,10 +1589,8 @@ rule HiCcompare:
         'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-sutm.txt',
         'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-sutm.txt'
     output:
-        all = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.homer',
-        links = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{pm}.links',
-        adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.homer',
-        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.homer',
+        adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.2d.txt',
+        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.2d.txt',
         adjIF1sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.sutm',
         adjIF2sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.sutm'
     params:
@@ -1596,20 +1612,43 @@ rule HiCcompare:
         '{wildcards.bin} {params.suffix} {input} &> {log}'
 
 
-rule homerToH5:
+rule Text2DToH5:
     input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.homer'
+        chromSizes = getChromSizes,
+        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.2d.txt'
     output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}-allChrom.h5'
     group:
         'HiCcompare'
     log:
-        'logs/homerToH5/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.log'
+        'logs/Text2DToH5/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        '(hicConvertFormat --matrices {input} --outFileName {output} '
-        '--inputFormat homer --outputFormat h5 || touch {output})  &> {log}'
+        '(hicConvertFormat --matrices {input.matrix} --outFileName {output} '
+        '--inputFormat 2D-text --outputFormat h5 --resolutions {wildcards.bin} '
+        '--chromosomeSizes {input.chromSizes} || touch {output})  &> {log}'
+
+
+rule adjustCompareMatrix:
+    input:
+        rules.Text2DToH5.output
+    output:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region] + 1,
+        end = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'HiCcompare'
+    log:
+        'logs/adjustCompareMatrix/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicAdjustMatrix --matrix {input} --outFileName {output} '
+        '--regions <(echo -e \'{params.chr}\t{params.start}\t{params.end}\') '
+        '&> {log}'
 
 
 if config['compareMatrices']['tads'] is not None:
@@ -1939,7 +1978,7 @@ rule createSubtractConfig:
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
-        '--changeScore {input.changeScore} '
+        '--rgbBed "Change Score",{input.changeScore},1.5 '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.vLines} {params.tracks} > {output} 2> {log}'
 
