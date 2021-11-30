@@ -59,12 +59,11 @@ HiCParams:
     minDistance:          300
     maxLibraryInsertSize: 1000
     minMappingQuality:    15
-    removeSelfLigation:   True
+    keepSelfLigation:     False
     keepSelfCircles:      False
-    skipDuplicationCheck: False
     nofill:               False
     threads:              4
-    makeBam:              True
+    makeBam:              False
     compartmentScore:     True
     multiplicativeValue:  10000 # HiC counts are normalised to this value
 
@@ -79,7 +78,6 @@ plotParams:
     viewpointRange: 150_000
     plotRep:        True
     vLines:         ../config/vlines.bed
-    runPCA:         True
 
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
@@ -95,6 +93,8 @@ compareMatrices:
     vMax: 0.75  # Maximum logFC value for colour scale.
     allPairs: False # If True run '1 vs 2' AND '2 vs 1'
     nPermute: 1000 # Experimental option
+    rawDiff: True
+    rawLog2: True
 
 # GATK variant calling best practises for human data
 gatk:

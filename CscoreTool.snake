@@ -1,65 +1,18 @@
-rule bam2sam:
-    input:
-        'dat/matrix/{region}/{sample}-{region}-{pm}.bam'
-    output:
-        pipe('dat/matrix/{region}/{sample}-{region}-{pm}.sam')
-    group:
-        'CscoreTool'
-    log:
-        'logs/bam2sam/{sample}-{region}-{pm}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        max(1, THREADS - 2)
-    shell:
-        'samtools view -@ {threads} -f 64 {input} > {output} 2> {log}'
-
-
-def getChrPrefix(wc):
-    """ Add 'chr' prefix if required since Cscore expects it. """
-    chrom = REGIONS['chr'][wc.region]
-    if not chrom.startswith('chr'):
-        prefix = 'chr'
-    else:
-        prefix = ''
-    return prefix
-
-
-rule bam2HiCsummary:
-    input:
-        rules.bam2sam.output
-    output:
-        'dat/matrix/{region}/{sample}-{region}-{pm}.HiCsummary.gz'
-    params:
-        prefix = getChrPrefix
-    group:
-        'CscoreTool'
-    log:
-        'logs/bam2HiCSummary/{sample}-{region}-{pm}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    threads:
-        2
-    shell:
-        'awk -f {SCRIPTS}/bam2hicSummary.awk -v prefix={params.prefix} '
-        '{input} | gzip > {output} 2> {log}'
-
-
-rule mergeHiCsummary:
+rule makeHiCsummary:
     input:
         lambda wc: expand(
-            'dat/matrix/{{region}}/{{group}}-{rep}-{{region}}-{{pm}}.HiCsummary.gz',
-            rep=HiC.groups()[wc.group]),
+            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}.h5',
+            rep=HiC.groups()[wc.group], BASE_BIN=BASE_BIN)
     output:
         'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz'
     group:
         'CscoreTool'
     log:
-        'logs/mergeHiCsummary/{group}-{region}-{pm}.log'
+        'logs/makeHiCsummary/{group}-{region}-{pm}.log'
     conda:
-        f'{ENVS}/samtools.yaml'
+        f'{ENVS}/hicexplorer.yaml'
     shell:
-        'cat {input} > {output} 2> {log}'
+        'python {SCRIPTS}/makeHiCsummary.py {input} | gzip > {output} 2> {log}'
 
 
 rule generateEqualLengthBed:
@@ -76,10 +29,20 @@ rule generateEqualLengthBed:
         '{wildcards.bin} > {output} 2> {log}'
 
 
+def getChrPrefix(wc):
+    """ Add 'chr' prefix if required since Cscore expects it. """
+    chrom = REGIONS['chr'][wc.region]
+    if not chrom.startswith('chr'):
+        prefix = 'chr'
+    else:
+        prefix = ''
+    return prefix
+
+
 rule CscoreTool:
     input:
         windows = rules.generateEqualLengthBed.output,
-        summary = rules.mergeHiCsummary.output
+        summary = rules.makeHiCsummary.output
     output:
         expand(
             'dat/Cscore/{{region}}/{{bin}}/{{group}}-{{region}}-{{bin}}-{{pm}}-Cscore{ext}',

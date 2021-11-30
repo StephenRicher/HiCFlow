@@ -10,14 +10,13 @@ from typing import List
 from scipy.sparse import csr_matrix
 from hicmatrix import HiCMatrix as hm
 from scipy.ndimage import median_filter
-from sklearn.preprocessing import minmax_scale
 from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
 
 
-def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: str):
+def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str):
 
     hic1 = hm.hiCMatrix(matrices[0])
     hic2 = hm.hiCMatrix(matrices[1])
@@ -27,18 +26,13 @@ def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str, mode: s
                  "the same resolution and created using the same parameters. "
                  "Check the matrix values using the tool `hicInfo`.")
 
+    hic1.convert_to_obs_exp_matrix()
+    hic2.convert_to_obs_exp_matrix()
+
     nan_bins = set(hic1.nan_bins)
     nan_bins = nan_bins.union(hic2.nan_bins)
 
-    if mode == 'diff':
-        newMatrix = hic2.matrix - hic1.matrix
-    elif mode == 'log2':
-        hic1.matrix.data = float(1) / hic1.matrix.data
-        newMatrix = hic2.matrix.multiply(hic1.matrix)
-        newMatrix.eliminate_zeros()
-
-        newMatrix.data = np.log2(newMatrix.data)
-        newMatrix.eliminate_zeros()
+    newMatrix = hic2.matrix - hic1.matrix
 
     for i, out in enumerate([outMatrix, outMatrixFilter]):
         if i == 1:
@@ -58,7 +52,6 @@ def parseArgs():
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=simpleSubtract)
     parser.add_argument('matrices', nargs=2, help='HiC matrix in homer format.')
-    parser.add_argument('--mode', help='Mode for subtraction comparison.')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--outMatrix', required=True,
