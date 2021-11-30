@@ -941,7 +941,7 @@ rule buildBaseMatrix:
         '--outFileName {output.hic} --skipDuplicationCheck '
         '--QCfolder {output.qc} --threads {threads} '
         f'{"--outBam {output.bam} " if config["HiCParams"]["makeBam"] else ""}'
-        '&> {log} || mkdir -p {output.qc}; touch {output.hic} {output.bam}'
+        '&> {log}'
 
 
 rule adjustMatrix:
@@ -1618,6 +1618,8 @@ rule Text2DToH5:
         matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.2d.txt'
     output:
         'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}-allChrom.h5'
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region]
     group:
         'HiCcompare'
     log:
@@ -1627,7 +1629,7 @@ rule Text2DToH5:
     shell:
         '(hicConvertFormat --matrices {input.matrix} --outFileName {output} '
         '--inputFormat 2D-text --outputFormat h5 --resolutions {wildcards.bin} '
-        '--chromosomeSizes {input.chromSizes} || touch {output})  &> {log}'
+        '--chromosomeSizes <(grep -w {params.chr} {input.chromSizes})) &> {log}'
 
 
 rule adjustCompareMatrix:
@@ -1740,17 +1742,17 @@ rule reformatDifferentialTAD:
 
 rule computeChangeScore:
     input:
-        expand('dat/HiCsubtract/{region}/{{bin}}/{{group1}}-vs-{{group2}}-LOESSdiff-medianFilter-{{pm}}.h5',
+        expand('dat/HiCsubtract/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{subtractMode}}-medianFilter-{{pm}}.h5',
             region=REGIONS.index),
     output:
-        'dat/changeScore/{bin}/{group1}-vs-{group2}-{pm}-{bin}-changeScore.bed'
+        'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed'
     params:
         alpha = config['compareMatrices']['alpha'],
         colourmap = config['compareMatrices']['colourmap'],
         maxDistance = 1000000,
         nBins = 20
     log:
-        'logs/computeChangeScore/{group1}-vs-{group2}-{bin}-{pm}.log'
+        'logs/computeChangeScore/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1774,11 +1776,11 @@ def getLoopsInput(wc):
 rule scoreLoopDiff:
     input:
         loops = getLoopsInput,
-        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-medianFilter-{pm}.h5'
+        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-medianFilter-{pm}.h5'
     output:
-        'dat/loops/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{pm}-loopDiff.pkl'
+        'dat/loops/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{region}-{bin}-{pm}-loopDiff.pkl'
     log:
-        'logs/scoreLoopDiff/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
+        'logs/scoreLoopDiff/{group1}-vs-{group2}-{subtractMode}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1788,17 +1790,17 @@ rule scoreLoopDiff:
 
 rule mergeLoopDiff:
     input:
-        expand('dat/loops/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{region}-{{bin}}-{{pm}}-loopDiff.pkl',
+        expand('dat/loops/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{subtractMode}}-{region}-{{bin}}-{{pm}}-loopDiff.pkl',
             region=REGIONS.index),
     output:
-        interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}.interact',
-        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}-linksUp.links',
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{bin}-{pm}-linksDown.links'
+        interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}.interact',
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links'
     params:
         nBins = 20,
         maxLineWidth = 3
     log:
-        'logs/mergeLoopDiff/{group1}-vs-{group2}-{bin}-{pm}.log'
+        'logs/mergeLoopDiff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1851,65 +1853,33 @@ rule plotCompareViewpoint:
         '--dpi {params.dpi} {params.build} &> {log}'
 
 
-####
-rule distanceNormaliseNormIF:
+def getSubtractInput(wc):
+    if wc.subtractMode == 'LOESSdiff':
+        return ([
+            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.h5',
+            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.h5',
+        ])
+    else:
+        return ([
+            'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}.h5',
+            'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}.h5',
+        ])
+
+rule HiCsubtract:
     input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+        getSubtractInput
     output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-obsExp-{pm}.h5'
-    params:
-        method = 'obs_exp'
+        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-noFilter-{pm}.h5',
+        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-medianFilter-{pm}.h5',
     group:
         'plotHiCsubtract'
     log:
-        'logs/distanceNormaliseNormIF/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}.log'
+        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-{subtractMode}-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicTransform -m {input} --method {params.method} -o {output} '
-        '&> {log} || touch {output}'
-
-
-rule HiCsubtract1:
-    input:
-        m1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-obsExp-{pm}.h5',
-        m2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-obsExp-{pm}.h5'
-    output:
-        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-noFilter-{pm}.h5',
-        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-LOESSdiff-medianFilter-{pm}.h5',
-    params:
-        mode = 'diff'
-    group:
-        'plotHiCsubtract'
-    log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-LOESSdiff-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outMatrix {output.out} --outMatrixFilter {output.outFilt} '
-        '--mode {params.mode} &> {log}'
-
-
-rule HiCsubtract2:
-    input:
-        m1 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
-        m2 = 'dat/matrix/{region}/{bin}/raw/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
-    output:
-        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWdiff-noFilter-{pm}.h5',
-        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-RAWdiff-medianFilter-{pm}.h5'
-    params:
-        mode = 'diff'
-    group:
-        'plotHiCsubtract'
-    log:
-        'logs/HiCsubtract/{group1}-{group2}-{bin}-{region}-RAWdiff-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/compareHiC.py {input.m1} {input.m2} '
-        '--outMatrix {output.out} --outMatrixFilter {output.outFilt} '
-        '--mode {params.mode} &> {log}'
+        'python {SCRIPTS}/compareHiC.py {input} --outMatrix {output.out} '
+        '--outMatrixFilter {output.outFilt} &> {log}'
 
 
 def getSNPcoverage(wc):
@@ -1950,12 +1920,12 @@ def getVmax(wc):
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
-        linksUp = rules.mergeLoopDiff.output.linksUp,
-        linksDown = rules.mergeLoopDiff.output.linksDown,
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
         vLines = config['plotParams']['vLines'],
-        changeScore = rules.computeChangeScore.output,
+        changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
         SNPcoverage = getSNPcoverage
     output:
         'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.ini',
