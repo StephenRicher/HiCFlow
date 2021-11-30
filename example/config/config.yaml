@@ -1,7 +1,7 @@
 # Specify output directory - either absolute path or relative to Snakefile.
 # If using relative paths for subsequent files, these should be relative to
 # this workding directory.
-workdir: example/analysis2/
+workdir: example/analysis/
 
 # CSV file with cell type, experimental group, replicate number,
 # read (forward/reverse) and path each FASTQ files.
