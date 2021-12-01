@@ -1853,17 +1853,35 @@ rule plotCompareViewpoint:
         '--dpi {params.dpi} {params.build} &> {log}'
 
 
+rule distanceNormaliseAdjIF:
+    input:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.h5'
+    output:
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-obsExp-{pm}.h5'
+    params:
+        method = 'obs_exp'
+    group:
+        'HiCcompare'
+    log:
+        'logs/distanceNormaliseAdjIF/{group1}-{group2}-{adjIF}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicTransform -m {input} --method {params.method} -o {output} &> {log}'
+
+
 def getSubtractInput(wc):
     if wc.subtractMode == 'LOESSdiff':
         return ([
-            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.h5',
-            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.h5',
+            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-obsExp-{pm}.h5',
+            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-obsExp-{pm}.h5',
         ])
     else:
         return ([
-            'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}.h5',
-            'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}.h5',
+            'dat/matrix/{region}/{bin}/raw/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
+            'dat/matrix/{region}/{bin}/raw/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
         ])
+
 
 rule HiCsubtract:
     input:

@@ -26,9 +26,6 @@ def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str):
                  "the same resolution and created using the same parameters. "
                  "Check the matrix values using the tool `hicInfo`.")
 
-    hic1.convert_to_obs_exp_matrix()
-    hic2.convert_to_obs_exp_matrix()
-
     nan_bins = set(hic1.nan_bins)
     nan_bins = nan_bins.union(hic2.nan_bins)
 
