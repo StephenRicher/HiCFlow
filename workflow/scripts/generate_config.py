@@ -2,6 +2,7 @@
 
 import os
 import argparse
+import fileinput
 import numpy as np
 
 def main():
@@ -87,6 +88,10 @@ def main():
         help = 'Maximum score value for matrix.')
     parser.add_argument(
         '--vLines', help = 'BED file to plot vertical lines.')
+    parser.add_argument(
+        '--tmpLinks', default='.tmp.merged.links',
+        help = 'Temporary links file output to fix issues '
+               'with loop plotting overlay.')
 
     args = parser.parse_args()
     func = args.function
@@ -106,7 +111,7 @@ def commaPair(value):
 def make_config(insulations, matrix, log, tads, loops, SNPdensity,
                 bigWig, bed, collapsedBed, compare, rgbBed,
                 depth, colourmap, vMin, vMax, switchScore,
-                genes, plain, vLines, links, CScore):
+                genes, plain, vLines, links, CScore, tmpLinks):
 
     if plain:
         loops = []
@@ -161,7 +166,11 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
     print('# End Sample Specific')
 
     if links is not None:
-        for i, link in enumerate(links):
+        with open(tmpLinks, 'w') as fout, fileinput.input(links) as fin:
+            for line in fin:
+                fout.write(line)
+        writeLinks(tmpLinks, 0)
+        for i, link in enumerate(links, 1):
             if notEmpty(link):
                 writeLinks(link, i)
         print('[spacer]')
@@ -242,7 +251,9 @@ def write_loops(loops, i, compare=False):
 
 
 def writeLinks(links, i):
-    colours = {0: 'Reds', 1: 'Blues'}
+    # Hack fix to reverse print the loops again
+    colours = {0: 'white', 1: 'Reds', 2: 'Blues'}
+    alpha = 0 if i == 0 else 1
     overlay = 'no' if i == 0 else 'share-y'
     print(f'[Links]',
           f'file = {links}', sep = '\n')
@@ -252,6 +263,8 @@ def writeLinks(links, i):
           f'line_style = solid',
           f'color = {colours[i]}',
           f'height = 3',
+          f'alpha = {alpha}',
+          f'compact_arcs_level = 0',
           f'file_type = links',
           f'overlay_previous = {overlay}', sep = '\n')
 

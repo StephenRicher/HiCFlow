@@ -63,16 +63,16 @@ write.table(
 
 # Create copy of data frame for lower triangle
 hic.table2 = data.frame(hic.table)
-names(hic.table2) = c("chr2", "start2",  "end2", "chr1", "start1", "end1", "IF1", "IF2", "D", "M", "adj.IF1", "adj.IF2", "adj.M",  "mc", "A")    
+names(hic.table2) = c("chr2", "start2",  "end2", "chr1", "start1", "end1", "IF1", "IF2", "D", "M", "adj.IF1", "adj.IF2", "adj.M",  "mc", "A")
 # Remove the centre diagonal to avoid two copies
 hic.table2 = hic.table2[(hic.table2$start2 != hic.table2$start1),]
 # Combine upper and lower values
 hic.table = rbind(hic.table, hic.table2)
 
-hic.table['start1'] = ((hic.table['start1'] - 1) * binsize) + (start - 1)
-hic.table['end1'] = ((hic.table['end1'] - 1) * binsize) + (start - 1)
-hic.table['start2'] = ((hic.table['start2'] - 1) * binsize) + (start - 1)
-hic.table['end2'] = ((hic.table['end2'] - 1) * binsize) + (start - 1)
+hic.table['start1'] = hic.table['start1'] * binsize
+hic.table['end1'] = hic.table['end1'] * binsize
+hic.table['start2'] = hic.table['start2'] * binsize
+hic.table['end2'] = hic.table['end2'] * binsize
 
 # Write adjusted IF1 values
 write.table(
@@ -83,4 +83,3 @@ write.table(
 write.table(
   hic.table[,c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'adj.IF2')],
   outIF2, sep='\t', quote=FALSE, row.names=FALSE, col.names=FALSE)
-

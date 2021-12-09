@@ -174,6 +174,13 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
+    [expand('plots/{region}/{bin}/HiCsubtract/configs/{compare}-{coords}-{subtractMode}-{filter}-{pm}-{mini}.ini',
+        region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
+        subtractMode=subtractMode) for region in regionBin],
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.ini',
+        region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
@@ -647,7 +654,7 @@ rule catBam:
         'dat/mapped/{preSample}-R1-addFlag.bam',
         'dat/mapped/{preSample}-R2-addFlag.bam'
     output:
-        pipe('dat/mapped/{preSample}-merged.bam')
+        temp('dat/mapped/{preSample}-merged.bam')
     group:
         'prepareBAM'
     log:
@@ -697,7 +704,7 @@ rule sortBam:
     input:
         rules.fixmateBam.output
     output:
-        pipe('dat/mapped/{preSample}.sorted.bam')
+        temp('dat/mapped/{preSample}.sorted.bam')
     params:
         mem = '1G'
     group:
@@ -1946,7 +1953,8 @@ rule createSubtractConfig:
         changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
         SNPcoverage = getSNPcoverage
     output:
-        'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.ini',
+        ini = 'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.ini',
+        tmpLinks = temp('plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.tmp.links')
     params:
         depth = getDepth,
         SNPcoverage = getSNPcommand,
@@ -1966,9 +1974,10 @@ rule createSubtractConfig:
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
+        '--tmpLinks {output.tmpLinks} '
         '--rgbBed "Change Score",{input.changeScore},1.5 '
         '--depth {params.depth} --colourmap {params.colourmap} '
-        '{params.vLines} {params.tracks} > {output} 2> {log}'
+        '{params.vLines} {params.tracks} > {output.ini} 2> {log}'
 
 
 def setSubtractTitle(wc):
@@ -1984,7 +1993,8 @@ def setSubtractTitle(wc):
 
 rule plotSubtract:
     input:
-        rules.createSubtractConfig.output
+        ini = rules.createSubtractConfig.output.ini,
+        tmpLinks = rules.createSubtractConfig.output.tmpLinks
     output:
         'plots/{region}/{bin}/HiCsubtract/{filter}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}'
     params:
@@ -2000,7 +2010,7 @@ rule plotSubtract:
     threads:
         THREADS
     shell:
-        'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input} '
+        'export NUMEXPR_MAX_THREADS=1; pyGenomeTracks --tracks {input.ini} '
         '--region {params.region} --outFileName {output} '
         '--title {params.title} --dpi {params.dpi} &> {log}'
 
