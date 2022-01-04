@@ -86,6 +86,8 @@ default_config = {
          'miniMatrix'    : False    ,
          'miniHeight'    : 6        ,
          'filetype'      : 'svg'    ,},
+    'other':
+        {'normQC':  False ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
     'localAlignment':    False,
@@ -2764,13 +2766,13 @@ rule sampleReads:
     group:
         'filterQC'
     params:
-        s = 42.10
+        nLines = 1000000 * 2
     log:
         'logs/sampleReads/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools view {input} > {output} 2> {log}'
+        'head -n {params.nLines} <(samtools view {input}) > {output} 2> {log}'
 
 
 rule processHiC:
@@ -2797,6 +2799,8 @@ rule plotQC:
     output:
         ditagOut = 'qc/filterQC/ditagLength.{type}',
         insertOut = 'qc/filterQC/insertSizeFrequency.{type}'
+    params:
+        norm = '--norm' if config['other']['normQC'] else ''
     group:
         'filterQC' if config['groupJobs'] else 'plotQC'
     log:
@@ -2804,8 +2808,8 @@ rule plotQC:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/plotQC.py {input} --insertOut {output.insertOut} '
-        '--ditagOut {output.ditagOut} &> {log}'
+        'python {SCRIPTS}/plotQC.py {input} {params.norm} '
+        '--insertOut {output.insertOut} --ditagOut {output.ditagOut} &> {log}'
 
 
 rule mergeHicupQC:

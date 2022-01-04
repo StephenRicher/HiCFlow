@@ -101,7 +101,7 @@ if ( $config{threads} eq '' ) {
 my @filenames;
 if ( hasval( $config{config} ) ) {
     @filenames = process_config( $config{config}, \%config );    #Modifies %config and returns an array of the filenames
-    
+
     if ( scalar @filenames % 2 ) {
         die "There needs to be an even number of files in the configuration file, see hicup --help for more details.\n";
     }
@@ -343,7 +343,7 @@ sub check_re1 {
         foreach my $cutsite (@{$config{re1_deduced_cut_sites}->[$i]}) {
             my $start_seq = substr($cutsite, 0, length($cutsite) - $config{re1_caret_position}->[$i]);
             my $end_seq   = substr($cutsite, $config{re1_caret_position}->[$i]);
-            push @junctions_per_site, { -start => $start_seq, 
+            push @junctions_per_site, { -start => $start_seq,
                                         -end   => $end_seq };
         }
         push @junctions, \@junctions_per_site
@@ -483,9 +483,9 @@ sub process_file {
 
                     unless ( ( length $line2 ) == ( length $truncated[0] ) ) {
                         if(length $truncated[0] == 0) {
-                            $line2 = substr($line2, 0, 1);    #Prevent truncated reads being of zero length
+                            $line2 = $re1;      #Prevent truncated reads being of zero length
                         }elsif($re1 =~ /N/){    #If re1 contains an N, don't append this to read, else will add an N to the read
-                            $line2 = $truncated[0]  
+                            $line2 = $truncated[0]
                         } else {
                             $line2 = $truncated[0] . $re1;
                         }
@@ -584,21 +584,21 @@ on adjacent lines in the configuration file.
 
 FUNCTION
 
-Valid Hi-C pairs comprise two DNA fragments from different regions of the genome 
-ligated together. The hicup_truncater script identifies ligation junctions within 
-reads and deletes sequences downstream of the restriction enzyme recognition 
-sequence. 
+Valid Hi-C pairs comprise two DNA fragments from different regions of the genome
+ligated together. The hicup_truncater script identifies ligation junctions within
+reads and deletes sequences downstream of the restriction enzyme recognition
+sequence.
 
-The names of the files to be processed and the restriction enzyme recogniton site 
+The names of the files to be processed and the restriction enzyme recogniton site
 may be passed tonthe scrip using a configuration file or command line arguments.
 
 COMMAND LINE OPTIONS
 
 --config         Name of the optional configuration file
 --help           Print program help and exit
---nofill         Hi-C protocol did NOT include a fill-in of sticky ends prior to 
+--nofill         Hi-C protocol did NOT include a fill-in of sticky ends prior to
                  re-ligation and therefore reads shall be truncated at
-                 the restriction site sequence. This feature is only supported for 
+                 the restriction site sequence. This feature is only supported for
                  single restriction enzyme Hi-C.
 --outdir         Directory to write output files
 --quiet          Suppress all progress reports
@@ -607,7 +607,7 @@ COMMAND LINE OPTIONS
                  e.g. A^GATCT,BglII:A^AGCTT,HindIII:^GANTC,myRE.
 --sequences      Instead of specifying a restriction enzyme recognition sequence,
                  specify the ligation sequences directly
---threads        Number of threads to use, allowing simultaneous processing  of 
+--threads        Number of threads to use, allowing simultaneous processing  of
                  different files
 --version        Print the program version and exit
 --zip            Compress output using gzip
@@ -616,5 +616,3 @@ Full instructions on running the pipeline can be found at:
 www.bioinformatics.babraham.ac.uk/projects/hicup
 
 Steven Wingett, Babraham Institute, Cambridge, UK (steven.wingett@babraham.ac.uk)
-
-

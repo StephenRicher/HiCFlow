@@ -12,7 +12,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int):
+def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int, norm: bool):
 
     #sns.set(font_scale=1.5)
     sns.set_style('whitegrid')
@@ -25,24 +25,25 @@ def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int):
     data['ditag_length'] = data['ditag_length'].abs()
 
     data = data.loc[(data['insert_size'] > 0) & (data['ditag_length'] > 0),]
-    grouped = data.groupby(['group', 'rep', 'orientation'])
-    # Retrieve sample size of smallest group
-    smallestGroup = grouped['sample'].count().min()
-    # Downsample data
-    data = grouped.sample(n=smallestGroup)
+    if norm:
+        grouped = data.groupby(['group', 'rep', 'orientation'])
+        # Retrieve sample size of smallest group
+        smallestGroup = grouped['sample'].count().min()
+        # Downsample data
+        data = grouped.sample(n=smallestGroup)
 
     insertSize = sns.displot(
         data[data['interaction_type'] == 'cis'],
         x='insert_size', hue='orientation',
         col='rep', row='group', kind='kde',
         log_scale=True, facet_kws={'sharey' : 'row'})
-    insertSize.set_axis_labels('Insert Size (bp)', 'Density (a.u.)')
+    insertSize.set_axis_labels('Insert Size (bp)', 'Density')
     insertSize.tight_layout()
     insertSize.savefig(insertOut, dpi=dpi, bbox_inches='tight')
 
     ditagDist = sns.displot(data,
         x='ditag_length', hue='sample', kind='kde', log_scale=True)
-    ditagDist.set_axis_labels('Ditag Length (bp)', 'Density (a.u.)')
+    ditagDist.set_axis_labels('Ditag Length (bp)', 'Density')
     ditagDist.tight_layout()
     ditagDist.savefig(ditagOut, dpi=dpi, bbox_inches='tight')
 
@@ -58,6 +59,9 @@ def parseArgs():
     parser.set_defaults(function=plotQC)
     parser.add_argument(
         'files', nargs='*', help='Process HiC stats files.')
+    parser.add_argument(
+        '--norm', action='store_true',
+        help='Downsample all groups to same value (default: %(default)s)')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--insertOut', required=True,

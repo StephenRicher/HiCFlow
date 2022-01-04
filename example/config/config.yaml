@@ -109,6 +109,9 @@ gatk:
     trustPoly:  True
     downSample: 42.1 # Optionally downsample reads for baseRecalibrator
 
+other:
+    normQC: False # Normalise group sizes for QC reporting
+
 # Optional run HiCRep - may take a while for high res datasets.
 runHiCRep: True
 
