@@ -2764,13 +2764,13 @@ rule sampleReads:
     group:
         'filterQC'
     params:
-        nLines = 1000000 * 2
+        s = 42.10
     log:
         'logs/sampleReads/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'head -n {params.nLines} <(samtools view {input}) > {output} 2> {log}'
+        'samtools view {input} > {output} 2> {log}'
 
 
 rule processHiC:
