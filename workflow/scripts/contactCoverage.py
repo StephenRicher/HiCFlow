@@ -6,26 +6,25 @@
 import os
 import sys
 import argparse
-import pandas as pd
 from typing import List
 import matplotlib.pyplot as plt
 from collections import defaultdict
-from utilities import setDefaults, createMainParent, readHomer
+from hicmatrix import HiCMatrix as hm
+from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
 
 
-def plotCoverage(files: List, out: str, nBins: int, dpi: int, fontSize: float):
+def plotCoverage(matrices: List, out: str, nBins: int, dpi: int, fontSize: float):
 
     # Set global matplotlib fontisze
     plt.rcParams.update({'font.size': fontSize})
     fig, ax = plt.subplots(figsize=(16, 8))
     xLim = 0
 
-    for file in files:
-        sample, binSize = splitName(file)
-        mat = readHomer(file, sparse=True)
-        contactsPerBin = mat.groupby('start')['score'].sum()
+    for matrix in matrices:
+        sample, binSize = splitName(matrix)
+        contactsPerBin = hm.hiCMatrix(matrix).matrix.sum(axis=1).A1
         # plot the cumulative histogram
         n, bins, patches = ax.hist(
             contactsPerBin, nBins, density=True,
@@ -50,9 +49,7 @@ def splitName(file):
     """ Return sample and binsize """
     path, name = os.path.split(file)
     name = name.split('.')[0]
-    if name.endswith('-ASHIC'):
-        name = name[:-6]
-    elif name.endswith('-SNPsplit'):
+    if name.endswith('-SNPsplit'):
         name = name[:-9]
     elif name.endswith('-full'):
         name = name[:-5]
@@ -66,12 +63,8 @@ def parseArgs():
     mainParent = createMainParent(verbose=False, version=__version__)
     parser = argparse.ArgumentParser(
         epilog=epilog, description=__doc__, parents=[mainParent])
-    parser.set_defaults(function=plotCoverage)
-    requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument(
-        '--out', required=True, help='Outplot plot name.')
     parser.add_argument(
-        'files', nargs='+', help='HiC matrices in homer format.')
+        'matrices', nargs='+', help='HiC matrices in h5 format.')
     parser.add_argument(
         '--nBins', type=int, default=10000,
         help='Number of bins for histogram (default: %(default)s)')
@@ -81,6 +74,10 @@ def parseArgs():
     parser.add_argument(
         '--dpi', type=int, default=300,
         help='Resolution for plot (default: %(default)s)')
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument(
+        '--out', required=True, help='Outplot plot name.')
+    parser.set_defaults(function=plotCoverage)
 
     return setDefaults(parser)
 

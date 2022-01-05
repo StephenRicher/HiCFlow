@@ -12,8 +12,8 @@ module_order:
             - '*.trim_fastqc.zip'
     - fastq_screen:
         name: 'FastQ Screen (trimmed sequences)'
-    - hicup
-    - bowtie2
+    - samtools
+    - samblaster
     - hicexplorer
     - bcftools
 
@@ -23,6 +23,3 @@ extra_fn_clean_exts:
 
 remove_sections:
     - hicexplorer_categorization_of_considered_reads
-    - hicup-mapping
-    - hicup-filtering
-    - hicup-deduplication

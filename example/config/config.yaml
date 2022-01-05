@@ -1,7 +1,7 @@
 # Specify output directory - either absolute path or relative to Snakefile.
 # If using relative paths for subsequent files, these should be relative to
 # this workding directory.
-workdir: example/analysis/
+workdir: example/analysis2/
 
 # CSV file with cell type, experimental group, replicate number,
 # read (forward/reverse) and path each FASTQ files.
@@ -21,7 +21,6 @@ build: BDGP6
 
 # Set True to perform phasing and haplotype assembly pipeline.
 phase: False
-ASHIC: False
 
 # Phased VCF file for allele specific analysis. Must specify a VCF for each
 # cell type defined in config['data']. If not set then run normal HiC mode.
@@ -79,14 +78,16 @@ plotParams:
     plotRep:        True
     vLines:         ../config/vlines.bed
 
+Genes:
+    gff3: ../genome/BDGP6.32.105.gff3.gz
+    label: Name      # Attribute key to label on plot
+    typeKey: biotype # Attribute key describing gene type
+
 # Bigwig tracks for plotting below HiC plots.
 bigWig :
     CP190 : ../genome/CP190-dm6.bw    # GSM762836
     Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
     CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
-# BED tracks for plotting with HiC plots.
-bed :
-    Genes : ../genome/BDGP6.28.99.genes.bed
 
 compareMatrices:
     vMin: -0.75 # Mimimum logFC value for colour scale.
@@ -111,18 +112,13 @@ gatk:
 
 other:
     normQC: False # Normalise group sizes for QC reporting
+    bwaThreads: 1
 
 # Optional run HiCRep - may take a while for high res datasets.
 runHiCRep: True
 
 # Treat data as microC - ignore restriction digest.
 microC: False
-
-# Skip FASTQ truncation and perform local alignment instead
-localAlignment: False
-
-# Write TAD and HiCcompare status and score to a binned pandas
-rescalePKL: False
 
 # Output a BAM file containing only valid HiC read pairs within defined regions.
 createValidBam: False
