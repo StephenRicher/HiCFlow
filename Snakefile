@@ -594,7 +594,7 @@ rule samblaster:
     input:
         rules.BWA.output
     output:
-        sam = 'dat/mapped/{preSample}-dedup.sam',
+        sam = pipe('dat/mapped/{preSample}-dedup.sam'),
         qc = 'qc/deduplicate/{preSample}.txt'
     group:
         'align'
@@ -611,7 +611,7 @@ rule sam2bam:
     input:
         rules.samblaster.output.sam
     output:
-        'dat/mapped/{preSample}-dedup.bam'
+        temp('dat/mapped/{preSample}-dedup.bam')
     group:
         'align'
     log:
@@ -1926,9 +1926,27 @@ rule juicerPre:
 
 if not ALLELE_SPECIFIC:
 
+    rule sortBam:
+        input:
+            'dat/mapped/{preSample}-dedup.bam'
+        output:
+            'dat/mapped/{preSample}-sort.bam'
+        params:
+            mem = '1G'
+        log:
+            'logs/sortBam/{preSample}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        threads:
+            THREADS
+        shell:
+            'samtools sort -@ {threads} -m {params.mem} {input} '
+            '> {output} 2> {log}'
+
+
     rule mergeBamByCellType:
         input:
-            lambda wc: expand('dat/mapped/{preSample}.dedup.bam',
+            lambda wc: expand('dat/mapped/{preSample}-sort.bam',
                 preSample = HiC.cellTypes()[wc.cellType])
         output:
             pipe('dat/mapped/mergeByCell/{cellType}.merged.bam')
@@ -2688,9 +2706,9 @@ def multiQCconfig():
 
 rule multiqc:
     input:
-        [expand('qc/fastqc/{sample}-{read}.{mode}_fastqc.zip',
-            sample=HiC.originalSamples(),
-            read=['R1', 'R2'], mode=['raw', 'trim']),
+        [#expand('qc/fastqc/{sample}-{read}.{mode}_fastqc.zip',
+        #    sample=HiC.originalSamples(),
+        #    read=['R1', 'R2'], mode=['raw', 'trim']),
          expand('qc/cutadapt/{sample}.cutadapt.txt',
             sample=HiC.originalSamples()),
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
