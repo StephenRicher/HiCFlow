@@ -127,7 +127,7 @@ createValidBam: False
 multiQCconfig : ../config/multiqc_config.yaml
 
 # Configuration file of paths to genome indexes for FastQ Screen.
-# See template in example/config/fastq_screen.config
+# See template in example/config/fastqScreen.config
 fastq_screen :
 
 # Cluster only - group certain jobs (e.g. lammps simulations / post-processing)

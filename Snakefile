@@ -109,6 +109,7 @@ config = set_config(config, default_config)
 workdir: config['workdir']
 THREADS = config['threads']
 BWA_THREADS = max(1, min(THREADS - 2, config['other']['bwaThreads']))
+
 BASE_BIN = config['resolution']['base']
 ALLELE_SPECIFIC = True if config['phased_vcf'] else False
 
@@ -118,7 +119,14 @@ HiC = HiCSamples(
 REGIONS = load_regions(config['regions'], adjust=BASE_BIN)
 
 # Remove region-binSize combinations with too few bins
-regionBin, binRegion = filterRegions(REGIONS, config['resolution']['bins'], nbins=config['HiCParams']['minBins'])
+regionBin, binRegion = filterRegions(
+    REGIONS, config['resolution']['bins'],
+    nbins=config['HiCParams']['minBins'])
+
+hicrepRegionsBin, _ = filterRegions(
+    REGIONS, [100000],
+    nbins=config['HiCParams']['minBins'])
+
 
 wildcard_constraints:
     cellType = rf'{"|".join(HiC.cellTypes())}',
@@ -243,9 +251,9 @@ rule all:
          if PHASE_MODE is not None else []),
         ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
           'qc/multiqc','qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
-        ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}', region=region,
-            bin=regionBin[region], pm=pm,
-            type=config['plotParams']['filetype']) for region in regionBin]
+        (expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}',
+            bin=1000000, pm=pm, region=hicrepRegionsBin.keys(),
+            type=config['plotParams']['filetype'])
          if config['runHiCRep'] else [])
 
 
@@ -440,8 +448,11 @@ rule fastQC:
         'fastqc'
     log:
         'logs/fastqc/{preSample}-{read}.log'
-    wrapper:
-        '0.49.0/bio/fastqc'
+    conda:
+        f'{ENVS}/fastqc.yaml'
+    shell:
+        '{SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
+        '--dataOut {output.zip} &> {log}'
 
 
 rule reformatFastQC:
@@ -469,9 +480,12 @@ rule fastQCTrimmed:
     group:
         'fastqc'
     log:
-        'logs/fastqc_trimmed/{preSample}-{read}.log'
-    wrapper:
-        '0.49.0/bio/fastqc'
+        'logs/fastqcTrimmed/{preSample}-{read}.log'
+    conda:
+        f'{ENVS}/fastqc.yaml'
+    shell:
+        '{SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
+        '--dataOut {output.zip} &> {log}'
 
 
 rule aggregateFastqc:
@@ -494,15 +508,18 @@ if config['fastq_screen'] is not None:
             txt = 'qc/fastq_screen/{preSample}-{read}.fastq_screen.txt',
             png = 'qc/fastq_screen/{preSample}-{read}.fastq_screen.png'
         params:
-            fastq_screen_config = config['fastq_screen'],
+            config = config['fastqScreen'],
             subset = 100000,
-            aligner = 'bowtie2'
         log:
-            'logs/fastq_screen/{preSample}-{read}.log'
+            'logs/fastqScreen/{sample}-{read}.log'
+        conda:
+            f'{ENVS}/fastqScreen.yaml'
         threads:
             THREADS
-        wrapper:
-            "0.60.0/bio/fastq_screen"
+        shell:
+            '{SCRIPTS}/fastqScreen.py {input} {params.config} '
+            '--subset {params.subset} --threads {threads} '
+            '--plotOut {output.png} --dataOut {output.txt} &> {log}'
 
 
 rule cutadapt:
@@ -1399,6 +1416,8 @@ rule HiCRep:
         'HiCRep'
     log:
         'logs/HiCRep/{sample1}-vs-{sample2}-{region}-{bin}-{pm}.log'
+    params:
+        THREADS
     conda:
         f'{ENVS}/hicrep.yaml'
     shell:
@@ -2073,7 +2092,8 @@ if not ALLELE_SPECIFIC:
 
     rule splitIntervals:
         input:
-            rules.bgzipGenome.output
+            genome = rules.bgzipGenome.output,
+            seqDict = rules.createSequenceDictionary.output
         output:
             expand('dat/gatk/splitIntervals/{{cellType}}/{rep}-scattered.interval_list',
                 rep=[str(i).zfill(4) for i in range(config['gatk']['scatterCount'])])
@@ -2085,7 +2105,7 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
-            'gatk SplitIntervals -R {input} -L {params.regions} '
+            'gatk SplitIntervals -R {input.genome} -L {params.regions} '
             '--scatter-count {params.scatterCount} '
             '--output dat/gatk/splitIntervals/{wildcards.cellType} &> {log} '
 
@@ -2706,9 +2726,9 @@ def multiQCconfig():
 
 rule multiqc:
     input:
-        [#expand('qc/fastqc/{sample}-{read}.{mode}_fastqc.zip',
-        #    sample=HiC.originalSamples(),
-        #    read=['R1', 'R2'], mode=['raw', 'trim']),
+        [expand('qc/fastqc/{sample}-{read}.{mode}_fastqc.zip',
+            sample=HiC.originalSamples(),
+            read=['R1', 'R2'], mode=['raw', 'trim']),
          expand('qc/cutadapt/{sample}.cutadapt.txt',
             sample=HiC.originalSamples()),
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
