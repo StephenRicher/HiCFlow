@@ -87,8 +87,7 @@ default_config = {
          'miniHeight'    : 6        ,
          'filetype'      : 'svg'    ,},
     'other':
-        {'normQC'    :  False      ,
-         'bwaThreads':  1          ,},
+        {'normQC'    :  False      ,},
     'Genes':
         {'gff3'        :  []        ,
          'typeKey'     : 'gene_type',
@@ -108,7 +107,6 @@ config = set_config(config, default_config)
 
 workdir: config['workdir']
 THREADS = config['threads']
-BWA_THREADS = max(1, min(THREADS - 2, config['other']['bwaThreads']))
 
 BASE_BIN = config['resolution']['base']
 ALLELE_SPECIFIC = True if config['phased_vcf'] else False
@@ -402,40 +400,31 @@ rule findRestSites:
         '--outFile {output} &> {log}'
 
 
-rule emptyRestSites:
-    output:
-        'dat/genome/restSites-empty.bed'
-    group:
-        'prepareGenome'
-    log:
-        'logs/emptyRestSites.log'
-    shell:
-        'touch {output} &> {log}'
-
-
-def bwaBuildInput(wildcards):
+def bowtie2BuildInput(wildcards):
     if ALLELE_SPECIFIC:
         return rules.maskPhased.output
     else:
         return rules.bgzipGenome.output
 
 
-rule bwaBuild:
+rule bowtie2Build:
     input:
-        bwaBuildInput
+        bowtie2BuildInput
     output:
-        expand('dat/genome/index/{{cellType}}.{n}',
-            n=['bwt.2bit.64', '0123', 'amb', 'ann', 'pac'])
+        expand('dat/genome/index/{{cellType}}.{n}.bt2',
+               n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
     params:
         basename = lambda wc: f'dat/genome/index/{wc.cellType}'
     group:
         'prepareGenome'
     log:
-        'logs/bwaBuild/{cellType}.log'
+        'logs/bowtie2Build/{cellType}.log'
     conda:
-        f'{ENVS}/bwa-mem2.yaml'
+        f'{ENVS}/bowtie2.yaml'
+    threads:
+        THREADS
     shell:
-        'bwa-mem2 index -p {params.basename} {input} &> {log}'
+        'bowtie2-build --threads {threads} {input} {params.basename} &> {log}'
 
 
 rule fastQC:
@@ -473,7 +462,7 @@ rule reformatFastQC:
 
 rule fastQCTrimmed:
     input:
-        'dat/fastq/trimmed/{preSample}-{read}.trim.fastq.gz'
+        'dat/fastq/{preSample}-{read}.trimmed.fastq.gz'
     output:
         html = 'qc/fastqc/{preSample}-{read}.trim_fastqc.html',
         zip = 'qc/fastqc/{preSample}-{read}.trim_fastqc.zip'
@@ -526,8 +515,8 @@ rule cutadapt:
     input:
         lambda wc: HiC.path(wc.preSample, ['R1', 'R2'])
     output:
-        trimmed = [temp('dat/fastq/trimmed/{preSample}-R1.trim.fastq.gz'),
-                   temp('dat/fastq/trimmed/{preSample}-R2.trim.fastq.gz')],
+        trimmed = [temp('dat/fastq/{preSample}-R1.trimmed.fastq.gz'),
+                   temp('dat/fastq/{preSample}-R2.trimmed.fastq.gz')],
         qc = 'qc/cutadapt/unmod/{preSample}.cutadapt.txt'
     group:
         'cutadapt'
@@ -571,50 +560,155 @@ rule reformatCutadapt:
         '> {output} 2> {log}'
 
 
-def bwaIndex(wc):
-    """ Retrieve BWA index associated with sample. """
-    return expand('dat/genome/index/{cellType}.{n}',
+rule hicupTruncate:
+    input:
+        rules.cutadapt.output.trimmed
+    output:
+        truncated = [temp('dat/fastq/{preSample}-R1.truncated.fastq.gz'),
+                     temp('dat/fastq/{preSample}-R2.truncated.fastq.gz')],
+        summary = 'qc/hicup/HiCUP_summary_report-{preSample}.txt'
+    params:
+        re1 = lambda wc: list(HiC.restrictionSeqs()[wc.preSample].values())[0],
+        fill = '--nofill' if config['HiCParams']['nofill'] else ''
+    group:
+        'hicupTruncate'
+    threads:
+        2 if THREADS > 2 else THREADS
+    log:
+        'logs/hicupTruncate/{preSample}.log'
+    conda:
+        f'{ENVS}/hicup.yaml'
+    shell:
+        'python {SCRIPTS}/hicupTruncate.py {params.fill} --re1 {params.re1} '
+        '--hicup {SCRIPTS}/hicup_truncater --output {output.truncated} '
+        '--threads {threads} {input} > {output.summary} 2> {log}'
+
+
+rule aggregatehicupTruncate:
+    input:
+        expand('qc/hicup/{sample}-truncate-summary.txt',
+            sample=HiC.originalSamples())
+    output:
+        touch('qc/hicup/.tmp.aggregatehicupTruncate')
+    group:
+        'hicupTruncate' if config['groupJobs'] else 'aggregateTarget'
+
+
+def bowtie2Index(wc):
+    """ Retrieve bowtie2 index associated with sample. """
+    return expand('dat/genome/index/{cellType}.{n}.bt2',
         cellType=HiC.sample2Cell()[wc.preSample],
-        n=['bwt.2bit.64', '0123', 'amb', 'ann', 'pac'])
+        n=['1', '2', '3', '4', 'rev.1', 'rev.2'])
 
 
-def bwaBasename(wc):
+def bowtie2Basename(wc):
     """ Retrieve bowtie2 index basename associated with sample. """
     cellType = HiC.sample2Cell()[wc.preSample]
     return f'dat/genome/index/{cellType}'
 
 
-rule BWA:
+def fastqInput(wc):
+    mode = 'trimmed' if config['microC'] else 'truncated'
+    return f'dat/fastq/{wc.preSample}-{wc.read}.{mode}.fastq.gz'
+
+
+rule bowtie2:
     input:
-        fastq = ([
-            'dat/fastq/trimmed/{preSample}-R1.trim.fastq.gz',
-            'dat/fastq/trimmed/{preSample}-R2.trim.fastq.gz']),
-        bwa_index = bwaIndex
+        fastq = fastqInput,
+        bt2_index = bowtie2Index
     output:
-        pipe('dat/mapped/{preSample}.sam'),
+        sam = pipe('dat/mapped/{preSample}-{read}.sam'),
+        qc = 'qc/bowtie2/{preSample}-{read}.bowtie2.txt'
     params:
-        index = bwaBasename,
+        index = bowtie2Basename,
+        sensitivity = 'sensitive',
+        cellType = lambda wc: HiC.sample2Cell()[wc.preSample]
     group:
-        'align'
+        'bowtie2'
     log:
-        'logs/BWA/{preSample}.log'
+        'logs/bowtie2/{preSample}-{read}.log'
     conda:
-        f'{ENVS}/bwa-mem2.yaml'
+        f'{ENVS}/bowtie2.yaml'
     threads:
-        BWA_THREADS
+        THREADS - 2 if THREADS > 2 else 1
     shell:
-        'bwa-mem2 mem -5SP -t {threads} {params.index} {input.fastq} '
-        '> {output} 2> {log}'
+        'bowtie2 -x {params.index} -U {input.fastq} '
+        '--reorder --threads {threads} --{params.sensitivity} '
+        '> {output.sam} 2> {log} && cp {log} {output.qc}'
+
+
+rule addReadFlag:
+    input:
+        rules.bowtie2.output.sam
+    output:
+        pipe('dat/mapped/{preSample}-{read}-addFlag.sam')
+    params:
+        flag = lambda wc: '0x41' if wc.read == 'R1' else '0x81'
+    group:
+        'bowtie2'
+    log:
+        'logs/addReadFlag/{preSample}-{read}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'awk -f {SCRIPTS}/addReadFlag.awk -v flag={params.flag} '
+        '{input} > {output} 2> {log}'
+
+
+rule sam2bam:
+    input:
+        rules.addReadFlag.output
+    output:
+        temp('dat/mapped/{preSample}-{read}-addFlag.bam')
+    group:
+        'bowtie2'
+    log:
+        'logs/sam2bam/{preSample}-{read}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools view -u {input} > {output} 2> {log}'
+
+
+rule mergeBam:
+    input:
+        'dat/mapped/{preSample}-R1-addFlag.bam',
+        'dat/mapped/{preSample}-R2-addFlag.bam'
+    output:
+        temp('dat/mapped/{preSample}-merged.bam')
+    group:
+        'prepareBAM'
+    log:
+        'logs/mergeBam/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools merge -n {output} {input} &> {log}'
+
+
+rule fixmateBam:
+    input:
+        rules.mergeBam.output
+    output:
+        pipe('dat/mapped/{preSample}.fixed.bam')
+    group:
+        'prepareBAM'
+    log:
+        'logs/fixmateBam/{preSample}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools fixmate -p -O SAM {input} {output} &> {log}'
 
 
 rule samblaster:
     input:
-        rules.BWA.output
+        rules.fixmateBam.output
     output:
         sam = pipe('dat/mapped/{preSample}-dedup.sam'),
         qc = 'qc/deduplicate/{preSample}.txt'
     group:
-        'align'
+        'prepareBAM'
     log:
         'logs/samblaster/{preSample}.log'
     conda:
@@ -623,26 +717,25 @@ rule samblaster:
         'samblaster --removeDups --input {input} > {output.sam} '
         '2> {log} && cp {log} {output.qc}'
 
-# Remove SA Tag which can break hicBuildMatrix
-rule sam2bam:
+
+rule sam2bam2:
     input:
         rules.samblaster.output.sam
     output:
         temp('dat/mapped/{preSample}-dedup.bam')
     group:
-        'align'
+        'prepareBAM'
     log:
-        'logs/sam2bam/{preSample}.log'
+        'logs/sam2bam2/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        r"sed 's/\tSA\:Z\:[^\t]*//' {input} | samtools view -b "
-        r"> {output} 2> {log}"
+        'samtools view -b {input} > {output} 2> {log}'
 
 
 rule removeUnmapped:
     input:
-        rules.sam2bam.output
+        rules.sam2bam2.output
     output:
         'dat/mapped/{preSample}.hic.bam'
     log:
@@ -657,7 +750,7 @@ rule removeUnmapped:
 
 rule samtoolsStats:
     input:
-        rules.sam2bam.output
+        rules.sam2bam2.output
     output:
         'qc/samtools/stats/{preSample}.stats.txt'
     group:
@@ -2733,6 +2826,10 @@ rule multiqc:
             sample=HiC.originalSamples()),
          expand('qc/fastq_screen/{sample}-{read}.fastq_screen.txt',
             sample=HiC.originalSamples(), read=['R1', 'R2']) if config['fastq_screen'] else [],
+         expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
+            sample=HiC.originalSamples(), read=['R1', 'R2']),
+         expand('qc/hicup/HiCUP_summary_report-{sample}.txt',
+            sample=HiC.originalSamples()) if not config['microC'] else [],
          expand('qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt',
             region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []],
          expand('qc/deduplicate/{sample}.txt', sample=HiC.originalSamples()),

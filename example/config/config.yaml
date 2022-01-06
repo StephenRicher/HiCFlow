@@ -1,7 +1,7 @@
 # Specify output directory - either absolute path or relative to Snakefile.
 # If using relative paths for subsequent files, these should be relative to
 # this workding directory.
-workdir: example/analysis2/
+workdir: example/analysis3/
 
 # CSV file with cell type, experimental group, replicate number,
 # read (forward/reverse) and path each FASTQ files.
@@ -112,7 +112,6 @@ gatk:
 
 other:
     normQC: False # Normalise group sizes for QC reporting
-    bwaThreads: 1
 
 # Optional run HiCRep - may take a while for high res datasets.
 runHiCRep: True
