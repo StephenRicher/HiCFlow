@@ -51,8 +51,7 @@ def parseArgs():
     parser.add_argument('matrices', nargs=2, help='HiC matrix in homer format.')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
-        '--outMatrix', required=True,
-        help='HiC matrix in h5 format.')
+        '--outMatrix', required=True, help='HiC matrix in h5 format.')
     parser.add_argument(
         '--outMatrixFilter',required=True,
         help='Median filtered HiC matrix in h5 format.')

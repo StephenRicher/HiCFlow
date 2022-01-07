@@ -139,24 +139,31 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
             writeTADs(tad, colour)
 
     #print('[spacer]')
-
+    miniTrack = False
     for title, file, size in rgbBed:
         if notEmpty(file):
             writeRBGBed(file, title, size)
+        miniTrack = True
         print('[spacer]')
 
     if notEmpty(SNPdensity):
         writeSNPdensity(SNPdensity)
+        miniTrack = True
         print('[spacer]')
 
     if notEmpty(CScore):
         writeCScore(CScore)
+        miniTrack = True
         print('[spacer]')
 
     if notEmpty(switchScore):
         writeSwitchScore(switchScore)
+        miniTrack = True
         print('[spacer]')
 
+    if not miniTrack:
+        print('[spacer]')
+        
     for i, insulation in enumerate(insulations):
         if notEmpty(insulation):
             write_insulation(insulation=insulation, compare=compare, i=i)

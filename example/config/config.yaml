@@ -99,16 +99,17 @@ compareMatrices:
 
 # GATK variant calling best practises for human data
 gatk:
-    hapmap:     #'gatkResourceBundle/hapmap_3.3.hg38.vcf.gz'
-    omni:       #'gatkResourceBundle/1000G_omni2.5.hg38.vcf.gz'
-    G1K:        #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz'
-    dbsnp:      #'gatkResourceBundle/dbsnp_146.hg38.vcf.gz'
-    mills:      #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz'
-    all_known:  #['gatkResourceBundle/dbsnp_146.hg38.vcf.gz',
-                #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
-                #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
+    hapmap:     #GATKresourceBundle/hapmap_3.3.hg19.sites.vcf.gz
+    omni:       #GATKresourceBundle/1000G_omni2.5.hg19.sites.vcf.gz
+    G1K:        #GATKresourceBundle/1000G_phase1.snps.high_confidence.hg19.sites.vcf.gz
+    dbsnp:      #GATKresourceBundle/dbsnp_138.hg19.vcf.gz
+    mills:      #GATKresourceBundle/Mills_and_1000G_gold_standard.indels.hg19.sites.vcf.gz
+    all_known: #['GATKresourceBundle/dbsnp_138.hg19.vcf.gz',
+               # 'GATKresourceBundle/1000G_phase1.snps.high_confidence.hg19.sites.vcf.gz',
+               # 'GATKresourceBundle/Mills_and_1000G_gold_standard.indels.hg19.sites.vcf.gz']
     trustPoly:  True
-    downSample: 42.1 # Optionally downsample reads for baseRecalibrator
+    scatterCount: 1
+    maxGaussians: 8
 
 other:
     normQC: False # Normalise group sizes for QC reporting
