@@ -61,3 +61,18 @@ rule CscoreTool:
     shell:
         '{SCRIPTS}/CscoreTool1.1 {input.windows} <(zcat {input.summary}) {params.prefix} '
         '{threads} {params.minDis} {params.chrPrefix}{params.chr} &> {log}'
+
+
+rule Bedgraph_to_Bed:
+    input:
+        'dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore_cscore.bedgraph'
+    output:
+        'dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore_cscore.bed'
+    group:
+        'CscoreTool'
+    log:
+        'logs/Bedgraph_to_Bed/{group}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/Bedgraph_to_Bed.py {input} > {output} 2> {log}'

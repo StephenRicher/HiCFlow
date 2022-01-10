@@ -88,7 +88,8 @@ default_config = {
          'includeRegions': True     ,
          'filetype'      : 'svg'    ,},
     'other':
-        {'normQC'    :  False      ,},
+        {'normQC'    : False      ,
+         'flipSNP'   : False      ,},
     'Genes':
         {'gff3'        :  []        ,
          'typeKey'     : 'gene_type',
@@ -97,7 +98,7 @@ default_config = {
     'bed'              : {}        ,
     'fastqScreen':      None,
     'runQC':            True,
-    'phase':            True,
+    'phase':            False,
     'runHiCRep':        True,
     'multiQCconfig':    None,
     'groupJobs':        False,
@@ -300,6 +301,8 @@ if ALLELE_SPECIFIC:
             rules.filterHomozygous.output
         output:
             'snpsplit/{cellType}-snpsplit.txt'
+        params:
+            flip = lambda wc: '--flipSNP' if config['other']['flipSNP'] else ''
         group:
             'prepareGenome'
         log:
@@ -307,7 +310,8 @@ if ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            'python {SCRIPTS}/reformatSNPsplit.py {input} > {output} 2> {log}'
+            'python {SCRIPTS}/reformatSNPsplit.py {params.flip} {input} '
+            '> {output} 2> {log}'
 
 
     rule SNPcoverage:
@@ -1281,14 +1285,14 @@ def getMatrix(wc):
 
 def getCscoreInput(wc):
     if config['HiCParams']['compartmentScore']:
-        return f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bedgraph'
+        return f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bed'
     else:
         return []
 
 def getCscoreParams(wc):
     if config['HiCParams']['compartmentScore']:
-        cscore = f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bedgraph'
-        return f'--bigWig CScore,{cscore},3'
+        cscore = f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bed'
+        return f'--CScore {cscore}'
     else:
         return ''
 

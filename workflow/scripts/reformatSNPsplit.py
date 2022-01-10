@@ -11,7 +11,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def reformatSNPsplit(VCF: str):
+def reformatSNPsplit(VCF: str, flipSNP: bool):
 
     with fileinput.input(VCF) as fh:
         for line in fh:
@@ -32,6 +32,9 @@ def reformatSNPsplit(VCF: str):
                 variants = f'{alt}/{ref}'
             else:
                 continue
+            if flipSNP:
+                a1, a2 = variants.split('/')
+                variants = f'{a2}/{a1}'
             print(id, chrom, pos, 1, variants, sep='\t')
 
 
@@ -44,6 +47,10 @@ def parseArgs():
     parser.set_defaults(function=reformatSNPsplit)
     parser.add_argument(
         'VCF', nargs='?', help='Phased VCF file (default: stdin))')
+    parser.add_argument(
+        '--flipSNP', action='store_true',
+        help='Flip allelic phased SNP assignment, this is '
+             'often arbitrary (default: %(default)s)')
 
     return setDefaults(parser)
 
