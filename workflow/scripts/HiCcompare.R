@@ -29,6 +29,7 @@ binsize = as.integer(args[6])
 suffix = args[7]
 matrix1 = args[8]
 matrix2 = args[9]
+include.zeros = as.logical(args[10])
 
 dir.create(qcdir, recursive = TRUE)
 
@@ -41,8 +42,9 @@ outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.2d.txt
 outIF1SUTM = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1-', suffix, '.sutm', sep = '')
 outIF2SUTM = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.sutm', sep = '')
 
-### LOESS with Partial Zero ###
-data.table <- create.hic.table(read.table(matrix1), read.table(matrix2), chr = chr, include.zeros = TRUE)
+### LOESS  ###
+data.table <- create.hic.table(
+  read.table(matrix1), read.table(matrix2), chr = chr, include.zeros = include.zeros)
 
 png(loess_plot)
 hic.table <- hic_loess(data.table, Plot=TRUE, Plot.smooth=FALSE)

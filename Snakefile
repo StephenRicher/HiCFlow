@@ -59,7 +59,8 @@ default_config = {
          'tads'         : None         ,
          'loops'        : None         ,
          'allPairs'     : False        ,
-         'rawDiff'      : False        ,},
+         'rawDiff'      : False        ,
+         'includeZeros' : False        ,},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -994,16 +995,32 @@ rule sumReplicates:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicSumMatrices --matrices {params.nonEmpty} --outFileName {output} '
-        '&> {log} || touch {output}'
+        '&> {log}'
+
+
+rule mergeBins:
+    input:
+        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}.h5'
+    output:
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}-raw.h5'
+    params:
+        nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
+    log:
+        'logs/mergeBins/{all}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
+        '--outFileName {output} &> {log}'
 
 
 rule normCounts01:
     input:
-        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}.h5'
+        rules.mergeBins.output
     output:
-        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-norm01.h5'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}-norm01.h5'
     log:
-        'logs/normCounts01/{all}-{region}-{pm}.log'
+        'logs/normCounts01/{all}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1015,11 +1032,11 @@ rule normCountsConstant:
     input:
         rules.normCounts01.output
     output:
-        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-normConstant.h5'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.h5'
     params:
         multiplicativeValue = config['HiCParams']['multiplicativeValue']
     log:
-        'logs/normCountsConstant/{all}-{region}-{pm}.log'
+        'logs/normCountsConstant/{all}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1028,25 +1045,9 @@ rule normCountsConstant:
         '--outFileName {output} &> {log} || touch {output}'
 
 
-rule mergeBins:
-    input:
-        f'dat/matrix/{{region}}/base/raw/{{all}}-{{region}}.{BASE_BIN}-{{pm}}-normConstant.h5'
-    output:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.h5'
-    params:
-        nbins = lambda wc: int(int(wc.bin) / BASE_BIN)
-    log:
-        'logs/mergeBins/{all}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
-        '--outFileName {output} &> {log} || touch {output}'
-
-
 rule correctMatrix:
     input:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.h5'
+        rules.normCountsConstant.output
     output:
         'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}-{pm}.h5'
     group:
@@ -1475,7 +1476,7 @@ rule plotMatrix:
 
 rule H5_to_NxN3p:
     input:
-        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}-{pm}.h5'
+        'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}-{pm}-raw.h5'
     output:
         'dat/matrix/{region}/{bin}/raw/{sample}-{region}-{bin}-{pm}.nxn3p.tsv'
     group:
@@ -1550,7 +1551,7 @@ rule mergeBamByReplicate:
 
 rule H5_to_SUTM:
     input:
-        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}.h5'
+        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}-raw.h5'
     output:
         'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}-sutm.txt'
     group:
@@ -1579,6 +1580,7 @@ rule HiCcompare:
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
         suffix = lambda wc: wc.pm,
+        includeZeros = config['compareMatrices']['includeZeros']
     group:
         'HiCcompare'
     log:
@@ -1587,8 +1589,8 @@ rule HiCcompare:
         f'{ENVS}/HiCcompare.yaml'
     shell:
         'Rscript {SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} '
-        '{params.chr} {params.start} {params.end} '
-        '{wildcards.bin} {params.suffix} {input} &> {log}'
+        '{params.chr} {params.start} {params.end} {wildcards.bin} '
+        '{params.suffix} {input} {params.includeZeros} &> {log}'
 
 
 rule Text2DToH5:
