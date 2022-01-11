@@ -17,18 +17,16 @@ def filterTADs(TADdomains: str, chromRef: str, startRef: int, endRef: int):
     with fileinput.input(TADdomains) as fh:
         for line in fh:
             chrom, start, end = line.split()[:3]
-            start = int(start)
-            end = int(end)
             # Exclude entries from different chromosome
             if chrom != chromRef:
                 continue
             # Exclude entries with start lower than startRef
-            if (startRef is not None) and (start < startRef):
+            if (startRef is not None) and (int(start) < startRef):
                 continue
             # Exclude entries with end higher than endRef
-            if (endRef is not None) and (end > endRef):
+            if (endRef is not None) and (int(end) > endRef):
                 continue
-            print(line, end='')
+            print(chrom, start, end, '.', '0', '.', start, end, '.', sep='\t')
 
 
 def parseArgs():

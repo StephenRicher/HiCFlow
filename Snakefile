@@ -7,6 +7,7 @@ import math
 import random
 import tempfile
 import itertools
+import numpy as np
 from snake_setup import set_config, load_regions, load_coords, filterRegions, HiCSamples
 
 BASE = workflow.basedir
@@ -182,7 +183,6 @@ subtractMode = ['LOESSdiff']
 if config['compareMatrices']['rawDiff']:
     subtractMode.append('RAWdiff')
 
-
 HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
@@ -208,6 +208,9 @@ HiC_mode = ([
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=pm,
         norm=norm, type=config['plotParams']['filetype']) for region in regionBin],
+     expand('referenceTADs/{all}-{bin}-ontad-{pm}.bed',
+        all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
+        bin=np.array(list(regionBin.values())).flatten(), pm=pm),
      expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=regionBin.keys(), pm=pm, type=config['plotParams']['filetype'])])
@@ -1184,8 +1187,7 @@ rule OnTAD:
     input:
         rules.H5_to_NxN.output
     output:
-        bed = 'dat/tads/{region}/{bin}/{all}-{region}-{bin}-ontad-{pm}.bed',
-        tad = 'dat/tads/{region}/{bin}/{all}-{region}-{bin}-ontad-{pm}.tad'
+        'dat/tads/{region}/{bin}/{all}-{region}-{bin}-ontad-{pm}.tad'
     params:
         chr = lambda wc: re.sub('chr', '', str(REGIONS['chr'][wc.region])),
         length = lambda wc: REGIONS['length'][wc.region],
@@ -1199,47 +1201,39 @@ rule OnTAD:
         '{params.length} {wildcards.bin} &> {log} || touch {output}'
 
 
-def setTrim(wc):
-    if str(REGIONS['chr'][wc.region]).startswith('chr'):
-        trim = ''
-    else:
-        trim = '--trimChr'
-    return trim
-
-
-rule reformatDomains:
+rule reformatOnTAD:
     input:
-        rules.OnTAD.output.bed
+        rules.OnTAD.output
     output:
-        'dat/tads/{region}/{bin}/{all}-{region}-{bin}-{pm}-ontad_domains.bed'
+        'dat/tads/{region}/{bin}/{all}-{region}-{bin}-ontad-{pm}.bed'
     params:
-        scale = lambda wc: REGIONS['start'][wc.region] - int(wc.bin),
-        trimChr = setTrim
+        chrom = lambda wc: REGIONS['chr'][wc.region],
+        scale = lambda wc: REGIONS['start'][wc.region],
+        maxPos = lambda wc: REGIONS['end'][wc.region]
     group:
         'processHiC'
     log:
-        'logs/reformatDomains/{all}-{region}-{bin}-{pm}.log'
+        'logs/reformatOnTAD/{all}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/reformatDomains.py {input} --scale {params.scale} '
-        '{params.trimChr} > {output} 2> {log}'
+        'python {SCRIPTS}/reformatOnTAD.py {input} --scale {params.scale} '
+        '--binSize {wildcards.bin} --chrom {params.chrom} '
+        '--maxPos {params.maxPos} > {output} 2> {log}'
 
 
-rule domain2boundaries:
+rule mergeOnTAD:
     input:
-        rules.reformatDomains.output
+        expand('dat/tads/{region}/{{bin}}/{{all}}-{region}-{{bin}}-ontad-{{pm}}.bed',
+            region=REGIONS.index)
     output:
-        'dat/tads/{region}/{bin}/{all}-{region}-{bin}-{pm}-ontad_boundaries.bed'
-    group:
-        'processHiC'
+        'referenceTADs/{all}-{bin}-ontad-{pm}.bed'
     log:
-        'logs/domain2boundaries/{all}-{region}-{bin}-{pm}.log'
+        'logs/mergeOnTAD/{all}-{bin}-{pm}.log'
     conda:
-        f'{ENVS}/python3.yaml'
+        f'{ENVS}/bedtools.yaml'
     shell:
-        'python {SCRIPTS}/TADdomains2boundaries.py {wildcards.bin} {input} '
-        '> {output} 2> {log}'
+        'bedtools sort -i <(cat {input}) > {output} 2> {log}'
 
 
 rule distanceNormalise:
@@ -1319,7 +1313,7 @@ rule createConfig:
         matrix = getMatrix,
         loops = 'dat/loops/{region}/{bin}/{group}-{region}-{bin}-{pm}.bedgraph',
         insulations = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-{pm}_tad_score.bm',
-        tads = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-{pm}-ontad_domains.bed',
+        tads = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-ontad-{pm}.bed',
         cscore = getCscoreInput,
         vLines = config['plotParams']['vLines'],
         genes = getGenesInput
@@ -1344,7 +1338,7 @@ rule createConfig:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
         '--depth {params.depth} {params.vMin} {params.vMax} '
-        '{params.plain} --insulations {input.insulations} --loops {input.loops} '
+        '{params.plain} --insulation {input.insulations} --loops {input.loops} '
         '{params.cscore} --tads {input.tads} > {output} 2> {log}'
 
 
@@ -1556,13 +1550,13 @@ rule mergeBamByReplicate:
 
 rule H5_to_SUTM:
     input:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}.h5'
+        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}.h5'
     output:
-        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}-sutm.txt'
+        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}-sutm.txt'
     group:
         'HiCcompare'
     log:
-        'logs/H5_to_SUTM/{all}-{region}-{bin}-{pm}.log'
+        'logs/H5_to_SUTM/{all}-{region}-{norm}-{bin}-{pm}.log'
     conda:
          f'{ENVS}/python3.yaml'
     shell:
@@ -1677,7 +1671,7 @@ def setDomains(wc):
         group = wc.group1
     else:
         group = wc.group2
-    return f'dat/tads/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-{{pm}}-ontad_domains.bed'
+    return f'dat/tads/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-ontad-{{pm}}.bed'
 
 
 rule differentialTAD:
@@ -1706,23 +1700,7 @@ rule differentialTAD:
         '--tadDomains {input.tadDomains} '
         '--pValue {params.pValue} --mode {params.mode} '
         '--modeReject {params.modeReject} --outFileNamePrefix {params.prefix} '
-        ' &> {log} || touch {output} '
-
-
-rule reformatDifferentialTAD:
-    input:
-        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_{result}.diff_tad'
-    output:
-        'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_{result}_domains.bed'
-    group:
-        'HiCcompare'
-    log:
-        'logs/reformatDifferentialTAD/{group1}-vs-{group2}-{adjIF}-{region}-{bin}-{pm}-{result}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/reformatDomains.py {input} --scale 0 '
-        '> {output} 2> {log}'
+        ' &> {log} '
 
 
 rule computeChangeScore:
@@ -1925,8 +1903,8 @@ rule createSubtractConfig:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
         linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
         linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links',
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected_domains.bed',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected_domains.bed',
+        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected.diff_tad',
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected.diff_tad',
         vLines = config['plotParams']['vLines'],
         changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
         SNPcoverage = getSNPcoverage,

@@ -20,7 +20,7 @@ def main():
     parser.set_defaults(function = make_config)
 
     parser.add_argument(
-        '--insulations', nargs = '*', default=[],
+        '--insulation',
         help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
     parser.add_argument(
         '--tads', nargs='*', default=[],
@@ -108,7 +108,7 @@ def commaPair(value):
     return tuple(v.strip() for v in value)
 
 
-def make_config(insulations, matrix, log, tads, loops, SNPdensity,
+def make_config(insulation, matrix, log, tads, loops, SNPdensity,
                 bigWig, bed, collapsedBed, compare, rgbBed,
                 depth, colourmap, vMin, vMax, switchScore,
                 genes, plain, vLines, links, CScore, tmpLinks):
@@ -142,7 +142,7 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
     miniTrack = False
     for title, file, size in rgbBed:
         if notEmpty(file):
-            writeRBGBed(file, title, size)
+            writeRGBBed(file, title, size)
         miniTrack = True
         print('[spacer]')
 
@@ -163,12 +163,10 @@ def make_config(insulations, matrix, log, tads, loops, SNPdensity,
 
     if not miniTrack:
         print('[spacer]')
-        
-    for i, insulation in enumerate(insulations):
-        if notEmpty(insulation):
-            write_insulation(insulation=insulation, compare=compare, i=i)
-        if i == len(insulations) - 1:
-            print('[spacer]')
+
+    if notEmpty(insulation):
+        writeInsulation(insulation)
+        print('[spacer]')
 
     print('# End Sample Specific')
 
@@ -279,32 +277,22 @@ def writeLinks(links, i):
 def writeTADs(tads, colour):
     print(f'[Tads]',
           f'file = {tads}',
-          f'file_type = domains',
-          f'links_type = triangles',
+          f'file_type = bed',
+          f'display = triangles',
           f'border_color = {colour}',
           f'color = none',
           f'overlay_previous = share-y',
           f'line_width = 1', sep = '\n')
 
 
-def write_insulation(insulation, compare, i,
-        colours = ['#d95f0280', '#1b9e7780', '#d902d980', '#00000080']):
-    colour = colours[i]
-    overlay = 'share-y' if i > 0 else 'no'
-    if compare:
-        title = f'Insulation difference (Z), threshold = 2'
-    else:
-        title = 'Insulation'
+def writeInsulation(insulation):
     print(f'[Bedgraph matrix]',
           f'file = {insulation}',
-          f'title = {title}',
+          f'title = Insulation',
           f'height = 3',
-          f'color = {colour}',
           f'file_type = bedgraph_matrix',
           f'type = lines',
-          f'overlay_previous = {overlay}', sep = '\n')
-    if compare:
-        writeHline(2)
+          f'overlay_previous = no', sep = '\n')
 
 
 def write_bigwig(
@@ -327,7 +315,6 @@ def write_bed(file, title, size):
     print(f'[Bed - {title}]',
           f'file = {file}',
           f'title = {title}',
-          f'type = genes',
           f'height = {size}',
           f'file_type = bed',
           f'labels = true', sep = '\n')
@@ -339,18 +326,9 @@ def writeGenes(file, title, size):
           f'color = bed_rgb',
           f'border_color = none',
           f'height = {size}',
-          f'type = genes',
           f'file_type = bed',
           f'labels = true', sep='\n')
-
-def writeHline(y):
-    print(f'[Hlines overlayed]',
-          f'color = black',
-          f'line_style = dotted',
-          f'y_values = {y}',
-          f'overlay_previous = share-y',
-          f'file_type = hlines', sep='\n')
-
+          
 
 def writeVlines(bed):
     print(f'[vlines]',
@@ -358,7 +336,7 @@ def writeVlines(bed):
           f'type = vlines', sep='\n')
 
 
-def writeRBGBed(bed, title, size):
+def writeRGBBed(bed, title, size):
     print(f'[rgb BED]',
           f'file = {bed}',
           f'title = {title}',
