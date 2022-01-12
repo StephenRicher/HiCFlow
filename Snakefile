@@ -1297,7 +1297,6 @@ def getGenesInput(wc):
     else:
         return []
 
-
 def getDepth(wc):
     chrom, start, end = wc.coord.split('_')
     height = config['plotParams']['miniHeight']
@@ -1899,6 +1898,21 @@ def getVmax(wc):
     return vMax
 
 
+def getSwitchScoreInput(wc):
+    if config['HiCParams']['compartmentScore']:
+        return f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.pm}-switchScore.bed'
+    else:
+        return []
+
+
+def getSwitchScoreParams(wc):
+    if config['HiCParams']['compartmentScore']:
+        switch = f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.pm}-switchScore.bed'
+        return f'--switchScore {switch}'
+    else:
+        return ''
+
+
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
@@ -1907,7 +1921,7 @@ rule createSubtractConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
         vLines = config['plotParams']['vLines'],
-        switchScore = 'dat/Cscore/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{pm}-switchScore.bed',
+        switchScore = getSwitchScoreInput,
         #changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
@@ -1920,6 +1934,7 @@ rule createSubtractConfig:
         depth = getDepth,
         tracks = getTracks,
         SNPcoverage = getSNPcommand,
+        switchScore = getSwitchScoreParams,
         colourmap = config['compareMatrices']['colourmap']
     group:
         'plotHiCsubtract'
@@ -1932,8 +1947,7 @@ rule createSubtractConfig:
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
-        '--tmpLinks {output.tmpLinks} '
-        '--switchScore {input.switchScore} '
+        '--tmpLinks {output.tmpLinks} {params.switchScore} '
         #'--rgbBed "Change Score",{input.changeScore},1.5 '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'
