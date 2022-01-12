@@ -41,7 +41,10 @@ def processGFF3(gff3: str, label: str, typeKey: str):
             attributes = dict([a.split('=') for a in attributes.split(';')])
             type_ = attributes[typeKey] if typeKey in attributes else 'unknown'
             rgb = colourMap[type_]
-            name = attributes[label] if label in attributes else ''
+            if (type_ == 'protein_coding') and (label in attributes):
+                name = attributes[label]
+            else:
+                name = ' '
             print(chrom, start, end, name, 0, strand, start, end, rgb, sep='\t')
 
 
