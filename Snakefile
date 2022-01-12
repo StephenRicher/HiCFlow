@@ -1675,36 +1675,8 @@ def setDomains(wc):
     return f'dat/tads/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-ontad-{{pm}}.bed'
 
 
+
 rule differentialTAD:
-    input:
-        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.h5',
-        control = setControl,
-        tadDomains = setDomains
-    output:
-        accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_accepted.diff_tad',
-        rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_rejected.diff_tad'
-    params:
-        pValue = 0.05,
-        mode = 'all',
-        modeReject = 'one',
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}-{wc.pm}'
-    group:
-        'HiCcompare'
-    log:
-        'logs/differentialTAD/{group1}-vs-{group2}-{adjIF}-{region}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicDifferentialTAD --targetMatrix {input.target} '
-        '--controlMatrix {input.control} '
-        '--tadDomains {input.tadDomains} '
-        '--pValue {params.pValue} --mode {params.mode} '
-        '--modeReject {params.modeReject} --outFileNamePrefix {params.prefix} '
-        ' &> {log} '
-
-
-rule differentialTAD2:
     input:
         target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.h5',
         control = setControl,
@@ -1718,7 +1690,7 @@ rule differentialTAD2:
     group:
         'HiCcompare'
     log:
-        'logs/differentialTAD2/{group1}-vs-{group2}-{adjIF}-{region}-{bin}-{pm}.log'
+        'logs/differentialTAD/{group1}-vs-{group2}-{adjIF}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
