@@ -76,3 +76,19 @@ rule Bedgraph_to_Bed:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/Bedgraph_to_Bed.py {input} > {output} 2> {log}'
+
+
+rule computeSwitchScore:
+    input:
+        'dat/Cscore/{region}/{bin}/{group1}-{region}-{bin}-{pm}-Cscore_cscore.bed',
+        'dat/Cscore/{region}/{bin}/{group2}-{region}-{bin}-{pm}-Cscore_cscore.bed'
+    output:
+        'dat/Cscore/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{pm}-switchScore.bed'
+    group:
+        'CscoreTool'
+    log:
+        'logs/computeSwitchScore/{group1}-vs-{group2}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeSwitchScore.py {input} > {output} 2> {log}'

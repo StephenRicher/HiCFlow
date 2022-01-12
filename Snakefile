@@ -1907,6 +1907,7 @@ rule createSubtractConfig:
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
         vLines = config['plotParams']['vLines'],
+        switchScore = 'dat/Cscore/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{pm}-switchScore.bed',
         #changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
@@ -1932,6 +1933,7 @@ rule createSubtractConfig:
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
         '--tmpLinks {output.tmpLinks} '
+        '--switchScore {input.switchScore} '
         #'--rgbBed "Change Score",{input.changeScore},1.5 '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'

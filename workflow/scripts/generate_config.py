@@ -328,7 +328,7 @@ def writeGenes(file, title, size):
           f'height = {size}',
           f'file_type = bed',
           f'labels = true', sep='\n')
-          
+
 
 def writeVlines(bed):
     print(f'[vlines]',
@@ -357,7 +357,6 @@ def writeSwitchScore(bed):
           f'color = binary',
           f'border_color = none',
           f'min_value = 0',
-          f'max_value = 1',
           f'line_width = 0',
           f'fontsize = 0',
           f'height = 1.5',
