@@ -60,7 +60,7 @@ default_config = {
          'loops'        : None         ,
          'allPairs'     : False        ,
          'rawDiff'      : False        ,
-         'includeZeros' : False        ,},
+         'minSum'       : 25           ,},
     'gatk':
         {'hapmap'      : None         ,
          'omni'        : None         ,
@@ -1579,8 +1579,7 @@ rule HiCcompare:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
-        suffix = lambda wc: wc.pm,
-        includeZeros = config['compareMatrices']['includeZeros']
+        suffix = lambda wc: wc.pm
     group:
         'HiCcompare'
     log:
@@ -1590,7 +1589,7 @@ rule HiCcompare:
     shell:
         'Rscript {SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} '
         '{params.chr} {params.start} {params.end} {wildcards.bin} '
-        '{params.suffix} {input} {params.includeZeros} &> {log}'
+        '{params.suffix} {input} &> {log}'
 
 
 rule Text2DToH5:
@@ -1703,6 +1702,29 @@ rule differentialTAD:
         '--pValue {params.pValue} --mode {params.mode} '
         '--modeReject {params.modeReject} --outFileNamePrefix {params.prefix} '
         ' &> {log} '
+
+
+rule differentialTAD2:
+    input:
+        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.h5',
+        control = setControl,
+        tadDomains = setDomains
+    output:
+        all = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-allTAD.bed',
+        outDiff =  'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed'
+    params:
+        alpha = 0.01,
+        minBias = 0.5
+    group:
+        'HiCcompare'
+    log:
+        'logs/differentialTAD2/{group1}-vs-{group2}-{adjIF}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/differentialTAD.py {input.control} {input.target} '
+        '{input.tadDomains} --minBias {params.minBias} --alpha {params.alpha} '
+        '--outDiff {output.outDiff} > {output.all} 2> {log}'
 
 
 rule computeChangeScore:
@@ -1850,10 +1872,14 @@ def getSubtractInput(wc):
 
 rule HiCsubtract:
     input:
-        getSubtractInput
+        matrices = getSubtractInput,
+        raw1 = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-raw.h5',
+        raw2 = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-raw.h5'
     output:
         out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-noFilter-{pm}.h5',
-        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-medianFilter-{pm}.h5',
+        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-medianFilter-{pm}.h5'
+    params:
+        minSum = config['compareMatrices']['minSum']
     group:
         'plotHiCsubtract'
     log:
@@ -1861,8 +1887,9 @@ rule HiCsubtract:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/compareHiC.py {input} --outMatrix {output.out} '
-        '--outMatrixFilter {output.outFilt} &> {log}'
+        'python {SCRIPTS}/compareHiC.py {input.matrices} --outMatrix {output.out} '
+        '--outMatrixFilter {output.outFilt} --minSum {params.minSum} '
+        '--raw {input.raw1} {input.raw2} &> {log}'
 
 
 def getSNPcoverage(wc):
@@ -1905,10 +1932,10 @@ rule createSubtractConfig:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
         linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
         linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links',
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected.diff_tad',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected.diff_tad',
+        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed', #_rejected.diff_tad',
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed', #_rejected.diff_tad',
         vLines = config['plotParams']['vLines'],
-        changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
+        #changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
     output:
@@ -1933,7 +1960,7 @@ rule createSubtractConfig:
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
         '--tmpLinks {output.tmpLinks} '
-        '--rgbBed "Change Score",{input.changeScore},1.5 '
+        #'--rgbBed "Change Score",{input.changeScore},1.5 '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'
 

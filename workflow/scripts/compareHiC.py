@@ -16,29 +16,43 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def simpleSubtract(matrices: List, outMatrix: str, outMatrixFilter: str):
+def simpleSubtract(
+    matrices: List, outMatrix: str, outMatrixFilter: str,
+    minSum: int, raw: List):
 
+    mask = getMask(raw, minSum=minSum)
     hic1 = hm.hiCMatrix(matrices[0])
     hic2 = hm.hiCMatrix(matrices[1])
 
-    if hic1.matrix.shape != hic2.matrix.shape:
+    if (hic1.matrix.shape != hic2.matrix.shape):
         sys.exit("The two matrices have different size. Use matrices having "
                  "the same resolution and created using the same parameters. "
                  "Check the matrix values using the tool `hicInfo`.")
 
     nan_bins = set(hic1.nan_bins)
     nan_bins = nan_bins.union(hic2.nan_bins)
+    newMatrix = (hic2.matrix - hic1.matrix).todense()
 
-    newMatrix = hic2.matrix - hic1.matrix
-
-    for i, out in enumerate([outMatrix, outMatrixFilter]):
-        if i == 1:
-            filtered = median_filter(newMatrix.todense(), size=3)
+    for i, out in enumerate([outMatrixFilter, outMatrix]):
+        if i == 0:
+            filtered = median_filter(newMatrix, size=3)
+            filtered[mask] = 0
             hic1.setMatrixValues(csr_matrix(filtered))
         else:
+            newMatrix[mask] = 0
             hic1.setMatrixValues(newMatrix)
         hic1.maskBins(sorted(nan_bins))
         hic1.save(out)
+
+
+def getMask(raw, minSum=0):
+    if raw:
+        raw1 = hm.hiCMatrix(raw[0])
+        raw2 = hm.hiCMatrix(raw[1])
+        mask = (raw1.matrix + raw2.matrix).todense() < minSum
+    else:
+        mask = True
+    return mask
 
 
 def parseArgs():
@@ -49,12 +63,19 @@ def parseArgs():
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=simpleSubtract)
     parser.add_argument('matrices', nargs=2, help='HiC matrix in homer format.')
+    parser.add_argument(
+        '--minSum', type=int, default=0,
+        help='Total per cell of raw matrices must be atleast '
+             'this value (default: %(default)s).')
+    parser.add_argument(
+        '--raw', nargs=2, help='Raw matrices to filter by minimum bin count.')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--outMatrix', required=True, help='HiC matrix in h5 format.')
-    parser.add_argument(
+    requiredNamed.add_argument(
         '--outMatrixFilter',required=True,
         help='Median filtered HiC matrix in h5 format.')
+
 
     return setDefaults(parser)
 
