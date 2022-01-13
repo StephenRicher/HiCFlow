@@ -452,7 +452,7 @@ rule fastQC:
     conda:
         f'{ENVS}/fastqc.yaml'
     shell:
-        '{SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
+        'python {SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
         '--dataOut {output.zip} &> {log}'
 
 
@@ -485,7 +485,7 @@ rule fastQCTrimmed:
     conda:
         f'{ENVS}/fastqc.yaml'
     shell:
-        '{SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
+        'python {SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
         '--dataOut {output.zip} &> {log}'
 
 
@@ -518,7 +518,7 @@ if config['fastqScreen'] is not None:
         threads:
             THREADS
         shell:
-            '{SCRIPTS}/fastqScreen.py {input} {params.config} '
+            'python {SCRIPTS}/fastqScreen.py {input} {params.config} '
             '--subset {params.subset} --threads {threads} '
             '--plotOut {output.png} --dataOut {output.txt} &> {log}'
 
