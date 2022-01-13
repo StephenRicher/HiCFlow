@@ -54,11 +54,6 @@ def main():
         help='Add title and rgb BED files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--bed', metavar='TITLE,FILE,SIZE', default=[],
-        type=commaPair, action='append',
-        help='Add title and bed files as comma seperated pairs.'
-        'Call multiple times to add more files.')
-    parser.add_argument(
         '--genes', metavar='TITLE,FILE,SIZE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
@@ -108,7 +103,7 @@ def commaPair(value):
 
 
 def make_config(insulation, matrix, log, tads, loops, SNPdensity,
-                bigWig, bed, collapsedBed, compare, rgbBed,
+                bigWig, collapsedBed, compare, rgbBed,
                 depth, colourmap, vMin, vMax, switchScore,
                 genes, plain, vLines, links, CScore, tmpLinks,
                 changeScore):
@@ -143,10 +138,14 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
             changeScore, title='Change Score', minV=-2, maxV=2, cmap='bwr')
         print('[spacer]')
 
-    miniTrack = False
-    for title, file, size in rgbBed:
-        if notEmpty(file):
-            writeRGBBed(file, title, size)
+
+    if notEmpty(CScore):
+        writeColourBed(CScore, title='Cscore', minV=-1, maxV=1, cmap='bwr')
+        miniTrack = True
+        print('[spacer]')
+
+    if notEmpty(switchScore):
+        writeColourBed(switchScore, title='Switch Score', minV=0, maxV=1, cmap='binary')
         miniTrack = True
         print('[spacer]')
 
@@ -156,13 +155,10 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
         miniTrack = True
         print('[spacer]')
 
-    if notEmpty(CScore):
-        writeColourBed(CScore, title='Cscore', minV=-1, maxV=1, cmap='bwr')
-        miniTrack = True
-        print('[spacer]')
-
-    if notEmpty(switchScore):
-        writeColourBed(switchScore, title='Switch Score', minV=0, maxV=1, cmap='binary')
+    miniTrack = False
+    for title, file, size in rgbBed:
+        if notEmpty(file):
+            writeRGBBed(file, title, size)
         miniTrack = True
         print('[spacer]')
 
@@ -203,11 +199,6 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
     for title, file, size in genes:
         if notEmpty(file):
             writeGenes(file=file, title=title, size=size)
-        print('[spacer]')
-
-    for title, file, size in bed:
-        if notEmpty(file):
-            write_bed(file=file, title=title, size=size)
         print('[spacer]')
 
     print('[x-axis]')
@@ -315,14 +306,6 @@ def write_bigwig(
           f'file_type = {type}',
           f'overlay_previous = {overlay}', sep = '\n')
 
-
-def write_bed(file, title, size):
-    print(f'[Bed - {title}]',
-          f'file = {file}',
-          f'title = {title}',
-          f'height = {size}',
-          f'file_type = bed',
-          f'labels = true', sep = '\n')
 
 def writeGenes(file, title, size):
     print(f'[rgb BED]',
