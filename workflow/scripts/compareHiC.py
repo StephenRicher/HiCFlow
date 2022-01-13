@@ -6,7 +6,9 @@
 import sys
 import argparse
 import numpy as np
+import pandas as pd
 from typing import List
+from scipy.stats import zscore
 from scipy.sparse import csr_matrix
 from hicmatrix import HiCMatrix as hm
 from scipy.ndimage import median_filter
@@ -43,6 +45,16 @@ def simpleSubtract(
             hic1.setMatrixValues(newMatrix)
         hic1.maskBins(sorted(nan_bins))
         hic1.save(out)
+
+    # Retrieve completely empty intervals (to exclude for Z score)
+    nonZero = abs(filtered).sum(axis=1) != 0
+    bed = pd.DataFrame(hic1.cut_intervals)
+    bed['sum'] = filtered.sum(axis=1)
+    bed.loc[nonZero, 'Z'] = zscore(bed.loc[nonZero, 'sum'])
+    bed = bed.dropna()
+    bed['name'] = '.'
+    bed[[0, 1, 2, 'name', 'Z']].to_csv(
+        sys.stdout, index=False, header=False, sep='\t')
 
 
 def getMask(raw, minSum=0):

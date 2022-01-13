@@ -69,11 +69,10 @@ def main():
         help='Add unlablled non-overlapping BED intervals.')
     parser.add_argument(
         '--switchScore', help='BED file of Cscore switch probability')
+    parser.add_argument('--CScore', help='BED file of Cscore')
+    parser.add_argument('--changeScore', help='BED file of changeScore.')
     parser.add_argument(
-        '--CScore', help='BED file of Cscore')
-    parser.add_argument(
-        '--SNPdensity',
-        help='BED file of SNP density per interval')
+        '--SNPdensity', help='BED file of SNP density per interval')
     parser.add_argument(
         '--depth', type=int, default=1000000,
         help='HiC matrix depth.')
@@ -111,7 +110,8 @@ def commaPair(value):
 def make_config(insulation, matrix, log, tads, loops, SNPdensity,
                 bigWig, bed, collapsedBed, compare, rgbBed,
                 depth, colourmap, vMin, vMax, switchScore,
-                genes, plain, vLines, links, CScore, tmpLinks):
+                genes, plain, vLines, links, CScore, tmpLinks,
+                changeScore):
 
     if plain:
         loops = []
@@ -138,7 +138,11 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
                 colour = ['#FF000080', '#0000FF80'][i]
             writeTADs(tad, colour)
 
-    #print('[spacer]')
+    if notEmpty(changeScore):
+        writeColourBed(
+            changeScore, title='Change Score', minV=-2, maxV=2, cmap='bwr')
+        print('[spacer]')
+
     miniTrack = False
     for title, file, size in rgbBed:
         if notEmpty(file):
@@ -147,17 +151,18 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
         print('[spacer]')
 
     if notEmpty(SNPdensity):
-        writeSNPdensity(SNPdensity)
+        writeColourBed(
+            SNPdensity, title='SNP Density', minV=0, maxV=1, cmap='binary')
         miniTrack = True
         print('[spacer]')
 
     if notEmpty(CScore):
-        writeCScore(CScore)
+        writeColourBed(CScore, title='Cscore', minV=-1, maxV=1, cmap='bwr')
         miniTrack = True
         print('[spacer]')
 
     if notEmpty(switchScore):
-        writeSwitchScore(switchScore)
+        writeColourBed(switchScore, title='Switch Score', minV=0, maxV=1, cmap='binary')
         miniTrack = True
         print('[spacer]')
 
@@ -349,45 +354,15 @@ def writeRGBBed(bed, title, size):
           f'display = collapsed', sep='\n')
 
 
-def writeSwitchScore(bed):
-    print(f'[Switch Score]',
+def writeColourBed(bed, title, minV=-1, maxV=1, cmap='bwr'):
+    print(f'[{title}]',
           f'file = {bed}',
-          f'title = Switch score',
+          f'title = {title}',
           f'labels = false',
-          f'color = binary',
+          f'color = {cmap}',
           f'border_color = none',
-          f'min_value = 0',
-          f'max_value = 1',
-          f'line_width = 0',
-          f'fontsize = 0',
-          f'height = 1.5',
-          f'display = collapsed', sep='\n')
-
-
-def writeCScore(bed):
-    print(f'[C Score]',
-          f'file = {bed}',
-          f'title = Cscore',
-          f'labels = false',
-          f'color = bwr',
-          f'border_color = none',
-          f'min_value = -1',
-          f'max_value = 1',
-          f'line_width = 0',
-          f'fontsize = 0',
-          f'height = 1.5',
-          f'display = collapsed', sep='\n')
-
-
-def writeSNPdensity(bed):
-    print(f'[SNP density]',
-          f'file = {bed}',
-          f'title = SNP density',
-          f'labels = false',
-          f'color = binary',
-          f'border_color = none',
-          f'min_value = 0',
-          f'max_value = 1',
+          f'min_value = {minV}',
+          f'max_value = {maxV}',
           f'line_width = 0',
           f'fontsize = 0',
           f'height = 1.5',

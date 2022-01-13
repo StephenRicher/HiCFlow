@@ -1734,9 +1734,9 @@ def getLoopsInput(wc):
 rule scoreLoopDiff:
     input:
         loops = getLoopsInput,
-        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-medianFilter-{pm}.h5'
+        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-medianFilter-{pm}.h5'
     output:
-        'dat/loops/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{region}-{bin}-{pm}-loopDiff.pkl'
+        'dat/loops/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}-loopDiff.pkl'
     log:
         'logs/scoreLoopDiff/{group1}-vs-{group2}-{subtractMode}-{region}-{bin}-{pm}.log'
     conda:
@@ -1748,7 +1748,7 @@ rule scoreLoopDiff:
 
 rule mergeLoopDiff:
     input:
-        expand('dat/loops/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{subtractMode}}-{region}-{{bin}}-{{pm}}-loopDiff.pkl',
+        expand('dat/loops/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{region}-{{bin}}-{{subtractMode}}-{{pm}}-loopDiff.pkl',
             region=REGIONS.index),
     output:
         interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}.interact',
@@ -1847,8 +1847,9 @@ rule HiCsubtract:
         raw1 = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-raw.h5',
         raw2 = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-raw.h5'
     output:
-        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-noFilter-{pm}.h5',
-        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-medianFilter-{pm}.h5'
+        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}.bed',
+        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-noFilter-{pm}.h5',
+        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-medianFilter-{pm}.h5'
     params:
         minSum = config['compareMatrices']['minSum']
     group:
@@ -1860,7 +1861,7 @@ rule HiCsubtract:
     shell:
         'python {SCRIPTS}/compareHiC.py {input.matrices} --outMatrix {output.out} '
         '--outMatrixFilter {output.outFilt} --minSum {params.minSum} '
-        '--raw {input.raw1} {input.raw2} &> {log}'
+        '--raw {input.raw1} {input.raw2} > {output.changeScore} 2> {log}'
 
 
 def getSNPcoverage(wc):
@@ -1915,11 +1916,12 @@ def getSwitchScoreParams(wc):
 
 rule createSubtractConfig:
     input:
-        mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{subtractMode}-{filter}-{pm}.h5',
-        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links',
+        mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{filter}-{pm}.h5',
+        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}.bed',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links',
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
         vLines = config['plotParams']['vLines'],
         switchScore = getSwitchScoreInput,
         #changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
@@ -1948,6 +1950,7 @@ rule createSubtractConfig:
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
         '--tmpLinks {output.tmpLinks} {params.switchScore} '
+        '--changeScore {input.changeScore} '
         #'--rgbBed "Change Score",{input.changeScore},1.5 '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'
