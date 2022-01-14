@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from scipy import stats
+from pathlib import Path
 from collections import defaultdict
 from hicmatrix import HiCMatrix as hm
 from statsmodels.stats.multitest import fdrcorrection
@@ -29,6 +30,9 @@ def resampleCompare(
     TADs = pd.read_csv(referenceTADs,
         names=names.keys(), dtype=names, usecols=[0,1,2], sep='\t')
     TADs = TADs.loc[TADs['chrom'] == chrom]
+    if TADs.empty:
+        Path(outDiff).touch()
+        return 0
 
     # Read matrices and mask lower
     adjIF1 = np.triu(hic1.matrix.toarray(), k=0)
@@ -63,7 +67,7 @@ def resampleCompare(
 
     TADtrue.loc[TADtrue['group'] == 'diffTAD', cols].to_csv(
         outDiff, header=False, index=False, sep='\t')
-        
+
 
 def setGroup(x, minBias, pThreshold):
     if (x['bias'] > minBias) & (x['p(adj)'] < pThreshold):
