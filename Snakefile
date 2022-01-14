@@ -1735,36 +1735,21 @@ rule scoreLoopDiff:
         loops = getLoopsInput,
         matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-medianFilter-{pm}.h5'
     output:
-        'dat/loops/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}-loopDiff.pkl'
+        interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}.interact',
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksUp.links',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksDown.links'
+    params:
+        nBins = 20,
+        maxLineWidth = 3
     log:
         'logs/scoreLoopDiff/{group1}-vs-{group2}-{subtractMode}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         'python {SCRIPTS}/scoreLoopDiff.py {input.loops} '
-        '--matrix {input.matrix} --out {output} 2> {log}'
-
-
-rule mergeLoopDiff:
-    input:
-        expand('dat/loops/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{region}-{{bin}}-{{subtractMode}}-{{pm}}-loopDiff.pkl',
-            region=REGIONS.index),
-    output:
-        interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}.interact',
-        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links'
-    params:
-        nBins = 20,
-        maxLineWidth = 3
-    log:
-        'logs/mergeLoopDiff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/mergeLoopDiff.py {input} '
         '--maxLineWidth {params.maxLineWidth} --nBins {params.nBins} '
-        '--interactOut {output.interactOut} --linksUp {output.linksUp} '
-        '--linksDown {output.linksDown} 2> {log}'
+        '--matrix {input.matrix} --interactOut {output.interactOut} '
+        '--linksUp {output.linksUp} --linksDown {output.linksDown} 2> {log}'
 
 
 rule runCompareViewpoint:
@@ -1919,8 +1904,8 @@ rule createSubtractConfig:
         changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}.bed',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksDown.links',
-        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}-linksUp.links',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksDown.links',
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksUp.links',
         vLines = config['plotParams']['vLines'],
         switchScore = getSwitchScoreInput,
         #changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',

@@ -388,3 +388,9 @@ def load_coords(regions, coordFile=None, adjust=1, includeRegions=True):
         for region, pos in coords.items():
             newCoords[region].extend(pos)
     return newCoords
+
+
+def getValidBins(regionBin):
+    """ Retrieve single list of valid bins to be used """
+    allBins = list(regionBin.values()) # List of list
+    return list(itertools.chain(*allBins))

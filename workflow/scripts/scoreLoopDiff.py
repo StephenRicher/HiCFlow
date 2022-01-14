@@ -5,17 +5,20 @@
 import os
 import sys
 import argparse
+import contextlib
 import numpy as np
 import pandas as pd
 from typing import List
 from hicmatrix import HiCMatrix as hm
+from sklearn.preprocessing import KBinsDiscretizer
 from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
 
 
-def scoreLoopDiff(loops: List, matrix: str, out: str):
+def scoreLoopDiff(loops: List, matrix: str, maxLineWidth: int,
+                  nBins: int, interactOut: str, linksUp: str, linksDown: str):
 
     loops = readLoops(loops)
     matrix = hm.hiCMatrix(matrix)
@@ -24,7 +27,57 @@ def scoreLoopDiff(loops: List, matrix: str, out: str):
     loops = loops.loc[loops['chrom1'] == chrom]
     loops[['rawScore', 'direction']] = loops.apply(
         scoreLoops, axis=1, args=(matrix,), result_type='expand')
-    loops.dropna().to_pickle(out)
+    loops = loops.dropna()
+
+    nBins = min(nBins, len(loops))
+    est = KBinsDiscretizer(n_bins=nBins, encode='ordinal', strategy='kmeans')
+    loops['score'] = est.fit_transform(
+        loops['rawScore'].to_numpy().reshape(-1,1)).astype(int)
+    loops['empty'] = '.'
+    loops['color'] = 0
+    loops['name'] = loops.index
+    loops['size'] = (loops['start2'] - loops['start1']).abs()
+    # Ensure start1 is less than start2 and otherwise swap
+    s = loops['start2'] < loops['start1']
+    loops.loc[s, ['start1','start2']] = loops.loc[s, ['start2','start1']].values
+    loops.loc[s, ['end1','end2']] = loops.loc[s, ['end2','end1']].values
+    # Ensure all integer
+    loops[['start1', 'end1', 'start2', 'end2']] = (
+        loops[['start1', 'end1', 'start2', 'end2']].astype(int))
+
+    # Write full file to interact format
+    writeInteract(loops, interactOut)
+
+    # Rescale score to set max line width
+    maxScore = (maxLineWidth * 2) ** 2
+    loops['score'] = (loops['score'] / loops['score'].max()) * maxScore
+
+    writeLinks(loops.loc[(loops['direction'] == 1)], linksUp)
+    writeLinks(loops.loc[(loops['direction'] == -1)], linksDown)
+
+
+def writeInteract(loops, out):
+    """ Write loops file in Interact format for UCSC genome browser """
+    names = ([
+        'chrom1', 'start1', 'end2', 'name', 'score',
+        'rawScore', 'empty', 'color',
+        'chrom1', 'start1', 'end1', 'empty', 'empty',
+        'chrom2', 'start2', 'end2', 'empty', 'empty'
+    ])
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(out)
+    # Rescale score to 0 - 1000
+    loops['score'] = loops['score'] / loops['score'].max() * 1000
+    with open(out , 'a') as fh:
+        fh.write(f'track type=interact useScore=on maxHeightPixels=200:100:50 '
+                  'visibility=full\n')
+        loops[names].to_csv(fh, sep='\t', header=False, index=False)
+
+
+def writeLinks(loops, out):
+    """ Write loops file in Links format for pyGenomeTracks """
+    names = (['chrom1', 'start1', 'end2', 'chrom2', 'start2', 'end2', 'score'])
+    loops[names].to_csv(out, sep='\t', header=False, index=False)
 
 
 def scoreLoops(loop, matrix):
@@ -63,11 +116,26 @@ def parseArgs():
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=scoreLoopDiff)
     parser.add_argument('loops', nargs='+', help='HiC loops file.')
+    parser.add_argument(
+        '--maxLineWidth', type=int, default=3,
+        help='Maximum loop line width to plot for top '
+             'scoring loop (default: %(default)s)')
+    parser.add_argument(
+        '--nBins', type=int, default=20,
+        help='Number of clusters to group loops scores (default: %(default)s)')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--matrix', help='HiC subtraction matrix in h5 format.')
     requiredNamed.add_argument(
-        '--out', help='Path to write pickled loop data.')
+        '--interactOut', required=True,
+        help='Path to Interact format output.')
+    requiredNamed.add_argument(
+        '--linksUp', required=True,
+        help='Path to Links format positive change loop data.')
+    requiredNamed.add_argument(
+        '--linksDown', required=True,
+        help='Path to Links format negative change loop data.')
+
 
     return setDefaults(parser)
 
