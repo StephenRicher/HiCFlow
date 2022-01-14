@@ -1697,28 +1697,6 @@ rule differentialTAD:
         '--outDiff {output.outDiff} > {output.all} 2> {log}'
 
 
-rule computeChangeScore:
-    input:
-        expand('dat/HiCsubtract/{region}/{{bin}}/{{group1}}-vs-{{group2}}-{{subtractMode}}-medianFilter-{{pm}}.h5',
-            region=REGIONS.index),
-    output:
-        'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed'
-    params:
-        alpha = config['compareMatrices']['alpha'],
-        colourmap = config['compareMatrices']['colourmap'],
-        maxDistance = 1000000,
-        nBins = 20
-    log:
-        'logs/computeChangeScore/{group1}-vs-{group2}-{subtractMode}-{bin}-{pm}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/computeChangeScore.py '
-        '--alpha {params.alpha}  --colourmap {params.colourmap} '
-        '--nBins {params.nBins} --maxDistance {params.maxDistance} '
-        '{input} > {output} 2> {log}'
-
-
 def getLoopsInput(wc):
     if config['compareMatrices']['loops'] is None:
         loops = ([
@@ -1836,8 +1814,6 @@ rule HiCsubtract:
         outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-medianFilter-{pm}.h5'
     params:
         minSum = config['compareMatrices']['minSum']
-    group:
-        'plotHiCsubtract'
     log:
         'logs/HiCsubtract/{group1}-vs-{group2}-{bin}-{region}-{subtractMode}-{pm}.log'
     conda:
@@ -1908,7 +1884,6 @@ rule createSubtractConfig:
         linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksUp.links',
         vLines = config['plotParams']['vLines'],
         switchScore = getSwitchScoreInput,
-        #changeScore = 'dat/changeScore/{bin}/{group1}-vs-{group2}-{subtractMode}-{pm}-{bin}-changeScore.bed',
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
     output:
@@ -1935,7 +1910,6 @@ rule createSubtractConfig:
         '--links {input.linksUp} {input.linksDown} '
         '--tmpLinks {output.tmpLinks} {params.switchScore} '
         '--changeScore {input.changeScore} '
-        #'--rgbBed "Change Score",{input.changeScore},1.5 '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'
 
