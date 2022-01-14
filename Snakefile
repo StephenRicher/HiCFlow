@@ -8,7 +8,7 @@ import random
 import tempfile
 import itertools
 import numpy as np
-from snake_setup import set_config, load_regions, load_coords, filterRegions, HiCSamples
+from snake_setup import set_config, load_regions, load_coords, filterRegions, HiCSamples, getValidBins
 
 BASE = workflow.basedir
 
@@ -91,7 +91,8 @@ default_config = {
          'filetype'      : 'svg'    ,},
     'other':
         {'normQC'    : False      ,
-         'flipSNP'   : False      ,},
+         'flipSNP'   : False      ,
+         'HiCRep_bin': None       ,},
     'Genes':
         {'gff3'        :  []        ,
          'typeKey'     : 'gene_type',
@@ -118,15 +119,23 @@ ALLELE_SPECIFIC = True if config['phasedVCF'] else False
 HiC = HiCSamples(
     config['data'], config['restrictionSeqs'], ALLELE_SPECIFIC,
     allPairs=config['compareMatrices']['allPairs'])
-REGIONS = load_regions(config['regions'], adjust=BASE_BIN)
+REGIONS = load_regions(
+    config['regions'], adjust=max(config['resolution']['bins']))
+
+
 
 # Remove region-binSize combinations with too few bins
 regionBin, binRegion = filterRegions(
     REGIONS, config['resolution']['bins'],
     nbins=config['HiCParams']['minBins'])
 
+# May want to specify a different bin size for HiCRep
+if config['other']['HiCRep_bin'] is None:
+    hicrepbins = config['resolution']['bins']
+else:
+    hicrepbins = [config['other']['HiCRep_bin']]
 hicrepRegionsBin, _ = filterRegions(
-    REGIONS, [100000],
+    REGIONS, hicrepbins,
     nbins=config['HiCParams']['minBins'])
 
 
@@ -158,10 +167,11 @@ wildcard_constraints:
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords(
     REGIONS, config['plotParams']['coordinates'],
-    adjust=BASE_BIN, includeRegions=config['plotParams']['includeRegions'])
+    adjust=max(config['resolution']['bins']),
+    includeRegions=config['plotParams']['includeRegions'])
 
 # Generate dictionary of plot viewpoints
-VIEWPOINTS =  load_coords(
+VIEWPOINTS = load_coords(
     REGIONS, config['plotParams']['viewpoints'], includeRegions=False)
 
 if config['phase'] and not ALLELE_SPECIFIC:
@@ -211,7 +221,7 @@ HiC_mode = ([
         norm=norm, type=config['plotParams']['filetype']) for region in regionBin],
      expand('referenceTADs/{all}-{bin}-ontad-{pm}.bed',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
-        bin=np.array(list(regionBin.values())).flatten(), pm=pm),
+        bin=getValidBins(regionBin), pm=pm),
      expand('qc/matrixCoverage/{region}/{all}-coverage-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=regionBin.keys(), pm=pm, type=config['plotParams']['filetype'])])
@@ -257,10 +267,10 @@ rule all:
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
          if PHASE_MODE is not None else []),
         ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
-          'qc/multiqc','qc/fastqc/.tmp.aggregateFastqc'] if config['runQC'] else []),
-        (expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}',
-            bin=1000000, pm=pm, region=hicrepRegionsBin.keys(),
-            type=config['plotParams']['filetype'])
+          'qc/multiqc'] if config['runQC'] else []),
+        ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}',
+            bin=hicrepRegionsBin[region], pm=pm, region=region,
+            type=config['plotParams']['filetype']) for region in hicrepRegionsBin]
          if config['runHiCRep'] else [])
 
 
@@ -487,17 +497,6 @@ rule fastQCTrimmed:
     shell:
         'python {SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
         '--dataOut {output.zip} &> {log}'
-
-
-rule aggregateFastqc:
-    input:
-        expand('qc/fastqc/{sample}-{read}.{type}_fastqc.zip',
-            sample=HiC.originalSamples(),
-            read=['R1', 'R2'], type=['trim', 'raw'])
-    output:
-        touch('qc/fastqc/.tmp.aggregateFastqc')
-    group:
-        'fastqc' if config['groupJobs'] else 'aggregateTarget'
 
 
 if config['fastqScreen'] is not None:
