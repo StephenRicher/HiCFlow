@@ -1,20 +1,3 @@
-rule makeHiCsummary:
-    input:
-        lambda wc: expand(
-            'dat/matrix/{{region}}/base/raw/{{group}}-{rep}-{{region}}.{BASE_BIN}-{{pm}}.h5',
-            rep=HiC.groups()[wc.group], BASE_BIN=BASE_BIN)
-    output:
-        'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz'
-    group:
-        'CscoreTool'
-    log:
-        'logs/makeHiCsummary/{group}-{region}-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'python {SCRIPTS}/makeHiCsummary.py {input} | gzip > {output} 2> {log}'
-
-
 rule generateEqualLengthBed:
     input:
         config['regions']
@@ -27,6 +10,40 @@ rule generateEqualLengthBed:
     shell:
         'python {SCRIPTS}/generateEqualLengthBed.py {input} '
         '{wildcards.bin} > {output} 2> {log}'
+
+
+rule extractRegion:
+    input:
+        genome = 'dat/genome/{cellType}.fa.gz',
+        index = 'dat/genome/{cellType}.fa.gz.fai'
+    output:
+        temp('dat/Cscore/{cellType}-{region}.fa')
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region],
+        end = lambda wc: REGIONS['end'][wc.region]
+    log:
+        'logs/extractRegion/{cellType}-{region}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools faidx {input.genome} '
+        '{params.chr}:{params.start}-{params.end} > {output} 2> {log}'
+
+
+rule makeHiCsummary:
+    input:
+        f'dat/matrix/{{region}}/base/raw/{{group}}-{{region}}.{BASE_BIN}-{{pm}}.h5'
+    output:
+        'dat/matrix/{region}/{group}-{region}-{pm}.HiCsummary.gz'
+    group:
+        'CscoreTool'
+    log:
+        'logs/makeHiCsummary/{group}-{region}-{pm}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'python {SCRIPTS}/makeHiCsummary.py {input} | gzip > {output} 2> {log}'
 
 
 def getChrPrefix(wc):
@@ -63,27 +80,6 @@ rule CscoreTool:
         '{threads} {params.minDis} {params.chrPrefix}{params.chr} &> {log}'
 
 
-rule extractRegion:
-    input:
-        genome = 'dat/genome/{cellType}.fa.gz',
-        index = 'dat/genome/{cellType}.fa.gz.fai'
-    output:
-        temp('dat/Cscore/{cellType}-{region}.fa')
-    params:
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        start = lambda wc: REGIONS['start'][wc.region],
-        end = lambda wc: REGIONS['end'][wc.region]
-    group:
-        'CscoreTool'
-    log:
-        'logs/extractRegion/{cellType}-{region}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input.genome} '
-        '{params.chr}:{params.start}-{params.end} > {output} 2> {log}'
-
-
 def getGenome(wc):
     cellType = HiC.sample2Cell()[wc.group]
     return f'dat/Cscore/{cellType}-{wc.region}.fa'
@@ -102,7 +98,7 @@ rule orientCscore:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/orientCscore.py {input.cscore} {input.genome} '
+        'python {SCRIPTS}/orientCscore.py {input.cscore} {input.genome} '
         '> {output} 2> {log}'
 
 
@@ -118,7 +114,7 @@ rule Bedgraph_to_Bed:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/Bedgraph_to_Bed.py {input} > {output} 2> {log}'
+        'python {SCRIPTS}/Bedgraph_to_Bed.py {input} > {output} 2> {log}'
 
 
 rule computeSwitchScore:
@@ -134,4 +130,4 @@ rule computeSwitchScore:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeSwitchScore.py {input} > {output} 2> {log}'
+        'python {SCRIPTS}/computeSwitchScore.py {input} > {output} 2> {log}'
