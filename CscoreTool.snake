@@ -63,9 +63,52 @@ rule CscoreTool:
         '{threads} {params.minDis} {params.chrPrefix}{params.chr} &> {log}'
 
 
+rule extractRegion:
+    input:
+        genome = 'dat/genome/{cellType}.fa.gz',
+        index = 'dat/genome/{cellType}.fa.gz.fai'
+    output:
+        temp('dat/Cscore/{cellType}-{region}.fa')
+    params:
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        start = lambda wc: REGIONS['start'][wc.region],
+        end = lambda wc: REGIONS['end'][wc.region]
+    group:
+        'CscoreTool'
+    log:
+        'logs/extractRegion/{cellType}-{region}.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools faidx {input.genome} '
+        '{params.chr}:{params.start}-{params.end} > {output} 2> {log}'
+
+
+def getGenome(wc):
+    cellType = HiC.sample2Cell()[wc.group]
+    return f'dat/Cscore/{cellType}-{wc.region}.fa'
+
+
+rule orientCscore:
+    input:
+        genome = getGenome,
+        cscore = 'dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore_cscore.bedgraph',
+    output:
+        'dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore-reorient.bedgraph'
+    group:
+        'CscoreTool'
+    log:
+        'logs/orientCscore/{group}-{region}-{bin}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/orientCscore.py {input.cscore} {input.genome} '
+        '> {output} 2> {log}'
+
+
 rule Bedgraph_to_Bed:
     input:
-        'dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore_cscore.bedgraph'
+        'dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore-reorient.bedgraph'
     output:
         'dat/Cscore/{region}/{bin}/{group}-{region}-{bin}-{pm}-Cscore_cscore.bed'
     group:

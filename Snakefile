@@ -104,7 +104,6 @@ default_config = {
     'phase':            False,
     'runHiCRep':        True,
     'multiQCconfig':    None,
-    'groupJobs':        False,
     'microC':           False,
 }
 
@@ -121,8 +120,6 @@ HiC = HiCSamples(
     allPairs=config['compareMatrices']['allPairs'])
 REGIONS = load_regions(
     config['regions'], adjust=max(config['resolution']['bins']))
-
-
 
 # Remove region-binSize combinations with too few bins
 regionBin, binRegion = filterRegions(
@@ -595,16 +592,6 @@ rule hicupTruncate:
         '--threads {threads} {input} > {output.summary} 2> {log}'
 
 
-rule aggregatehicupTruncate:
-    input:
-        expand('qc/hicup/{sample}-truncate-summary.txt',
-            sample=HiC.originalSamples())
-    output:
-        touch('qc/hicup/.tmp.aggregatehicupTruncate')
-    group:
-        'hicupTruncate' if config['groupJobs'] else 'aggregateTarget'
-
-
 def bowtie2Index(wc):
     """ Retrieve bowtie2 index associated with sample. """
     return expand('dat/genome/index/{cellType}.{n}.bt2',
@@ -1024,7 +1011,7 @@ rule normCounts01:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicNormalize --matrices {input} --normalize norm_range '
-        '--outFileName {output} &> {log} || touch {output}'
+        '--outFileName {output} &> {log}'
 
 
 rule normCountsConstant:
@@ -1041,7 +1028,7 @@ rule normCountsConstant:
     shell:
         'hicNormalize --matrices {input} --normalize multiplicative '
         '--multiplicativeValue {params.multiplicativeValue} '
-        '--outFileName {output} &> {log} || touch {output}'
+        '--outFileName {output} &> {log}'
 
 
 rule correctMatrix:
@@ -1057,7 +1044,7 @@ rule correctMatrix:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicCorrectMatrix correct --matrix {input} --correctionMethod KR '
-        '--outFileName {output} &> {log} || touch {output}'
+        '--outFileName {output} &> {log}'
 
 
 rule TADinsulation:
@@ -1090,7 +1077,7 @@ rule TADinsulation:
         '--minDepth {params.min_depth} --maxDepth {params.max_depth} '
         '--step {wildcards.bin} --outPrefix {params.prefix} '
         '--correctForMultipleTesting {params.method} '
-        '--numberOfProcessors {threads} &> {log} || touch {output}'
+        '--numberOfProcessors {threads} &> {log}'
 
 
 rule detectLoops:
@@ -1124,7 +1111,7 @@ rule detectLoops:
         '--pValue {params.pValue} '
         '--peakInteractionsThreshold {params.peakInteractionsThreshold} '
         '--threads 1 --threadsPerChromosome {threads} '
-        '&> {log} || touch {output} && touch {output} '
+        '&> {log}'
 
 # Hacky fix to correct loop intervals that extend too far
 rule clampLoops:
@@ -1158,8 +1145,7 @@ rule H5_to_NxN:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/H5_to_NxN.py {input} > {output} '
-        '2> {log} || touch {output}'
+        'python {SCRIPTS}/H5_to_NxN.py {input} > {output} 2> {log}'
 
 
 rule plotCoverage:
@@ -1198,7 +1184,7 @@ rule OnTAD:
         'logs/OnTAD/{all}-{region}-{bin}-{pm}.log'
     shell:
         '{SCRIPTS}/OnTAD {input} -o {params.outprefix} -bedout chr{params.chr} '
-        '{params.length} {wildcards.bin} &> {log} || touch {output}'
+        '{params.length} {wildcards.bin} &> {log}'
 
 
 rule reformatOnTAD:
@@ -1250,8 +1236,7 @@ rule distanceNormalise:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicTransform -m {input} --method {params.method} -o {output} '
-        '&> {log} || touch {output}'
+        'hicTransform -m {input} --method {params.method} -o {output} &> {log}'
 
 
 def getTracks(wc):
@@ -1463,13 +1448,10 @@ rule plotMatrix:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicPlotMatrix --matrix {input} '
-        '--outFileName {output} '
+        'hicPlotMatrix --matrix {input} --outFileName {output} '
         '--region {params.chr}:{params.start}-{params.end} '
-        '--colorMap {params.colour} '
-        '--title {params.title} '
-        '--vMin 0 --vMax 2 --dpi {params.dpi} '
-        '&> {log} || touch {output}'
+        '--colorMap {params.colour} --title {params.title} '
+        '--vMin 0 --vMax 2 --dpi {params.dpi} &> {log}'
 
 
 rule H5_to_NxN3p:
@@ -2753,7 +2735,7 @@ rule plotQC:
     params:
         norm = '--norm' if config['other']['normQC'] else ''
     group:
-        'filterQC' if config['groupJobs'] else 'plotQC'
+        'filterQC'
     log:
         'logs/plotQC-{type}.log'
     conda:
