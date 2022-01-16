@@ -17,8 +17,8 @@ __version__ = '1.0.0'
 
 
 def resampleCompare(
-    m1: str, m2: str, referenceTADs: str, minBias: float,
-    alpha: float, outDiff: str):
+    m1: str, m2: str, referenceTADs: str,
+    minBias: float, alpha: float, out: str):
 
     hic1 = hm.hiCMatrix(m1)
     hic2 = hm.hiCMatrix(m2)
@@ -62,11 +62,12 @@ def resampleCompare(
     TADtrue['p(adj)'] = fdrcorrection(TADtrue['p'])[1]
     TADtrue['group'] = TADtrue.apply(setGroup, axis=1, args=(minBias, alpha))
     TADtrue['direction'] = TADtrue.apply(setDirection, axis=1)
-    cols = ['chrom', 'start', 'end', 'group', 'direction', 'p(adj)']
-    TADtrue[cols].to_csv(sys.stdout, header=False, index=False, sep='\t')
 
+    cols = ['chrom', 'start', 'end', 'group', 'direction', 'p(adj)', 'p', 'bias']
     TADtrue.loc[TADtrue['group'] == 'diffTAD', cols].to_csv(
-        outDiff, header=False, index=False, sep='\t')
+        sys.stdout, header=False, index=False, sep='\t')
+
+    TADtrue.to_pickle(out)
 
 
 def setGroup(x, minBias, pThreshold):
@@ -105,7 +106,7 @@ def parseArgs():
         '--alpha', type=float, default=0.01,
         help='Threshold for significance (default: %(default)s)')
     parser.add_argument(
-        '--outDiff', help='Write diffTAD only to path.')
+        '--out', help='Write processed data as pickle.')
 
     return setDefaults(parser)
 
