@@ -52,8 +52,9 @@ default_config = {
          'multiplicativeValue':  10000 ,
          'QCsample':             100000,},
     'compareMatrices':
-        {'colourmap'    : 'bwr'         ,
-         'alpha'        : 0.05         ,
+        {'colourmap'    : 'bwr'        ,
+         'alpha'        : 0.01         ,
+         'minBias'      : 0.25         ,
          'vMin'         : -1           ,
          'vMax'         : 1            ,
          'tads'         : None         ,
@@ -1662,11 +1663,11 @@ rule differentialTAD:
         control = setControl,
         tadDomains = setDomains
     output:
-        all = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-allTAD.bed',
+        all = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-differentialTAD.pkl',
         outDiff =  'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed'
     params:
-        alpha = 0.01,
-        minBias = 0.5
+        alpha = config['compareMatrices']['alpha'],
+        minBias = config['compareMatrices']['minBias']
     group:
         'HiCcompare'
     log:
@@ -1676,7 +1677,7 @@ rule differentialTAD:
     shell:
         'python {SCRIPTS}/differentialTAD.py {input.control} {input.target} '
         '{input.tadDomains} --minBias {params.minBias} --alpha {params.alpha} '
-        '--outDiff {output.outDiff} > {output.all} 2> {log}'
+        '--out {output.all} > {output.outDiff} 2> {log}'
 
 
 def getLoopsInput(wc):
