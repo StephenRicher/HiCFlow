@@ -29,7 +29,7 @@ def main():
         '--loops', nargs='*', default=[],
         help = 'Loop output.')
     parser.add_argument(
-        '--links', nargs=2,
+        '--links', nargs=2, default=[],
         help = 'Plot 2 links files, up in diffTAD and down in diffTAD.')
     parser.add_argument(
         '--matrix',
@@ -64,10 +64,13 @@ def main():
         help='Add unlablled non-overlapping BED intervals.')
     parser.add_argument(
         '--switchScore', help='BED file of Cscore switch probability')
-    parser.add_argument('--CScore', help='BED file of Cscore')
+    parser.add_argument(
+        '--CScore', nargs='*', default=[], help='BED files of Cscore')
     parser.add_argument('--changeScore', help='BED file of changeScore.')
     parser.add_argument(
         '--SNPdensity', help='BED file of SNP density per interval')
+    parser.add_argument(
+        '--ratioScore', help='BED file of of ratio score.')
     parser.add_argument(
         '--depth', type=int, default=1000000,
         help='HiC matrix depth.')
@@ -86,6 +89,9 @@ def main():
         '--tmpLinks', default='.tmp.merged.links',
         help = 'Temporary links file output to fix issues '
                'with loop plotting overlay.')
+    parser.add_argument(
+        '--removeXAxis', default=False, action='store_true',
+        help = 'Do not plot a X axis coordinate track.')
 
     args = parser.parse_args()
     func = args.function
@@ -106,7 +112,7 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
                 bigWig, collapsedBed, compare, rgbBed,
                 depth, colourmap, vMin, vMax, switchScore,
                 genes, plain, vLines, links, CScore, tmpLinks,
-                changeScore):
+                changeScore, removeXAxis, ratioScore):
 
     if plain:
         loops = []
@@ -135,14 +141,15 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
 
     if notEmpty(changeScore):
         writeColourBed(
-            changeScore, title='Change Score', minV=-2, maxV=2, cmap='bwr')
+            changeScore, title='Change Score', minV=-3, maxV=3, cmap='bwr')
         print('[spacer]')
 
-
-    if notEmpty(CScore):
-        writeColourBed(CScore, title='Cscore', minV=-1, maxV=1, cmap='bwr')
-        miniTrack = True
-        print('[spacer]')
+    for i, cscore in enumerate(CScore):
+        if notEmpty(cscore):
+            title = setCscoreTitle(i, CScore)
+            writeColourBed(cscore, title=title, minV=-1, maxV=1, cmap='bwr')
+            miniTrack = True
+    print('[spacer]')
 
     if notEmpty(switchScore):
         writeColourBed(switchScore, title='Switch Score', minV=0, maxV=1, cmap='binary')
@@ -152,6 +159,12 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
     if notEmpty(SNPdensity):
         writeColourBed(
             SNPdensity, title='SNP Density', minV=0, maxV=1, cmap='binary')
+        miniTrack = True
+        print('[spacer]')
+
+    if notEmpty(ratioScore):
+        writeColourBed(
+            ratioScore, title='Ratio Score', minV=0, maxV=0.5, cmap='binary')
         miniTrack = True
         print('[spacer]')
 
@@ -171,7 +184,11 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
 
     print('# End Sample Specific')
 
-    if links is not None:
+    isLinks = False
+    for link in links:
+        if notEmpty(link):
+            isLinks = True
+    if isLinks:
         with open(tmpLinks, 'w') as fout, fileinput.input(links) as fin:
             for line in fin:
                 fout.write(line)
@@ -180,6 +197,7 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
             if notEmpty(link):
                 writeLinks(link, i)
         print('[spacer]')
+
 
     for title, file, size in bigWig:
         if notEmpty(file):
@@ -199,9 +217,10 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
     for title, file, size in genes:
         if notEmpty(file):
             writeGenes(file=file, title=title, size=size)
-        print('[spacer]')
 
-    print('[x-axis]')
+    if not removeXAxis:
+        print('[spacer]')
+        print('[x-axis]')
 
     if notEmpty(vLines):
         writeVlines(vLines)
@@ -360,6 +379,22 @@ def writeCollapsedBed(bed, title):
           f'fontsize = 0',
           f'height = 1.5',
           f'display = collapsed', sep='\n')
+
+def setCscoreTitle(i, cscore):
+    if len(cscore) == 1:
+        return 'Cscore'
+    elif len(cscore) == 2:
+        if i == 0:
+            return 'Cscore (A1)'
+        else:
+            return 'Cscore (A2)'
+    else:
+        if i == 0:
+            return 'Cscore (Full)'
+        elif i == 1:
+            return 'A1'
+        else:
+            return 'A2'
 
 
 if __name__ == "__main__":

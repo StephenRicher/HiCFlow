@@ -35,6 +35,9 @@ def simpleSubtract(
     nan_bins = nan_bins.union(hic2.nan_bins)
     newMatrix = (hic2.matrix - hic1.matrix).todense()
 
+    # On occasion the raw may have excess rows - remove these
+    mask = mask[np.indices(newMatrix.shape, sparse=True)]
+
     for i, out in enumerate([outMatrixFilter, outMatrix]):
         if i == 0:
             filtered = median_filter(newMatrix, size=3)
@@ -47,13 +50,24 @@ def simpleSubtract(
         hic1.save(out)
 
     # Retrieve completely empty intervals (to exclude for Z score)
-    nonZero = abs(filtered).sum(axis=1) != 0
+    nonZero = (abs(filtered).sum(axis=1) != 0)
     bed = pd.DataFrame(hic1.cut_intervals)
     bed['sum'] = filtered.sum(axis=1)
     bed.loc[nonZero, 'Z'] = zscore(bed.loc[nonZero, 'sum'])
     bed = bed.dropna()
     bed['name'] = '.'
     bed[[0, 1, 2, 'name', 'Z']].to_csv(
+        sys.stdout, index=False, header=False, sep='\t')
+
+
+def writeChangeScore(hic1, hic2):
+    diff = hic2.matrix - hic1.matrix
+    nonZero = (abs(diff).sum(axis=1) != 0).A1
+    df = pd.DataFrame(hic1.cut_intervals)
+    df['sum'] = diff.sum(axis=1).A1
+    df.loc[nonZero, 'Z'] = zscore(df.loc[nonZero, 'sum'])
+    df['name'] = '.'
+    df[[0, 1, 2, 'name', 'Z']].to_csv(
         sys.stdout, index=False, header=False, sep='\t')
 
 

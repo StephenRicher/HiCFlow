@@ -460,7 +460,7 @@ rule fastQC:
     conda:
         f'{ENVS}/fastqc.yaml'
     shell:
-        'python {SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
+        'python3 {SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
         '--dataOut {output.zip} &> {log}'
 
 
@@ -493,7 +493,7 @@ rule fastQCTrimmed:
     conda:
         f'{ENVS}/fastqc.yaml'
     shell:
-        'python {SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
+        'python3 {SCRIPTS}/fastqc.py {input} --htmlOut {output.html} '
         '--dataOut {output.zip} &> {log}'
 
 
@@ -681,8 +681,10 @@ rule mergeBam:
         'logs/mergeBam/{preSample}.log'
     conda:
         f'{ENVS}/samtools.yaml'
+    threads:
+        THREADS
     shell:
-        'samtools merge -n {output} {input} &> {log}'
+        'samtools merge -@ {threads} -n {output} {input} &> {log}'
 
 
 rule fixmateBam:
@@ -1664,7 +1666,7 @@ rule differentialTAD:
         tadDomains = setDomains
     output:
         all = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-differentialTAD.pkl',
-        outDiff =  'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed'
+        outDiff = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed'
     params:
         alpha = config['compareMatrices']['alpha'],
         minBias = config['compareMatrices']['minBias']
@@ -2706,7 +2708,9 @@ rule sampleReads:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'head -n {params.nLines} <(samtools view {input}) > {output} 2> {log}'
+        'cat <(samtools view -H {input}) '
+        '<(samtools view {input} | head -n {params.nLines}) '
+        '> {output} 2> {log}'
 
 
 rule processHiC:

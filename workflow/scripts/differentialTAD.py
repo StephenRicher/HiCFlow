@@ -47,6 +47,8 @@ def resampleCompare(
     TADtrue = {}
     for i, chrom, start, end in TADs.itertuples():
         idx = hic1.getRegionBinRange(chrom, start, end)
+        if idx is None:
+            continue
         n = mask[idx[0]:idx[1], idx[0]:idx[1]].sum()
         nPositive = positive[idx[0]:idx[1], idx[0]:idx[1]].sum()
         nNegative = n - nPositive

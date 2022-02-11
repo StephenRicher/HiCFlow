@@ -28,7 +28,7 @@ def processHiC(infile: List, digest: str):
     with fileinput.input(infile) as fh:
         for line in fh:
             if line.startswith('@'):
-                if line.starstwith('@SQ'):
+                if line.startswith('@SQ'):
                     ref, size = line.split()[1:]
                     ref = ref.split(':')[1]
                     size = int(size.split(':')[1])

@@ -29,8 +29,8 @@ def createMainParent(verbose=True, version=None):
     """ Create parser of verbose/version to be added to parser/subparsers. """
     parent = argparse.ArgumentParser(add_help=False)
     if version:
-        parent.add_argument('--version', action='version',
-            version=f'%(prog)s {version}')
+        parent.add_argument(
+            '--version', action='version', version=f'%(prog)s {version}')
     if verbose:
         parent.add_argument(
             '--verbose', action='store_const', const=logging.DEBUG,
