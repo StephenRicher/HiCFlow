@@ -28,7 +28,7 @@ def orientCscore(cscore: str, fasta: str) -> None:
     if rho < 0:
         cscore['score'] *= -1
     logging.warning(f'GC content correlation: p = {p}, rho = {rho}.')
-    if p > 0.0:
+    if p > 0.01:
         logging.warning(
             f'P-value of correlation is not significant p = {p}.')
 
