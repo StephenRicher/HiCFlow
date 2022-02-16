@@ -144,6 +144,7 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
             changeScore, title='Change Score', minV=-3, maxV=3, cmap='bwr')
         print('[spacer]')
 
+    miniTrack = False
     for i, cscore in enumerate(CScore):
         if notEmpty(cscore):
             title = setCscoreTitle(i, CScore)
@@ -168,12 +169,11 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
         miniTrack = True
         print('[spacer]')
 
-    miniTrack = False
     for title, file, size in rgbBed:
         if notEmpty(file):
             writeRGBBed(file, title, size)
+            print('[spacer]')
         miniTrack = True
-        print('[spacer]')
 
     if not miniTrack:
         print('[spacer]')
