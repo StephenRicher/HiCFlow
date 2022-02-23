@@ -197,6 +197,9 @@ HiC_mode = ([
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
         subtractMode=subtractMode) for region in regionBin],
+    [expand('dat/tads/{region}/{bin}/{compare}-{region}-{bin}-{adjIF}-{pm}_rejected.diff_tad',
+        region=region, bin=regionBin[region], compare=HiC.groupCompares(), pm=pm,
+        adjIF=['adjIF1', 'adjIF2']) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -263,13 +266,13 @@ rule all:
         HiC_mode,
         compartmentOutput,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
-         if PHASE_MODE is not None else []),
+            if PHASE_MODE is not None else []),
         ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
-          'qc/multiqc'] if config['runQC'] else []),
+        'qc/multiqc'] if config['runQC'] else []),
         ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}',
             bin=hicrepRegionsBin[region], pm=pm, region=region,
-            type=config['plotParams']['filetype']) for region in hicrepRegionsBin]
-         if config['runHiCRep'] else [])
+            type=config['plotParams']['filetype'])
+            for region in hicrepRegionsBin] if config['runHiCRep'] else [])
 
 
 if ALLELE_SPECIFIC:
@@ -1552,16 +1555,17 @@ rule HiCcompare:
         'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-sutm.txt',
         'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-sutm.txt'
     output:
-        adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.2d.txt',
-        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.2d.txt',
-        adjIF1sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-{pm}.sutm',
-        adjIF2sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-{pm}.sutm'
+        adjIF1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}.2d.txt',
+        adjIF2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}.2d.txt',
+        adjIF1sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}.sutm',
+        adjIF2sutm = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}.sutm'
     params:
         dir = lambda wc: f'dat/HiCcompare/{wc.region}/{wc.bin}',
         qcdir = lambda wc: f'qc/HiCcompare/{wc.region}/{wc.bin}',
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
         end = lambda wc: REGIONS['end'][wc.region],
+        region = lambda wc: wc.region,
         suffix = lambda wc: wc.pm
     group:
         'HiCcompare'
@@ -1571,16 +1575,16 @@ rule HiCcompare:
         f'{ENVS}/HiCcompare.yaml'
     shell:
         'Rscript {SCRIPTS}/HiCcompare.R {params.dir} {params.qcdir} '
-        '{params.chr} {params.start} {params.end} {wildcards.bin} '
-        '{params.suffix} {input} &> {log}'
+        '{params.chr} {params.start} {params.end} {params.region} '
+        '{wildcards.bin} {params.suffix} {input} &> {log}'
 
 
 rule Text2DToH5:
     input:
         chromSizes = getChromSizes,
-        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.2d.txt'
+        matrix = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}.2d.txt'
     output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}-allChrom.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}-allChrom.h5'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region]
     group:
@@ -1599,7 +1603,7 @@ rule adjustCompareMatrix:
     input:
         rules.Text2DToH5.output
     output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}.h5'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1644,7 +1648,7 @@ def setControl(wc):
         adj = 'adjIF2'
     else:
         adj = 'adjIF1'
-    return f'dat/HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{adj}-{{pm}}.h5'
+    return f'dat/HiCcompare/{{region}}/{{bin}}/{{group1}}-vs-{{group2}}-{{region}}-{{bin}}-{adj}-{{pm}}.h5'
 
 
 def setDomains(wc):
@@ -1658,28 +1662,33 @@ def setDomains(wc):
     return f'dat/tads/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-ontad-{{pm}}.bed'
 
 
-
 rule differentialTAD:
     input:
-        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.h5',
+        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}.h5',
         control = setControl,
         tadDomains = setDomains
     output:
-        all = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-differentialTAD.pkl',
-        outDiff = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed'
+        accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_accepted.diff_tad',
+        rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_rejected.diff_tad'
     params:
-        alpha = config['compareMatrices']['alpha'],
-        minBias = config['compareMatrices']['minBias']
+        pValue = 0.05,
+        mode = 'all',
+        modeReject = 'one',
+        chr = lambda wc: REGIONS['chr'][wc.region],
+        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}-{wc.pm}'
     group:
         'HiCcompare'
     log:
-        'logs/differentialTAD/{group1}-vs-{group2}-{adjIF}-{region}-{bin}-{pm}.log'
+        'logs/originaldifferentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.log'
     conda:
-        f'{ENVS}/python3.yaml'
+        f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/differentialTAD.py {input.control} {input.target} '
-        '{input.tadDomains} --minBias {params.minBias} --alpha {params.alpha} '
-        '--out {output.all} > {output.outDiff} 2> {log}'
+        'hicDifferentialTAD --targetMatrix {input.target} '
+        '--controlMatrix {input.control} '
+        '--tadDomains {input.tadDomains} '
+        '--pValue {params.pValue} --mode {params.mode} '
+        '--modeReject {params.modeReject} --outFileNamePrefix {params.prefix} '
+        ' &> {log}'
 
 
 def getLoopsInput(wc):
@@ -1717,7 +1726,7 @@ rule scoreLoopDiff:
 
 rule runCompareViewpoint:
     input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{set}-{pm}.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{set}-{pm}.h5'
     output:
         plot = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-{set}-{region}-{coord}-{bin}-{pm}.png',
         bedgraph = 'dat/HiCcompare/{region}/{bin}/viewpoint/{group1}-vs-{group2}-{set}-{region}-{coord}-{bin}-{pm}.bedgraph',
@@ -1760,9 +1769,9 @@ rule plotCompareViewpoint:
 
 rule distanceNormaliseAdjIF:
     input:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}.h5'
     output:
-        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-obsExp-{pm}.h5'
+        'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-obsExp-{pm}.h5'
     params:
         method = 'obs_exp'
     group:
@@ -1778,8 +1787,8 @@ rule distanceNormaliseAdjIF:
 def getSubtractInput(wc):
     if wc.subtractMode == 'LOESSdiff':
         return ([
-            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF1-obsExp-{pm}.h5',
-            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-adjIF2-obsExp-{pm}.h5',
+            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-obsExp-{pm}.h5',
+            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-obsExp-{pm}.h5',
         ])
     else:
         return ([
@@ -1863,8 +1872,8 @@ rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{filter}-{pm}.h5',
         changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}.bed',
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
+        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected.diff_tad',
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected.diff_tad',
         linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksDown.links',
         linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksUp.links',
         vLines = config['plotParams']['vLines'],
