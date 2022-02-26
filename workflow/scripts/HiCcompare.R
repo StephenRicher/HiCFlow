@@ -25,21 +25,22 @@ qcdir = args[2]
 chr = args[3]
 start = as.integer(args[4])
 end = as.integer(args[5])
-binsize = as.integer(args[6])
-suffix = args[7]
-matrix1 = args[8]
-matrix2 = args[9]
+region = args[6]
+binsize = as.integer(args[7])
+suffix = args[8]
+matrix1 = args[9]
+matrix2 = args[10]
 
 dir.create(qcdir, recursive = TRUE)
 
 group1 = get_group(matrix1)
 group2 = get_group(matrix2)
 
-loess_plot = paste(qcdir, '/', group1, '-vs-', group2, '-loess-', suffix, '.png', sep = '')
-outIF1 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1-', suffix, '.2d.txt', sep = '')
-outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.2d.txt', sep = '')
-outIF1SUTM = paste(outdir, '/', group1, '-vs-', group2, '-adjIF1-', suffix, '.sutm', sep = '')
-outIF2SUTM = paste(outdir, '/', group1, '-vs-', group2, '-adjIF2-', suffix, '.sutm', sep = '')
+loess_plot = paste(qcdir, '/', group1, '-vs-', group2, '-', region, '-', binsize, '-loess-', suffix, '.png', sep = '')
+outIF1 = paste(outdir, '/', group1, '-vs-', group2, '-', region, '-', binsize, '-adjIF1-', suffix, '.2d.txt', sep = '')
+outIF2 = paste(outdir, '/', group1, '-vs-', group2, '-', region, '-', binsize, '-adjIF2-', suffix, '.2d.txt', sep = '')
+outIF1SUTM = paste(outdir, '/', group1, '-vs-', group2, '-', region, '-', binsize, '-adjIF1-', suffix, '.sutm', sep = '')
+outIF2SUTM = paste(outdir, '/', group1, '-vs-', group2, '-', region, '-', binsize, '-adjIF2-', suffix, '.sutm', sep = '')
 
 ### LOESS  ###
 data.table <- create.hic.table(
