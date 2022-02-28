@@ -4,13 +4,12 @@
 
 import os
 import sys
+import logging
 import argparse
 import numpy as np
 import pandas as pd
 from typing import List
 from hicmatrix import HiCMatrix as hm
-from sklearn.preprocessing import KBinsDiscretizer
-from statsmodels.stats.multitest import fdrcorrection
 from utilities import setDefaults, createMainParent
 
 
@@ -18,15 +17,36 @@ __version__ = '1.0.0'
 
 
 def processDiffTAD(
-        diffTAD: List, matrix: str, outDiff: str, outPickle: str,
-        adjustP: bool, alpha: float, name: str):
-    allTADs = pd.concat([readDiffTAD(file) for file in diffTAD])
+        diffTAD: List, subtractionMat: str, countMats: List, outDiff: str,
+        outPickle: str, threshold: float, name: str):
 
-    pCols = ['p-value left-inter-TAD', 'p-value right-inter-TAD', 'p-value intra-TAD']
-    allTADs['p'] = allTADs[pCols].fillna(1).min(axis=1)
-    allTADs['p(adj)'] = fdrcorrection(allTADs['p'])[1]
-    refP = 'p(adj)' if adjustP else 'p'
-    allTADs['diffTAD'] = allTADs[refP] < alpha
+    allTADs = pd.concat([readBED(file) for file in diffTAD])
+
+    hic = hm.hiCMatrix(subtractionMat)
+    chrom = hic.getChrNames()[0]
+
+    # Only keep domains matching the provided matrix
+    allTADs = allTADs.loc[allTADs['chrom'] == chrom]
+
+    # Convert genomic intervals to list of tuples
+    allTADs = list(allTADs.to_records(index=False))
+
+    values = np.abs(np.triu(hic.matrix.toarray()))
+    allTADsummary, allSizes = processTADscores(allTADs, hic, values)
+    backgroundStats = getDomainBackground(allSizes, values, hic, countMats)
+
+    mergeBy =  ['chrom', 'size']
+    allTADs = pd.merge(
+        backgroundStats, allTADsummary, left_on=mergeBy, right_on=mergeBy)
+    allTADs['z'] = (allTADs['sumDiff'] - allTADs['mean']) / allTADs['std']
+
+    # Remove any domains that were too small to test
+    allTADs = allTADs.loc[allTADs[['mean', 'std', 'z']].notna().all(axis=1)]
+
+    allTADs['rank'] = allTADs['z'].rank(pct=True)
+
+    # Define diffTAD as top 'threshold' % of domains
+    allTADs['diffTAD'] = (allTADs['rank'] * 100) >= 100 - threshold
 
     # Write diffTADs
     if outDiff is not None:
@@ -34,53 +54,46 @@ def processDiffTAD(
         (allTADs.loc[allTADs['diffTAD']].sort_values(['chrom', 'start'])
             .to_csv(outDiff, sep='\t', index=False, header=False, columns=cols))
 
-
-    hic = hm.hiCMatrix(matrix)
-    values = np.abs(np.triu(hic.matrix.toarray()))
-    allTADsummary, allSizes = processTADscores(allTADs, hic, values)
-    densityStats = getDensity(allSizes, values, hic)
-
-    mergeBy =  ['chrom', 'size']
-    allTADsummary = pd.merge(densityStats, allTADsummary, left_on=mergeBy, right_on=mergeBy)
-    allTADsummary['z'] = (allTADsummary['density'] - allTADsummary['mean']) / allTADsummary['std']
-
-    mergeBy =  ['chrom', 'start', 'end']
-    allTADs = pd.merge(allTADs, allTADsummary.drop('size', axis=1), left_on=mergeBy, right_on=mergeBy)
-
     if outPickle is not None:
         allTADs.to_pickle(outPickle)
 
-    # Remove any domains that were too small to test
-    allTADs = allTADs.loc[allTADs[['mean', 'std', 'z']].notna().all(axis=1)]
-    # Bin score from 0 to 1000 for UCSC browser
-    est = KBinsDiscretizer(n_bins=1000, encode='ordinal', strategy='uniform')
-    allTADs['score'] = est.fit_transform(allTADs['z'].values.reshape(-1, 1))
-    allTADs['strand'] = '.'
+    # Set score between 0 - 1000 according to rank
     allTADs['colour'] = 0
-    allTADs['name'] = allTADs['diffTAD'].apply(lambda x: name if x else f'non-{name}')
+    allTADs['strand'] = '.'
+    allTADs['score'] = allTADs['rank'] * 1000
+    allTADs['name'] = allTADs['diffTAD'].apply(
+        lambda x: name if x else f'non-{name}')
     cols = ['chrom', 'start', 'end', 'name', 'score', 'strand', 'start', 'end', 'colour']
 
     print(f'visibility=4 useScore="On"')
     allTADs[cols].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
 
-def getDensity(allSizes, values, hic):
+def getDomainBackground(allSizes, values, hic, countMats):
     """ Scan all domain sizes to retrieve
         backgound mean / std of absolute change """
     chrom = hic.getChrNames()[0]
     chromSize = hic.get_chromosome_sizes()[chrom]
     binSize = hic.getBinSize()
     densityStats = {}
+
+    IF1 = hm.hiCMatrix(countMats[0]).matrix.toarray()
+    IF2 = hm.hiCMatrix(countMats[1]).matrix.toarray()
+    sparsity = (IF1 + IF2) > 0 # False at empty
+
     for size in allSizes:
         idx1, idx2 = 0, size
         scores = []
         while True:
-            scores.append(values[idx1:idx2, idx1:idx2].sum())
+            score = values[idx1:idx2, idx1:idx2].sum()
+            isZero = sparsity[idx1:idx2, idx1:idx2].sum()
             idx1, idx2 = idx1 + 1, idx2 + 1
+            if True: #isZero > 0:
+                scores.append(score)
             if idx2 * binSize > chromSize:
                 break
         scores = np.array(scores)
-        densityStats[(chrom, size)] = (scores.mean(), scores.std())
+        densityStats[(f'{chrom}', size)] = (scores.mean(), scores.std())
     densityStats = pd.DataFrame(densityStats).T.reset_index()
     densityStats.columns = ['chrom', 'size', 'mean', 'std']
 
@@ -91,23 +104,25 @@ def processTADscores(allTADs, hic, values):
     """ Loop through each TAD domains - score each domain by absolute change """
     allTADsummary = {}
     allSizes = set() # Store tad sizes
-    for row in allTADs.itertuples(index=False):
-        idx1, idx2 = hic.getRegionBinRange(f'{row.chrom}', row.start, row.end)
+    for chrom, start, end in allTADs:
+        try:
+            idx1, idx2 = hic.getRegionBinRange(f'{chrom}', start, end)
+        except TypeError:
+            logging.error(f'Skipping {chrom}:{start}-{end} - out of range.')
+            continue
         domain = values[idx1:idx2, idx1:idx2]
         allSizes.add(len(domain)) # store matrix length
-        allTADsummary[(row.chrom, row.start, row.end)] = (len(domain), domain.sum())
+        allTADsummary[(chrom, start, end)] = (len(domain), domain.sum())
     allTADsummary = pd.DataFrame(allTADsummary).T.reset_index()
-    allTADsummary.columns = ['chrom', 'start', 'end', 'size', 'density']
+
+    allTADsummary.columns = ['chrom', 'start', 'end', 'size', 'sumDiff']
 
     return allTADsummary, allSizes
 
 
-def readDiffTAD(file):
-    dtypes = ({
-        'chrom': str, 'start': int, 'end': int, 'p-value left-inter-TAD': float,
-        'p-value right-inter-TAD': float, 'p-value intra-TAD': float
-    })
-    df = pd.read_csv(file, comment='#', usecols=[0,1,2,6,7,8],
+def readBED(file):
+    dtypes = {'chrom': str, 'start': int, 'end': int}
+    df = pd.read_csv(file, comment='#', usecols=[0,1,2],
                      names=dtypes.keys(), dtype=dtypes, sep='\t')
     return df
 
@@ -120,18 +135,18 @@ def parseArgs():
         epilog=epilog, description=__doc__, parents=[mainParent])
     parser.set_defaults(function=processDiffTAD)
     parser.add_argument(
-        'matrix',
+        'subtractionMat',
         help='Subtraction matrix, in .h5 format of compared matrices.')
+    parser.add_argument(
+        'countMats', nargs=2,
+        help='Count matrices of compared samples, used to exclude '
+             'completely empty regions')
     parser.add_argument(
         'diffTAD', nargs='+',
         help='Pair of output files from hicDifferentialTAD.')
     parser.add_argument(
-        '--alpha', type=float, default=0.05,
-        help='Threshold for calling diffTADs (default: %(default)s)')
-    parser.add_argument(
-        '--adjustP', action='store_true',
-        help='If set alpha will be compared against '
-             'the FDR ajusted p-value (default: %(default)s)')
+        '--threshold', type=float, default=10,
+        help='Define top % of domains as differential (default: %(default)s)')
     parser.add_argument(
         '--name', default='diffTAD',
         help='Name for differential TAD domains (default: %(default)s)')
