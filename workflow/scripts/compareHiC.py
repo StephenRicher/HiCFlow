@@ -22,10 +22,10 @@ def simpleSubtract(
     matrices: List, outMatrix: str, outMatrixFilter: str,
     minSum: int, raw: List):
 
-    mask = getMask(raw, minSum=minSum)
+
     hic1 = hm.hiCMatrix(matrices[0])
     hic2 = hm.hiCMatrix(matrices[1])
-
+    mask = getMask(raw, hic1, minSum)
     if (hic1.matrix.shape != hic2.matrix.shape):
         sys.exit("The two matrices have different size. Use matrices having "
                  "the same resolution and created using the same parameters. "
@@ -71,13 +71,13 @@ def writeChangeScore(hic1, hic2):
         sys.stdout, index=False, header=False, sep='\t')
 
 
-def getMask(raw, minSum=0):
+def getMask(raw, hic, minSum=0):
     if raw:
         raw1 = hm.hiCMatrix(raw[0])
         raw2 = hm.hiCMatrix(raw[1])
         mask = (raw1.matrix + raw2.matrix).todense() < minSum
     else:
-        mask = True
+        mask = hic.matrix.todense() < 0
     return mask
 
 
