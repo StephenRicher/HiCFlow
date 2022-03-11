@@ -54,13 +54,11 @@ default_config = {
     'compareMatrices':
         {'colourmap'    : 'bwr'        ,
          'alpha'        : 0.01         ,
-         'minBias'      : 0.25         ,
          'vMin'         : -1           ,
          'vMax'         : 1            ,
          'tads'         : None         ,
          'loops'        : None         ,
          'allPairs'     : False        ,
-         'rawDiff'      : False        ,
          'minSum'       : 25           ,},
     'gatk':
         {'hapmap'      : None         ,
@@ -188,25 +186,21 @@ norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
-subtractMode = ['LOESSdiff']
-if config['compareMatrices']['rawDiff']:
-    subtractMode.append('RAWdiff')
+
 
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}',
+    [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-LOESSdiff-{filter}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
-        subtractMode=subtractMode) for region in regionBin],
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
     [expand('dat/tads/{region}/{bin}/{compare}-{region}-{bin}-{adjIF}-{pm}_rejected.diff_tad',
         region=region, bin=regionBin[region], compare=HiC.groupCompares(), pm=pm,
         adjIF=['adjIF1', 'adjIF2']) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
-    [expand('plots/{region}/{bin}/HiCsubtract/configs/{compare}-{coords}-{subtractMode}-{filter}-{pm}-{mini}.ini',
+    [expand('plots/{region}/{bin}/HiCsubtract/configs/{compare}-{coords}-LOESSdiff-{filter}-{pm}-{mini}.ini',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini,
-        subtractMode=subtractMode) for region in regionBin],
+        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.ini',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -289,7 +283,7 @@ if ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/bcftools.yaml'
         shell:
-            'bcftools view -H -m 2 -M 2 -v snps -i \'GT="het"\' --phased '
+            'bcftools view -H -m 2 -M 2 -v snps -g het --phased '
             '{input} > {output} 2> {log}'
 
 
@@ -1691,6 +1685,30 @@ rule differentialTAD:
         ' &> {log}'
 
 
+rule processDiffTAD:
+    input:
+        allTADs = setDomains,
+        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-medianFilter-{pm}.h5'
+    output:
+        outPkl = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}.pkl',
+        outDiff = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed',
+        out = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-allTAD.bed'
+    params:
+        threshold = 2,
+        name = 'ASTAD' if ALLELE_SPECIFIC else 'diffTAD'
+    group:
+        'HiCcompare'
+    log:
+        'logs/processDiffTAD/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/processDiffTAD.py {input.matrix} {input.allTADs} '
+        '--threshold {params.threshold} --name {params.name} '
+        '--outDiff {output.outDiff} --outPickle {output.outPkl} '
+        '> {output.out} 2> {log}'
+
+
 def getLoopsInput(wc):
     if config['compareMatrices']['loops'] is None:
         loops = ([
@@ -1705,16 +1723,16 @@ def getLoopsInput(wc):
 rule scoreLoopDiff:
     input:
         loops = getLoopsInput,
-        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-medianFilter-{pm}.h5'
+        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-medianFilter-{pm}.h5'
     output:
-        interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}.interact',
-        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksUp.links',
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksDown.links'
+        interactOut = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}.interact',
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksUp.links',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksDown.links'
     params:
         nBins = 20,
         maxLineWidth = 3
     log:
-        'logs/scoreLoopDiff/{group1}-vs-{group2}-{subtractMode}-{region}-{bin}-{pm}.log'
+        'logs/scoreLoopDiff/{group1}-vs-{group2}-LOESSdiff-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1784,36 +1802,25 @@ rule distanceNormaliseAdjIF:
         'hicTransform -m {input} --method {params.method} -o {output} &> {log}'
 
 
-def getSubtractInput(wc):
-    if wc.subtractMode == 'LOESSdiff':
-        return ([
-            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-obsExp-{pm}.h5',
-            'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-obsExp-{pm}.h5',
-        ])
-    else:
-        return ([
-            'dat/matrix/{region}/{bin}/raw/obs_exp/{group1}-{region}-{bin}-{pm}.h5',
-            'dat/matrix/{region}/{bin}/raw/obs_exp/{group2}-{region}-{bin}-{pm}.h5'
-        ])
-
-
 rule HiCsubtract:
     input:
-        matrices = getSubtractInput,
+        mat1 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-obsExp-{pm}.h5',
+        mat2 = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-obsExp-{pm}.h5',
         raw1 = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-raw.h5',
         raw2 = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-raw.h5'
     output:
-        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}.bed',
-        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-noFilter-{pm}.h5',
-        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-medianFilter-{pm}.h5'
+        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{pm}.bed',
+        out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-noFilter-{pm}.h5',
+        outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-medianFilter-{pm}.h5'
     params:
         minSum = config['compareMatrices']['minSum']
     log:
-        'logs/HiCsubtract/{group1}-vs-{group2}-{bin}-{region}-{subtractMode}-{pm}.log'
+        'logs/HiCsubtract/{group1}-vs-{group2}-{bin}-{region}-LOESSdiff-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'python {SCRIPTS}/compareHiC.py {input.matrices} --outMatrix {output.out} '
+        'python {SCRIPTS}/compareHiC.py {input.mat1} {input.mat2} '
+        '--outMatrix {output.out} '
         '--outMatrixFilter {output.outFilt} --minSum {params.minSum} '
         '--raw {input.raw1} {input.raw2} > {output.changeScore} 2> {log}'
 
@@ -1870,19 +1877,19 @@ def getSwitchScoreParams(wc):
 
 rule createSubtractConfig:
     input:
-        mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{filter}-{pm}.h5',
-        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{subtractMode}-{pm}.bed',
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}_rejected.diff_tad',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}_rejected.diff_tad',
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksDown.links',
-        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-{subtractMode}-{bin}-{pm}-linksUp.links',
+        mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{filter}-{pm}.h5',
+        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{pm}.bed',
+        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
+        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
+        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksDown.links',
+        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksUp.links',
         vLines = config['plotParams']['vLines'],
         switchScore = getSwitchScoreInput,
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
     output:
-        ini = 'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.ini',
-        tmpLinks = temp('plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.tmp.links')
+        ini = 'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-LOESSdiff-{filter}-{pm}-{mini}.ini',
+        tmpLinks = temp('plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-LOESSdiff-{filter}-{pm}-{mini}.tmp.links')
     params:
         vMin = getVmin,
         vMax = getVmax,
@@ -1894,7 +1901,7 @@ rule createSubtractConfig:
     group:
         'plotHiCsubtract'
     log:
-        'logs/createSubtractConfig/{group1}-vs-{group2}-{bin}-{region}-{coord}-{subtractMode}-{filter}-{pm}-{mini}.log'
+        'logs/createSubtractConfig/{group1}-vs-{group2}-{bin}-{region}-{coord}-LOESSdiff-{filter}-{pm}-{mini}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1915,7 +1922,7 @@ def setSubtractTitle(wc):
     else:
         build = ''
     title = (f'"{wc.group1} vs {wc.group2} - {wc.region}{build} at '
-             f'{wc.bin} bin size - {wc.subtractMode} - {wc.pm}"')
+             f'{wc.bin} bin size - LOESSdiff - {wc.pm}"')
     return title
 
 
@@ -1924,7 +1931,7 @@ rule plotSubtract:
         ini = rules.createSubtractConfig.output.ini,
         tmpLinks = rules.createSubtractConfig.output.tmpLinks
     output:
-        'plots/{region}/{bin}/HiCsubtract/{filter}/{group1}-vs-{group2}-{region}-{coord}-{bin}-{subtractMode}-{filter}-{pm}-{mini}.{type}'
+        'plots/{region}/{bin}/HiCsubtract/{filter}/{group1}-vs-{group2}-{region}-{coord}-{bin}-LOESSdiff-{filter}-{pm}-{mini}.{type}'
     params:
         title = setSubtractTitle,
         region = setRegion,
@@ -1934,7 +1941,7 @@ rule plotSubtract:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotSubtract/{group1}-vs-{group2}-{bin}-{region}-{coord}-{subtractMode}-{filter}-{pm}-{mini}-{type}.log'
+        'logs/plotSubtract/{group1}-vs-{group2}-{bin}-{region}-{coord}-LOESSdiff-{filter}-{pm}-{mini}-{type}.log'
     threads:
         THREADS
     shell:
@@ -2132,6 +2139,7 @@ if not ALLELE_SPECIFIC:
     rule splitIntervals:
         input:
             genome = rules.bgzipGenome.output,
+            index = rules.indexGenome.output,
             seqDict = rules.createSequenceDictionary.output
         output:
             expand('dat/gatk/splitIntervals/{{cellType}}/{rep}-scattered.interval_list',
@@ -2377,7 +2385,7 @@ if not ALLELE_SPECIFIC:
             dbsnp = f'--resource:dbsnp,known=true,training=false,truth=false,'
             f'prior=2.0 {config["gatk"]["dbsnp"]}' if config["gatk"]["dbsnp"]  else '',
             trustPoly = '--trust-all-polymorphic' if config['gatk']['trustPoly'] else '',
-            maxGaussians = config['gatk']['maxGaussians'],
+            maxGaussians = 4, # config['gatk']['maxGaussians'],
             java_opts = '-Xmx4G',
             tmp = config['tmpdir'],
             extra = '',  # optional
