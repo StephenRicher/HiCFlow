@@ -45,8 +45,8 @@ def processDiffTAD(
 
     allTADs['rank'] = allTADs['z'].rank(pct=True)
 
-    # Define diffTAD as top 'threshold' % of domains
-    allTADs['diffTAD'] = (allTADs['rank'] * 100) >= 100 - threshold
+    # Define diffTAD by threshold
+    allTADs['diffTAD'] = allTADs['z'] > threshold
 
     # Write diffTADs
     if outDiff is not None:
@@ -88,7 +88,7 @@ def getDomainBackground(allSizes, values, hic, countMats):
             score = values[idx1:idx2, idx1:idx2].sum()
             isZero = sparsity[idx1:idx2, idx1:idx2].sum()
             idx1, idx2 = idx1 + 1, idx2 + 1
-            if True: #isZero > 0:
+            if isZero > 0:
                 scores.append(score)
             if idx2 * binSize > chromSize:
                 break
@@ -145,8 +145,8 @@ def parseArgs():
         'diffTAD', nargs='+',
         help='Pair of output files from hicDifferentialTAD.')
     parser.add_argument(
-        '--threshold', type=float, default=10,
-        help='Define top % of domains as differential (default: %(default)s)')
+        '--threshold', type=float, default=2,
+        help='Z score threshold for defining top of domains (default: %(default)s)')
     parser.add_argument(
         '--name', default='diffTAD',
         help='Name for differential TAD domains (default: %(default)s)')
