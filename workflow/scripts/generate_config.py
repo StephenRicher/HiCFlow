@@ -63,7 +63,7 @@ def main():
         type=commaPair, action='append',
         help='Add unlablled non-overlapping BED intervals.')
     parser.add_argument(
-        '--switchScore', help='BED file of Cscore switch probability')
+        '--switchScore', help='BED file of Cscore magnitude (Z)')
     parser.add_argument(
         '--CScore', nargs='*', default=[], help='BED files of Cscore')
     parser.add_argument('--changeScore', help='BED file of changeScore.')
@@ -153,7 +153,7 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
     print('[spacer]')
 
     if notEmpty(switchScore):
-        writeColourBed(switchScore, title='Switch Score', minV=0, maxV=1, cmap='binary')
+        writeColourBed(switchScore, title='Switch Score', minV=-3, maxV=3, cmap='bwr')
         miniTrack = True
         print('[spacer]')
 
