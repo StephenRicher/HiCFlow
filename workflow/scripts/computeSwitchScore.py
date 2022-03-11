@@ -6,6 +6,7 @@
 import sys
 import argparse
 import pandas as pd
+from scipy.stats import zscore
 from scipy.stats import pearsonr
 from utilities import setDefaults, createMainParent
 
@@ -29,7 +30,7 @@ def computeSwitchScore(cscore1: str, cscore2: str) -> None:
     rho, p = pearsonr(cscore['cscore_x'], cscore['cscore_y'])
     if rho < 0:
         cscore['cscore_y'] *= -1
-    cscore['switch'] = (cscore['cscore_x'] - cscore['cscore_y']).abs()
+    cscore['switch'] = zscore(cscore['cscore_x'] - cscore['cscore_y'])
     cscore = cscore.reset_index()
     cscore['name'] = '.'
     cscore[['chrom', 'start', 'end', 'name', 'switch']].to_csv(
