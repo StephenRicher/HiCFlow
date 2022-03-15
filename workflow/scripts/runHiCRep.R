@@ -36,12 +36,12 @@ if (file.info(matrix1)$size == 0) {
   
   m1 = read.table(matrix1)
   m2 = read.table(matrix2)
-  
+
   # Calculate optimal smoothing parameter for a given region and bin
   h_hat = tryCatch({
     htrain(m1, m2, resol = bin, max = max_interaction, range = 0:20)
   }, error = function(e) {cat("ERROR :", conditionMessage(e), "\n")})
-  
+
   if (is.null(h_hat)) {
     print("Unable to calculate smoothing parameter - SCC note computed")
     h_hat = NA

@@ -17,10 +17,10 @@ __version__ = '1.0.0'
 
 
 def processDiffTAD(
-        diffTAD: List, subtractionMat: str, countMats: List, outDiff: str,
+        allTADs: str, subtractionMat: str, countMats: List, outDiff: str,
         outPickle: str, threshold: float, name: str):
 
-    allTADs = pd.concat([readBED(file) for file in diffTAD])
+    allTADs = readBED(allTADs)
 
     hic = hm.hiCMatrix(subtractionMat)
     chrom = hic.getChrNames()[0]
@@ -142,8 +142,7 @@ def parseArgs():
         help='Count matrices of compared samples, used to exclude '
              'completely empty regions')
     parser.add_argument(
-        'diffTAD', nargs='+',
-        help='Pair of output files from hicDifferentialTAD.')
+        'allTADs', help='BED file of TADs to process.')
     parser.add_argument(
         '--threshold', type=float, default=2,
         help='Z score threshold for defining top of domains (default: %(default)s)')
