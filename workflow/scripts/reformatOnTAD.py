@@ -20,6 +20,7 @@ def reformatOnTAD(ontad: str, scale: int, chrom: str, binSize: int, maxPos: int)
                 continue
             # Start and End bins are 1-based in OnTAD
             start, end = line.split()[:2]
+            score = line.split()[4]
             # Retrieve midpoint coordinates of each interval
             startMid = int((int(start) * binSize) - (binSize / 2))
             # Rest end position to maximum position.
@@ -29,7 +30,7 @@ def reformatOnTAD(ontad: str, scale: int, chrom: str, binSize: int, maxPos: int)
             # Shift coordinates as required
             startMid = str(startMid  + scale)
             endMid = str(endMid + scale)
-            print(chrom, startMid, endMid, '.', '0', '.', startMid, endMid, '.', sep='\t')
+            print(chrom, startMid, endMid, '.', score, '.', startMid, endMid, '.', sep='\t')
 
 
 def parseArgs():
