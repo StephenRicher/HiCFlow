@@ -1688,7 +1688,9 @@ rule differentialTAD:
 rule processDiffTAD:
     input:
         allTADs = setDomains,
-        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-medianFilter-{pm}.h5'
+        matrix = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-medianFilter-{pm}.h5',
+        raw1 = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-raw.h5',
+        raw2 = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-raw.h5'
     output:
         outPkl = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}.pkl',
         outDiff = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed',
@@ -1703,7 +1705,8 @@ rule processDiffTAD:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/processDiffTAD.py {input.matrix} {input.allTADs} '
+        'python {SCRIPTS}/processDiffTAD.py {input.matrix} '
+        '{input.raw1} {input.raw2} {input.allTADs} '
         '--threshold {params.threshold} --name {params.name} '
         '--outDiff {output.outDiff} --outPickle {output.outPkl} '
         '> {output.out} 2> {log}'
@@ -1859,32 +1862,16 @@ def getVmax(wc):
         vMax *= 0.75
     return vMax
 
-
-def getSwitchScoreInput(wc):
-    if config['HiCParams']['compartmentScore']:
-        return f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.pm}-switchScore.bed'
-    else:
-        return []
-
-
-def getSwitchScoreParams(wc):
-    if config['HiCParams']['compartmentScore']:
-        switch = f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.pm}-switchScore.bed'
-        return f'--switchScore {switch}'
-    else:
-        return ''
-
-
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{filter}-{pm}.h5',
-        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{pm}.bed',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
+        cscore1 = 'dat/Cscore/{region}/{bin}/{group1}-{region}-{bin}-{pm}-Cscore_cscore.bed',
+        cscore2 = 'dat/Cscore/{region}/{bin}/{group2}-{region}-{bin}-{pm}-Cscore_cscore.bed',
         linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksDown.links',
         linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksUp.links',
         vLines = config['plotParams']['vLines'],
-        switchScore = getSwitchScoreInput,
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
     output:
@@ -1896,7 +1883,6 @@ rule createSubtractConfig:
         depth = getDepth,
         tracks = getTracks,
         SNPcoverage = getSNPcommand,
-        switchScore = getSwitchScoreParams,
         colourmap = config['compareMatrices']['colourmap']
     group:
         'plotHiCsubtract'
@@ -1909,8 +1895,8 @@ rule createSubtractConfig:
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
-        '--tmpLinks {output.tmpLinks} {params.switchScore} '
-        '--changeScore {input.changeScore} '
+        '--CScore {input.cscore1} {input.cscore2} '
+        '--tmpLinks {output.tmpLinks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'
 
