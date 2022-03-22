@@ -50,12 +50,11 @@ default_config = {
          'compartmentScore':     False ,
          'threads':              4     ,
          'multiplicativeValue':  10000 ,
-         'QCsample':             100000,},
+         'microC':               False ,},
     'compareMatrices':
         {'colourmap'    : 'bwr'        ,
-         'alpha'        : 0.01         ,
-         'vMin'         : -1           ,
-         'vMax'         : 1            ,
+         'zThreshold'   : 2            ,
+         'vMax'         : 2            ,
          'tads'         : None         ,
          'loops'        : None         ,
          'allPairs'     : False        ,
@@ -88,22 +87,23 @@ default_config = {
          'miniHeight'    : 6        ,
          'includeRegions': True     ,
          'filetype'      : 'svg'    ,},
-    'other':
-        {'normQC'    : False      ,
-         'flipSNP'   : False      ,
-         'HiCRep_bin': None       ,},
     'Genes':
         {'gff3'        :  []        ,
          'typeKey'     : 'gene_type',
          'label'       : 'gene_id'  ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
-    'fastqScreen':      None,
-    'runQC':            True,
+    'QC':
+        {'runQC'        : True  ,
+         'normQC'       : False ,
+         'flipSNP'      : False ,
+         'QCsample'     : 100000,
+         'fastqScreen'  : None  ,
+         'multiQCconfig': None  ,
+         'runHiCRep'    : True  ,
+         'HiCRep_bin'   : None  ,},
     'phase':            False,
-    'runHiCRep':        True,
-    'multiQCconfig':    None,
-    'microC':           False,
+
 }
 
 config = set_config(config, default_config)
@@ -126,10 +126,10 @@ regionBin, binRegion = filterRegions(
     nbins=config['HiCParams']['minBins'])
 
 # May want to specify a different bin size for HiCRep
-if config['other']['HiCRep_bin'] is None:
+if config['QC']['HiCRep_bin'] is None:
     hicrepbins = config['resolution']['bins']
 else:
-    hicrepbins = [config['other']['HiCRep_bin']]
+    hicrepbins = [config['QC']['HiCRep_bin']]
 hicrepRegionsBin, _ = filterRegions(
     REGIONS, hicrepbins,
     nbins=config['HiCParams']['minBins'])
@@ -192,9 +192,6 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-LOESSdiff-{filter}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
-    [expand('dat/tads/{region}/{bin}/{compare}-{region}-{bin}-{adjIF}-{pm}_rejected.diff_tad',
-        region=region, bin=regionBin[region], compare=HiC.groupCompares(), pm=pm,
-        adjIF=['adjIF1', 'adjIF2']) for region in regionBin],
     [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
@@ -262,11 +259,11 @@ rule all:
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
             if PHASE_MODE is not None else []),
         ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
-        'qc/multiqc'] if config['runQC'] else []),
+        'qc/multiqc'] if config['QC']['runQC'] else []),
         ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}',
             bin=hicrepRegionsBin[region], pm=pm, region=region,
             type=config['plotParams']['filetype'])
-            for region in hicrepRegionsBin] if config['runHiCRep'] else [])
+            for region in hicrepRegionsBin] if config['QC']['runHiCRep'] else [])
 
 
 if ALLELE_SPECIFIC:
@@ -311,7 +308,7 @@ if ALLELE_SPECIFIC:
         output:
             'snpsplit/{cellType}-snpsplit.txt'
         params:
-            flip = lambda wc: '--flipSNP' if config['other']['flipSNP'] else ''
+            flip = lambda wc: '--flipSNP' if config['QC']['flipSNP'] else ''
         group:
             'prepareGenome'
         log:
@@ -494,19 +491,19 @@ rule fastQCTrimmed:
         '--dataOut {output.zip} &> {log}'
 
 
-if config['fastqScreen'] is not None:
+if config['QC']['fastqScreen'] is not None:
 
     rule fastQScreen:
         input:
-            'dat/fastq/trimmed/{preSample}-{read}.trim.fastq.gz'
+            'dat/fastq/{preSample}-{read}.trimmed.fastq.gz'
         output:
-            txt = 'qc/fastqScreen/{preSample}-{read}.fastqScreen.txt',
+            txt = 'qc/fastqScreen/{preSample}-{read}_screen.txt',
             png = 'qc/fastqScreen/{preSample}-{read}.fastqScreen.png'
         params:
-            config = config['fastqScreen'],
+            config = config['QC']['fastqScreen'],
             subset = 100000,
         log:
-            'logs/fastqScreen/{sample}-{read}.log'
+            'logs/fastqScreen/{preSample}-{read}.log'
         conda:
             f'{ENVS}/fastqScreen.yaml'
         threads:
@@ -604,7 +601,7 @@ def bowtie2Basename(wc):
 
 
 def fastqInput(wc):
-    mode = 'trimmed' if config['microC'] else 'truncated'
+    mode = 'trimmed' if config['HiCParams']['microC'] else 'truncated'
     return f'dat/fastq/{wc.preSample}-{wc.read}.{mode}.fastq.gz'
 
 
@@ -855,7 +852,7 @@ rule splitPairedReads:
 
 def getRestSites(wc):
     """ Retrieve restSite files associated with sample wildcard """
-    if config['microC']:
+    if config['HiCParams']['microC']:
         return ['dat/genome/restSites-empty.bed']
     try:
         sample = wc.sample
@@ -1113,7 +1110,7 @@ rule detectLoops:
         '--threads 1 --threadsPerChromosome {threads} '
         '&> {log}'
 
-# Hacky fix to correct loop intervals that extend too far
+# Fix to correct loop intervals that extend too far
 rule clampLoops:
     input:
         rules.detectLoops.output
@@ -1656,35 +1653,6 @@ def setDomains(wc):
     return f'dat/tads/{{region}}/{{bin}}/{group}-{{region}}-{{bin}}-ontad-{{pm}}.bed'
 
 
-rule differentialTAD:
-    input:
-        target = 'dat/HiCcompare/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}.h5',
-        control = setControl,
-        tadDomains = setDomains
-    output:
-        accepted = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_accepted.diff_tad',
-        rejected = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}_rejected.diff_tad'
-    params:
-        pValue = 0.05,
-        mode = 'all',
-        modeReject = 'one',
-        chr = lambda wc: REGIONS['chr'][wc.region],
-        prefix = lambda wc: f'dat/tads/{wc.region}/{wc.bin}/{wc.group1}-vs-{wc.group2}-{wc.region}-{wc.bin}-{wc.adjIF}-{wc.pm}'
-    group:
-        'HiCcompare'
-    log:
-        'logs/originaldifferentialTAD/{region}/{bin}/{group1}-vs-{group2}-{adjIF}-{pm}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicDifferentialTAD --targetMatrix {input.target} '
-        '--controlMatrix {input.control} '
-        '--tadDomains {input.tadDomains} '
-        '--pValue {params.pValue} --mode {params.mode} '
-        '--modeReject {params.modeReject} --outFileNamePrefix {params.prefix} '
-        ' &> {log}'
-
-
 rule processDiffTAD:
     input:
         allTADs = setDomains,
@@ -1696,7 +1664,7 @@ rule processDiffTAD:
         outDiff = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-diffTAD.bed',
         out = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-{adjIF}-{pm}-allTAD.bed'
     params:
-        threshold = 2,
+        threshold = config['compareMatrices']['zThreshold'],
         name = 'ASTAD' if ALLELE_SPECIFIC else 'diffTAD'
     group:
         'HiCcompare'
@@ -1847,13 +1815,7 @@ def getSNPcommand(wc):
         command += f'--SNPdensity {track} '
     return command
 
-# Manual overide of vMin vMax for testing
-def getVmin(wc):
-    vMin = config['compareMatrices']['vMin']
-    # Reduce vMin slightly to account for median filter
-    if wc.filter == 'medianFilter':
-        vMin *= 0.75
-    return vMin
+
 
 def getVmax(wc):
     vMax = config['compareMatrices']['vMax']
@@ -1862,13 +1824,30 @@ def getVmax(wc):
         vMax *= 0.75
     return vMax
 
+def getVmin(wc):
+    return -getVmax(wc)
+
+def getCscoreInputSubtact(wc):
+    if config['HiCParams']['compartmentScore']:
+        return ([
+            f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group1}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bed',
+            f'dat/Cscore/{wc.region}/{wc.bin}/{wc.group2}-{wc.region}-{wc.bin}-{wc.pm}-Cscore_cscore.bed'])
+    else:
+        return []
+
+def getCscoreParams(wc):
+    if config['HiCParams']['compartmentScore']:
+        cscore = getCscoreInputSubtact(wc)
+        return f'--CScore {cscore[0]} {cscore[1]}'
+    else:
+        return ''
+
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{filter}-{pm}.h5',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
-        cscore1 = 'dat/Cscore/{region}/{bin}/{group1}-{region}-{bin}-{pm}-Cscore_cscore.bed',
-        cscore2 = 'dat/Cscore/{region}/{bin}/{group2}-{region}-{bin}-{pm}-Cscore_cscore.bed',
+        cscore = getCscoreInputSubtact,
         linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksDown.links',
         linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksUp.links',
         vLines = config['plotParams']['vLines'],
@@ -1882,6 +1861,7 @@ rule createSubtractConfig:
         vMax = getVmax,
         depth = getDepth,
         tracks = getTracks,
+        cscore = getCscoreParams,
         SNPcoverage = getSNPcommand,
         colourmap = config['compareMatrices']['colourmap']
     group:
@@ -1895,7 +1875,7 @@ rule createSubtractConfig:
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
         '--links {input.linksUp} {input.linksDown} '
-        '--CScore {input.cscore1} {input.cscore2} '
+        '{params.cscore} '
         '--tmpLinks {output.tmpLinks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'
@@ -2705,7 +2685,7 @@ rule sampleReads:
     group:
         'filterQC'
     params:
-        nLines = config['HiCParams']['QCsample'] * 2
+        nLines = config['QC']['QCsample'] * 2
     log:
         'logs/sampleReads/{preSample}.log'
     conda:
@@ -2741,7 +2721,7 @@ rule plotQC:
         ditagOut = 'qc/filterQC/ditagLength.{type}',
         insertOut = 'qc/filterQC/insertSizeFrequency.{type}'
     params:
-        norm = '--norm' if config['other']['normQC'] else ''
+        norm = '--norm' if config['QC']['normQC'] else ''
     group:
         'filterQC'
     log:
@@ -2754,8 +2734,8 @@ rule plotQC:
 
 
 def multiQCconfig():
-    if config['multiQCconfig']:
-        return f'--config {config["multiQCconfig"]}'
+    if config['QC']['multiQCconfig']:
+        return f'--config {config["QC"]["multiQCconfig"]}'
     else:
         return ''
 
@@ -2766,12 +2746,12 @@ rule multiqc:
             read=['R1', 'R2'], mode=['raw', 'trim']),
          expand('qc/cutadapt/{sample}.cutadapt.txt',
             sample=HiC.originalSamples()),
-         expand('qc/fastqScreen/{sample}-{read}.fastqScreen.txt',
-            sample=HiC.originalSamples(), read=['R1', 'R2']) if config['fastqScreen'] else [],
+         expand('qc/fastqScreen/{sample}-{read}_screen.txt',
+            sample=HiC.originalSamples(), read=['R1', 'R2']) if config['QC']['fastqScreen'] else [],
          expand('qc/bowtie2/{sample}-{read}.bowtie2.txt',
             sample=HiC.originalSamples(), read=['R1', 'R2']),
          expand('qc/hicup/HiCUP_summary_report-{sample}.txt',
-            sample=HiC.originalSamples()) if not config['microC'] else [],
+            sample=HiC.originalSamples()) if not config['HiCParams']['microC'] else [],
          expand('qc/bcftools/{region}/{cellType}-{region}-bcftoolsStats.txt',
             region=REGIONS.index, cellType=HiC.cellTypes()) if PHASE_MODE=='BCFTOOLS' else []],
          expand('qc/deduplicate/{sample}.txt', sample=HiC.originalSamples()),

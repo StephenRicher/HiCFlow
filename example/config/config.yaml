@@ -61,43 +61,46 @@ HiCParams:
     keepSelfLigation:     False
     keepSelfCircles:      False
     nofill:               False
-    threads:              4
     makeBam:              False
-    compartmentScore:     True
-    multiplicativeValue:  10000 # HiC counts are normalised to this value
+    compartmentScore:     False # Run Cscore compartment analysis.
+    threads:              4 # Threads for building HiC matrix.
+    multiplicativeValue:  10000 # HiC counts are normalised to this value.
+    microC:               False # Treat data as microC (experimental)
+
+compareMatrices:
+    colourmap:      bwr # Matplotlib colour map for differential comparisons.
+    zThreshold:     2 # Minimum Z-score for defining a diffTAD / ASTAD.
+    vMax:           2 # Absolute value of colour scale, vMin set to -vMax.
+    allPairs:       False # Compute all pairwise comparisons (e.g. A vs. B, and B vs. A)
+    minSum:         0 # Remove interactions with fewer than this number of raw interactions.
 
 plotParams:
     distanceNorm:   False # Plot obs/exp matrix instead of log counts.
-    plain:          True # Plot additional figure without TAD / loop annotations
-    colourmap:      Purples
-    # BED file for creating plots of additional viewpoints in addition to those
-    # defined config['protocol']['regions'].
-    coordinates:    ../config/plot_coordinates.bed
+    plain:          True # Plot additional figure without overlaid TAD / loop annotations.
+    raw:            False # Plot raw HiC matrix (without KR normalisation).
+    colourmap:      Purples # Matplotlib colourmap to use for HiC matrices.
+    coordinates:    ../config/plot_coordinates.bed # BED file of regions to plot.
     viewpoints:     ../config/viewpoints.bed
     viewpointRange: 150_000
-    plotRep:        True
-    vLines:         ../config/vlines.bed
+    plotRep:        True # Plot individual replicates in addition to merged data.
+    vLines:         ../config/vlines.bed # Coordinates to add vLines to plots.
+    includeRegions: True # Plot config['regions'] in addition to config['plotParams']['coordinates'].
+    filetype:       svg # Plot filetype.
 
+# Gene annotation to include with HiC plots.
 Genes:
-    gff3: ../genome/BDGP6.32.105.gff3.gz
-    label: Name      # Attribute key to label on plot
-    typeKey: biotype # Attribute key describing gene type
+    gff3: ../genome/BDGP6.32.105.gff3.gz # Path to GFF3 gene annotation.
+    typeKey: biotype                     # Attribute key describing gene type
+    label: Name                          # Attribute key to label on plot
 
-# Bigwig tracks for plotting below HiC plots.
+# Assorted BigWig annotations include with HiC plots
 bigWig :
     CP190 : ../genome/CP190-dm6.bw    # GSM762836
     Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
     CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
 
-compareMatrices:
-    vMin: -0.75 # Mimimum logFC value for colour scale.
-    vMax: 0.75  # Maximum logFC value for colour scale.
-    allPairs: False # If True run '1 vs 2' AND '2 vs 1'
-    nPermute: 1000 # Experimental option
-    rawDiff: True
-    rawLog2: True
 
-# GATK variant calling best practises for human data
+# GATK variant calling best practises for Human data
 gatk:
     hapmap:     #GATKresourceBundle/hapmap_3.3.hg19.sites.vcf.gz
     omni:       #GATKresourceBundle/1000G_omni2.5.hg19.sites.vcf.gz
@@ -111,27 +114,12 @@ gatk:
     scatterCount: 1
     maxGaussians: 8
 
-other:
-    normQC: False # Normalise group sizes for QC reporting
-
-# Optional run HiCRep - may take a while for high res datasets.
-runHiCRep: True
-
-# Treat data as microC - ignore restriction digest.
-microC: False
-
-# Output a BAM file containing only valid HiC read pairs within defined regions.
-createValidBam: False
-
-# Configuration file for customising multiQC output report.
-multiQCconfig : ../config/multiqc_config.yaml
-
-# Configuration file of paths to genome indexes for FastQ Screen.
-# See template in example/config/fastqScreen.config
-fastq_screen :
-
-# Cluster only - group certain jobs (e.g. lammps simulations / post-processing)
-# into a single job submission. Some clusters be default assign a job all
-# threads even for single-thread operation. Therefore it may by quicker to
-# run all replicates in parallel in one job rather than have wasted threads.
-groupJobs: True
+QC:
+    runQC        : True
+    normQC       : True # Normalise group sizes for QC reporting
+    flipSNP      : False
+    QCsample     : 100000
+    fastqScreen  : ../config/fastq_screen.config # See template in example/config/fastqScreen.config
+    multiQCconfig: ../config/multiqc_config.yaml
+    runHiCRep    : True # Run HiCRep - May take a while for high res datasets.
+    HiCRep_bin   : 3000

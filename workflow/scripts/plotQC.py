@@ -32,10 +32,17 @@ def plotQC(files: List, insertOut: str, ditagOut: str, dpi: int, norm: bool):
         # Downsample data
         data = grouped.sample(n=smallestGroup)
 
+    if len(data['group'].unique()) == 1:
+        col_wrap = 3
+        row = None
+    else:
+        col_wrap = None
+        row = 'group'
     insertSize = sns.displot(
         data[data['interaction_type'] == 'cis'],
         x='insert_size', hue='orientation',
-        col='rep', row='group', kind='kde',
+        col='rep', row=row, kind='kde',
+        col_wrap=col_wrap,
         log_scale=True, facet_kws={'sharey' : 'row'})
     insertSize.set_axis_labels('Insert Size (bp)', 'Density')
     insertSize.tight_layout()

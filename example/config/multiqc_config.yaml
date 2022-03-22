@@ -11,7 +11,9 @@ module_order:
         path_filters:
             - '*.trim_fastqc.zip'
     - fastq_screen:
+        fn: '*_screen.txt'
         name: 'FastQ Screen (trimmed sequences)'
+    - bowtie2
     - samtools
     - samblaster
     - hicexplorer
