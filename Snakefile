@@ -95,7 +95,6 @@ default_config = {
     'bed'              : {}        ,
     'QC':
         {'runQC'        : True  ,
-         'normQC'       : False ,
          'flipSNP'      : False ,
          'QCsample'     : 100000,
          'fastqScreen'  : None  ,
@@ -258,7 +257,7 @@ rule all:
         compartmentOutput,
         (expand('phasedVCFs/{cellType}-phased.vcf', cellType=HiC.cellTypes())
             if PHASE_MODE is not None else []),
-        ([f'qc/filterQC/ditagLength.{config["plotParams"]["filetype"]}',
+        ([f'qc/filterQC/insertSizeFrequency.{config["plotParams"]["filetype"]}',
         'qc/multiqc'] if config['QC']['runQC'] else []),
         ([expand('qc/hicrep/{region}-{bin}-hicrep-{pm}.{type}',
             bin=hicrepRegionsBin[region], pm=pm, region=region,
@@ -1152,7 +1151,7 @@ rule plotCoverage:
     output:
         'qc/matrixCoverage/{region}/{all}-coverage-{pm}.{type}'
     params:
-        dpi = 300,
+        dpi = 600,
         nBins = 10000,
         fontSize = 12,
         nonEmpty = nonEmpty
@@ -2698,10 +2697,9 @@ rule sampleReads:
 
 rule processHiC:
     input:
-        reads = rules.sampleReads.output,
-        digest = getRestSites
+        rules.sampleReads.output,
     output:
-        'dat/mapped/{preSample}-processed.txt'
+        'dat/mapped/{preSample}-processed.pkl'
     group:
         'filterQC'
     log:
@@ -2709,19 +2707,18 @@ rule processHiC:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/processHiC.py {input.digest[0]} {input.reads} '
-        '> {output} 2> {log}'
+        'python {SCRIPTS}/processHiC.py {wildcards.preSample} {output} '
+        '{input} &> {log}'
 
 
 rule plotQC:
     input:
-        expand('dat/mapped/{sample}-processed.txt',
+        expand('dat/mapped/{sample}-processed.pkl',
             sample=HiC.originalSamples())
     output:
-        ditagOut = 'qc/filterQC/ditagLength.{type}',
-        insertOut = 'qc/filterQC/insertSizeFrequency.{type}'
+        'qc/filterQC/insertSizeFrequency.{type}'
     params:
-        norm = '--norm' if config['QC']['normQC'] else ''
+        dpi = 600
     group:
         'filterQC'
     log:
@@ -2729,8 +2726,8 @@ rule plotQC:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/plotQC.py {input} {params.norm} '
-        '--insertOut {output.insertOut} --ditagOut {output.ditagOut} &> {log}'
+        'python {SCRIPTS}/plotQC.py {output} {input} '
+        '--dpi {params.dpi} &> {log}'
 
 
 def multiQCconfig():

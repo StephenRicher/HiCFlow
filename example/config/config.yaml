@@ -5,7 +5,7 @@ workdir: example/analysis/
 
 # CSV file with cell type, experimental group, replicate number,
 # read (forward/reverse) and path each FASTQ files.
-data:  ../config/samples.csv
+data:  ../config/samples.tsv
 
 # Bed file of genomic regions to perform HiC analysis.
 # These may be whole chromosomes for normal HiC or specific capture regions
@@ -116,7 +116,6 @@ gatk:
 
 QC:
     runQC        : True
-    normQC       : True # Normalise group sizes for QC reporting
     flipSNP      : False
     QCsample     : 100000
     fastqScreen  : ../config/fastq_screen.config # See template in example/config/fastqScreen.config
