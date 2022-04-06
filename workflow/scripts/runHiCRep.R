@@ -33,7 +33,7 @@ if (file.info(matrix1)$size == 0) {
 } else {
   # Set max interaction as half capture region size, or 1,000,000bp
   max_interaction = min(1000000, as.integer((end - start)/2))
-  
+
   m1 = read.table(matrix1)
   m2 = read.table(matrix2)
 
@@ -49,13 +49,13 @@ if (file.info(matrix1)$size == 0) {
   } else {
     # Downsample matrices to the same sequencing depth
     min_sample = as.integer(min(sum(m1[,-c(1:3)]), sum(m2[,-c(1:3)])))
-    
+
     m1_ds <- depth.adj(m1, min_sample, bin, out = 0)
     m2_ds <- depth.adj(m2, min_sample, bin, out = 0)
-    
+
     # Format HiC matrix pairs and smooth
     pre_hic <- prep(m1_ds, m2_ds, resol = bin, h = h_hat, max = max_interaction)
-    
+
     # Calculate SCC
     scc = get.scc(pre_hic, resol = bin, max = max_interaction)$scc
   }
