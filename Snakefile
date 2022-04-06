@@ -71,8 +71,8 @@ default_config = {
          'downSample'  : None         ,
          'scatterCount': 100          ,},
     'resolution':
-        {'base':          5000        ,
-         'bins':         [5000, 10000],},
+        {'base':          10000        ,
+         'bins':         [10000, 20000],},
     'plotParams':
         {'distanceNorm'  : False    ,
          'plain'         : False    ,
