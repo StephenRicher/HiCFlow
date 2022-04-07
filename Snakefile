@@ -102,13 +102,13 @@ default_config = {
     'bigWig'           : {}        ,
     'bed'              : {}        ,
     'QC':
-        {'runQC'        : True  ,
-         'flipSNP'      : False ,
-         'QCsample'     : 100000,
-         'fastqScreen'  : None  ,
-         'multiQCconfig': None  ,
-         'runHiCRep'    : True  ,
-         'HiCRep_bin'   : None  ,},
+        {'runQC'        : True    ,
+         'flipSNP'      : False   ,
+         'QCsample'     : 100000  ,
+         'fastqScreen'  : None    ,
+         'multiQCconfig': None    ,
+         'runHiCRep'    : True    ,
+         'HiCRep_bin'   : 150000  ,},
     'phase':            False,
 
 }
@@ -132,13 +132,8 @@ regionBin, binRegion = filterRegions(
     REGIONS, config['resolution']['bins'],
     nbins=config['HiCParams']['minBins'])
 
-# May want to specify a different bin size for HiCRep
-if config['QC']['HiCRep_bin'] is None:
-    hicrepbins = config['resolution']['bins']
-else:
-    hicrepbins = [config['QC']['HiCRep_bin']]
 hicrepRegionsBin, _ = filterRegions(
-    REGIONS, hicrepbins,
+    REGIONS, [config['QC']['HiCRep_bin']],
     nbins=config['HiCParams']['minBins'])
 
 
