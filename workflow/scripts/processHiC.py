@@ -37,7 +37,7 @@ def processHiC(sample: str, out: str, infile: List):
             read1, read2 = reorderReadPair(read1, read2)
             data['orientation'].append(getOrientation(read1, read2))
             data['cis'].append(isCisInteraction(read1, read2))
-            data['insertSize'].append(getInsertSize(read1, read2))
+            data['readSeperation'].append(getReadSeperation(read1, read2))
 
     group, rep = sample.rsplit('-', 1)
     data = pd.DataFrame(data)
@@ -46,7 +46,7 @@ def processHiC(sample: str, out: str, infile: List):
     data.to_pickle(out)
 
 
-def getInsertSize(read1, read2):
+def getReadSeperation(read1, read2):
     return abs(read2.right_pos - read1.left_pos + 1)
 
 

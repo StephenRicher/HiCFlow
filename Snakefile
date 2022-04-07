@@ -83,8 +83,6 @@ default_config = {
          'viewpointRange': 500000   ,
          'plotRep'       : True     ,
          'vLines'        : []       ,
-         'miniMatrix'    : False    ,
-         'miniHeight'    : 6        ,
          'includeRegions': True     ,
          'filetype'      : 'svg'    ,},
     'Genes':
@@ -181,25 +179,23 @@ else:
 vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
 norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
-# Set addition suffic if mini matrix
-mini = ['mm', 'fm'] if config['plotParams']['miniMatrix'] else ['fm']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
 
 HiC_mode = ([
-    [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-LOESSdiff-{filter}-{pm}-{mini}.{type}',
+    [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-LOESSdiff-{filter}-{pm}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.{type}',
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.{type}',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
-    [expand('plots/{region}/{bin}/HiCsubtract/configs/{compare}-{coords}-LOESSdiff-{filter}-{pm}-{mini}.ini',
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('plots/{region}/{bin}/HiCsubtract/configs/{compare}-{coords}-LOESSdiff-{filter}-{pm}.ini',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coords}-{bin}-{vis}-{pm}-{mini}.ini',
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coords}-{bin}-{vis}-{pm}.ini',
         region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
-        bin=regionBin[region], type=config['plotParams']['filetype'], mini=mini) for region in regionBin],
+        bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
@@ -1279,13 +1275,7 @@ def getGenesInput(wc):
 
 def getDepth(wc):
     chrom, start, end = wc.coord.split('_')
-    height = config['plotParams']['miniHeight']
-    if wc.mini == 'mm':
-        scale = (height * 2) / 32.8896465805521
-    else:
-        scale = 1
-    regionLength = int(end) - int(start)
-    return int(scale * regionLength)
+    return int(end) - int(start)
 
 
 rule createConfig:
@@ -1298,7 +1288,7 @@ rule createConfig:
         vLines = config['plotParams']['vLines'],
         genes = getGenesInput
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coord}-{bin}-{vis}-{pm}-{mini}.ini'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coord}-{bin}-{vis}-{pm}.ini'
     params:
         tracks = getTracks,
         depth = getDepth,
@@ -1313,7 +1303,7 @@ rule createConfig:
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{vis}-{pm}-{mini}.log'
+        'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{vis}-{pm}.log'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
@@ -1351,7 +1341,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}-{mini}.{type}'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}.{type}'
     params:
         region = setRegion,
         title = setMatrixTitle,
@@ -1361,7 +1351,7 @@ rule plotHiC:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}-{pm}-{mini}-{type}.log'
+        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}-{pm}-{type}.log'
     threads:
         THREADS
     shell:
@@ -1853,8 +1843,8 @@ rule createSubtractConfig:
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
     output:
-        ini = 'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-LOESSdiff-{filter}-{pm}-{mini}.ini',
-        tmpLinks = temp('plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-LOESSdiff-{filter}-{pm}-{mini}.tmp.links')
+        ini = 'plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-LOESSdiff-{filter}-{pm}.ini',
+        tmpLinks = temp('plots/{region}/{bin}/HiCsubtract/configs/{group1}-vs-{group2}-{coord}-LOESSdiff-{filter}-{pm}.tmp.links')
     params:
         vMin = getVmin,
         vMax = getVmax,
@@ -1866,7 +1856,7 @@ rule createSubtractConfig:
     group:
         'plotHiCsubtract'
     log:
-        'logs/createSubtractConfig/{group1}-vs-{group2}-{bin}-{region}-{coord}-LOESSdiff-{filter}-{pm}-{mini}.log'
+        'logs/createSubtractConfig/{group1}-vs-{group2}-{bin}-{region}-{coord}-LOESSdiff-{filter}-{pm}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1896,7 +1886,7 @@ rule plotSubtract:
         ini = rules.createSubtractConfig.output.ini,
         tmpLinks = rules.createSubtractConfig.output.tmpLinks
     output:
-        'plots/{region}/{bin}/HiCsubtract/{filter}/{group1}-vs-{group2}-{region}-{coord}-{bin}-LOESSdiff-{filter}-{pm}-{mini}.{type}'
+        'plots/{region}/{bin}/HiCsubtract/{filter}/{group1}-vs-{group2}-{region}-{coord}-{bin}-LOESSdiff-{filter}-{pm}.{type}'
     params:
         title = setSubtractTitle,
         region = setRegion,
@@ -1906,7 +1896,7 @@ rule plotSubtract:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotSubtract/{group1}-vs-{group2}-{bin}-{region}-{coord}-LOESSdiff-{filter}-{pm}-{mini}-{type}.log'
+        'logs/plotSubtract/{group1}-vs-{group2}-{bin}-{region}-{coord}-LOESSdiff-{filter}-{pm}-{type}.log'
     threads:
         THREADS
     shell:

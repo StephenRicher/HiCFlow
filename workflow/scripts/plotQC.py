@@ -27,11 +27,11 @@ def plotQC(files: List, out: str, dpi: int):
         row = 'group'
     insertSize = sns.displot(
         data[data['cis']],
-        x='insertSize', hue='orientation',
+        x='readSeperation', hue='orientation',
         col='rep', row=row, kind='kde',
         col_wrap=col_wrap, common_norm=False,
         log_scale=True, facet_kws={'sharey' : 'row'})
-    insertSize.set_axis_labels('Insert Size (bp)', 'Density')
+    insertSize.set_axis_labels('Read Seperation (bp)', 'Density')
     insertSize.tight_layout()
     insertSize.savefig(out, dpi=dpi, bbox_inches='tight')
 
