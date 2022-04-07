@@ -51,10 +51,20 @@ default_config = {
          'threads':              4     ,
          'multiplicativeValue':  10000 ,
          'microC':               False ,},
+    'loops':
+        {'detectLoops':               False  ,
+         'peakWidth':                 6      ,
+         'windowSize':                10     ,
+         'pValuePreselection':        0.1    ,
+         'peakInteractionsThreshold': 10     ,
+         'obsExpThreshold':           1.5    ,
+         'pValue':                    0.025  ,
+         'maxLoopDistance':           2000000,
+         'expected':                 'mean'  ,},
     'compareMatrices':
         {'colourmap'    : 'bwr'        ,
          'zThreshold'   : 2            ,
-         'vMax'         : 2            ,
+         'vMax'         : 1            ,
          'tads'         : None         ,
          'loops'        : None         ,
          'allPairs'     : False        ,
@@ -1078,13 +1088,14 @@ rule detectLoops:
     output:
         'dat/loops/{region}/{bin}/unmod/{all}-{region}-{bin}-{pm}.bedgraph'
     params:
-        peakWidth = 6,
-        windowSize = 10,
-        pValuePre = 0.1,
-        peakInteractionsThreshold = 10,
-        obsExpThreshold = 1.5,
-        pValue = 0.1,
-        maxLoopDistance = 2000000
+        peakWidth = config['loops']['peakWidth'],
+        windowSize = config['loops']['windowSize'],
+        pValuePreselection = config['loops']['pValuePreselection'],
+        peakInteractionsThreshold = config['loops']['peakInteractionsThreshold'],
+        obsExpThreshold = config['loops']['obsExpThreshold'],
+        pValue = config['loops']['pValue'],
+        maxLoopDistance = config['loops']['maxLoopDistance'],
+        expected = config['loops']['expected']
     group:
         'processHiC'
     log:
@@ -1098,10 +1109,11 @@ rule detectLoops:
         '--maxLoopDistance {params.maxLoopDistance} '
         '--windowSize {params.windowSize} '
         '--peakWidth {params.peakWidth} '
-        '--pValuePreselection {params.pValuePre} '
+        '--pValuePreselection {params.pValuePreselection} '
         '--obsExpThreshold {params.obsExpThreshold} '
         '--pValue {params.pValue} '
         '--peakInteractionsThreshold {params.peakInteractionsThreshold} '
+        '--expected {params.expected} '
         '--threads 1 --threadsPerChromosome {threads} '
         '&> {log}'
 
@@ -1277,11 +1289,16 @@ def getDepth(wc):
     chrom, start, end = wc.coord.split('_')
     return int(end) - int(start)
 
+def getLoops(wc):
+    if config['loops']['detectLoops']:
+        return f'dat/loops/{wc.region}/{wc.bin}/{wc.group}-{wc.region}-{wc.bin}-{wc.pm}.bedgraph'
+    else:
+        return []
 
 rule createConfig:
     input:
         matrix = getMatrix,
-        loops = 'dat/loops/{region}/{bin}/{group}-{region}-{bin}-{pm}.bedgraph',
+        loops = getLoops,
         insulations = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-{pm}_tad_score.bm',
         tads = 'dat/tads/{region}/{bin}/{group}-{region}-{bin}-ontad-{pm}.bed',
         cscore = getCscoreInput,
@@ -1292,6 +1309,7 @@ rule createConfig:
     params:
         tracks = getTracks,
         depth = getDepth,
+        loops = lambda wc: f'--loops {getLoops(wc)}' if config['loops']['detectLoops'] else '',
         colourmap = config['plotParams']['colourmap'],
         vMin = '--vMin 0' if config['plotParams']['distanceNorm'] else '',
         vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
@@ -1308,7 +1326,7 @@ rule createConfig:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
         '--depth {params.depth} {params.vMin} {params.vMax} '
-        '{params.plain} --insulation {input.insulations} --loops {input.loops} '
+        '{params.plain} --insulation {input.insulations} {params.loops} '
         '{params.cscore} --tads {input.tads} > {output} 2> {log}'
 
 
@@ -1793,7 +1811,6 @@ def getSNPcoverage(wc):
         return f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bed'
     return []
 
-
 def getSNPcommand(wc):
     cellType1 = HiC.sample2Cell()[wc.group1]
     cellType2 = HiC.sample2Cell()[wc.group2]
@@ -1803,8 +1820,6 @@ def getSNPcommand(wc):
         track = f'dat/genome/SNPcoverage/{cellType1}-{bin}-phasedHet.bed'
         command += f'--SNPdensity {track} '
     return command
-
-
 
 def getVmax(wc):
     vMax = config['compareMatrices']['vMax']
@@ -1831,14 +1846,28 @@ def getCscoreParams(wc):
     else:
         return ''
 
+def getLinksInput(wc):
+    if ((config['compareMatrices']['loops'] is None)
+            and (not config['loops']['detectLoops'])):
+        return []
+    else:
+        return [f'dat/loops/diff/{wc.group1}-vs-{wc.group2}-{wc.region}-LOESSdiff-{wc.bin}-{wc.pm}-linksUp.links',
+                f'dat/loops/diff/{wc.group1}-vs-{wc.group2}-{wc.region}-LOESSdiff-{wc.bin}-{wc.pm}-linksDown.links']
+
+def getLinksParams(wc):
+    links = getLinksInput(wc)
+    if links == []:
+        return ''
+    else:
+        return f'--links {links[0]} {links[1]}'
+
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{filter}-{pm}.h5',
         tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
         tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
         cscore = getCscoreInputSubtact,
-        linksDown = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksDown.links',
-        linksUp = 'dat/loops/diff/{group1}-vs-{group2}-{region}-LOESSdiff-{bin}-{pm}-linksUp.links',
+        linksInput = getLinksInput,
         vLines = config['plotParams']['vLines'],
         SNPcoverage = getSNPcoverage,
         genes = getGenesInput
@@ -1850,6 +1879,7 @@ rule createSubtractConfig:
         vMax = getVmax,
         depth = getDepth,
         tracks = getTracks,
+        links = getLinksParams,
         cscore = getCscoreParams,
         SNPcoverage = getSNPcommand,
         colourmap = config['compareMatrices']['colourmap']
@@ -1863,9 +1893,8 @@ rule createSubtractConfig:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
         '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
-        '--links {input.linksUp} {input.linksDown} '
+        '{params.links} --tmpLinks {output.tmpLinks} '
         '{params.cscore} '
-        '--tmpLinks {output.tmpLinks} '
         '--depth {params.depth} --colourmap {params.colourmap} '
         '{params.tracks} > {output.ini} 2> {log}'
 

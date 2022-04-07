@@ -70,7 +70,7 @@ HiCParams:
 compareMatrices:
     colourmap:      bwr # Matplotlib colour map for differential comparisons.
     zThreshold:     2 # Minimum Z-score for defining a diffTAD / ASTAD.
-    vMax:           2 # Absolute value of colour scale, vMin set to -vMax.
+    vMax:           1 # Absolute value of colour scale, vMin set to -vMax.
     allPairs:       False # Compute all pairwise comparisons (e.g. A vs. B, and B vs. A)
     minSum:         0 # Remove interactions with fewer than this number of raw interactions.
 

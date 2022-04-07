@@ -4,6 +4,7 @@ import os
 import argparse
 import fileinput
 import numpy as np
+from pathlib import Path
 
 def main():
 
@@ -188,6 +189,8 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
     for link in links:
         if notEmpty(link):
             isLinks = True
+
+    Path(tmpLinks).touch() # Force file creation
     if isLinks:
         with open(tmpLinks, 'w') as fout, fileinput.input(links) as fin:
             for line in fin:
