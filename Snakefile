@@ -252,6 +252,9 @@ if config['HiCParams']['compartmentScore']:
 else:
     compartmentOutput = []
 
+if len(HiC.sampleCompares()) == 0:
+    config['QC']['runHiCRep'] = False
+
 rule all:
     input:
         HiC_mode,
@@ -572,7 +575,8 @@ rule hicupTruncate:
         summary = 'qc/hicup/HiCUP_summary_report-{preSample}.txt'
     params:
         re1 = lambda wc: list(HiC.restrictionSeqs()[wc.preSample].values())[0],
-        fill = '--nofill' if config['HiCParams']['nofill'] else ''
+        fill = '--nofill' if config['HiCParams']['nofill'] else '',
+        tmpdir = config['tmpdir']
     group:
         'hicupTruncate'
     threads:
@@ -584,7 +588,8 @@ rule hicupTruncate:
     shell:
         'python {SCRIPTS}/hicupTruncate.py {params.fill} --re1 {params.re1} '
         '--hicup {SCRIPTS}/hicup_truncater --output {output.truncated} '
-        '--threads {threads} {input} > {output.summary} 2> {log}'
+        '--threads {threads} --tmpdir {params.tmpdir} '
+        '{input} > {output.summary} 2> {log}'
 
 
 def bowtie2Index(wc):
@@ -1310,7 +1315,7 @@ rule createConfig:
         vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
         log = '' if config['plotParams']['distanceNorm'] else '--log',
         plain = lambda wc: '--plain' if wc.vis == 'plain' else '',
-        cscore = getCscoreParams,
+        cscore = getCscoreParams
     group:
         'processHiC'
     conda:
@@ -1782,7 +1787,6 @@ rule HiCsubtract:
         raw1 = 'dat/matrix/{region}/{bin}/raw/{group1}-{region}-{bin}-{pm}-raw.h5',
         raw2 = 'dat/matrix/{region}/{bin}/raw/{group2}-{region}-{bin}-{pm}-raw.h5'
     output:
-        changeScore = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{pm}.bed',
         out = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-noFilter-{pm}.h5',
         outFilt = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-medianFilter-{pm}.h5'
     params:
@@ -1795,7 +1799,7 @@ rule HiCsubtract:
         'python {SCRIPTS}/compareHiC.py {input.mat1} {input.mat2} '
         '--outMatrix {output.out} '
         '--outMatrixFilter {output.outFilt} --minSum {params.minSum} '
-        '--raw {input.raw1} {input.raw2} > {output.changeScore} 2> {log}'
+        '--raw {input.raw1} {input.raw2} &> {log}'
 
 
 def getSNPcoverage(wc):
