@@ -14,8 +14,8 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def hicupTruncate(files, hicup, output, nofill, re1, threads):
-    with tempfile.TemporaryDirectory() as dirname:
+def hicupTruncate(files, hicup, output, nofill, re1, tmpdir, threads):
+    with tempfile.TemporaryDirectory(dir=tmpdir) as dirname:
         command = ([
             'perl', hicup, '--re1', re1, '--zip', '--threads', str(threads),
             '--outdir', dirname, files[0], files[1]
@@ -103,6 +103,8 @@ def parseArgs():
     parser.add_argument(
         '--threads', default=1, type=int,
         help='Number of threads to use (default: %(default)s)')
+    parser.add_argument(
+        '--tmpdir', help=f'Set temporary directory (default: {tempfile.gettempdir()})')
     requiredNamed = parser.add_argument_group(
         'required named arguments')
     requiredNamed.add_argument(
