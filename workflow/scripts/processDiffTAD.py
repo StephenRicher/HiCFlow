@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from typing import List
+from matplotlib import cm
 from hicmatrix import HiCMatrix as hm
 from utilities import setDefaults, createMainParent
 
@@ -58,9 +59,10 @@ def processDiffTAD(
         allTADs.to_pickle(outPickle)
 
     # Set score between 0 - 1000 according to rank
-    allTADs['colour'] = 0
+
     allTADs['strand'] = '.'
     allTADs['score'] = allTADs['rank'] * 1000
+    allTADs['colour'] = allTADs.apply(getRGB, axis=1)
     allTADs['name'] = allTADs['diffTAD'].apply(
         lambda x: name if x else f'non-{name}')
     cols = ['chrom', 'start', 'end', 'name', 'score', 'strand', 'start', 'end', 'colour']
@@ -68,6 +70,12 @@ def processDiffTAD(
     print(f'visibility=4 useScore="On"')
     allTADs[cols].to_csv(sys.stdout, index=False, header=False, sep='\t')
 
+
+def getRGB(x):
+    if x['diffTAD']:
+        return '0,0,0'
+    else:
+        return '211,211,211' #'250,250,250'
 
 def getDomainBackground(allSizes, values, hic, countMats):
     """ Scan all domain sizes to retrieve
