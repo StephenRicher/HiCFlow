@@ -1863,8 +1863,7 @@ def getLinksParams(wc):
 rule createSubtractConfig:
     input:
         mat = 'dat/HiCsubtract/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-LOESSdiff-{filter}-{pm}.h5',
-        tads1 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-diffTAD.bed',
-        tads2 = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF2-{pm}-diffTAD.bed',
+        tads = 'dat/tads/{region}/{bin}/{group1}-vs-{group2}-{region}-{bin}-adjIF1-{pm}-allTAD.bed',
         cscore = getCscoreInputSubtact,
         linksInput = getLinksInput,
         vLines = config['plotParams']['vLines'],
@@ -1891,7 +1890,7 @@ rule createSubtractConfig:
     shell:
         'python {SCRIPTS}/generate_config.py --compare '
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
-        '--tads {input.tads1} {input.tads2} {params.SNPcoverage} '
+        '--tads {input.tads} {params.SNPcoverage} '
         '{params.links} --tmpLinks {output.tmpLinks} '
         '{params.cscore} '
         '--depth {params.depth} --colourmap {params.colourmap} '
