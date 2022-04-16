@@ -24,7 +24,7 @@ def main():
         '--insulation',
         help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
     parser.add_argument(
-        '--tads', nargs='*', default=[],
+        '--tads', default=[],
         help = 'TAD scores in ".links" format.')
     parser.add_argument(
         '--loops', nargs='*', default=[],
@@ -60,14 +60,7 @@ def main():
         help='Add title and bed files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
-        '--collapsedBed', metavar='TITLE,FILE', default=[],
-        type=commaPair, action='append',
-        help='Add unlablled non-overlapping BED intervals.')
-    parser.add_argument(
-        '--switchScore', help='BED file of Cscore magnitude (Z)')
-    parser.add_argument(
         '--CScore', nargs='*', default=[], help='BED files of Cscore')
-    parser.add_argument('--changeScore', help='BED file of changeScore.')
     parser.add_argument(
         '--SNPdensity', help='BED file of SNP density per interval')
     parser.add_argument(
@@ -93,6 +86,12 @@ def main():
     parser.add_argument(
         '--removeXAxis', default=False, action='store_true',
         help = 'Do not plot a X axis coordinate track.')
+    parser.add_argument(
+        '--height', type=float, default=1,
+        help='Height of BED tracks.')
+    parser.add_argument(
+        '--geneLabelFontSize', type=int, default=10,
+        help='Font size for gene labels.')
 
     args = parser.parse_args()
     func = args.function
@@ -110,10 +109,10 @@ def commaPair(value):
 
 
 def make_config(insulation, matrix, log, tads, loops, SNPdensity,
-                bigWig, collapsedBed, compare, rgbBed,
-                depth, colourmap, vMin, vMax, switchScore,
+                bigWig, compare, rgbBed, height,
+                depth, colourmap, vMin, vMax, geneLabelFontSize,
                 genes, plain, vLines, links, CScore, tmpLinks,
-                changeScore, removeXAxis, ratioScore):
+                removeXAxis, ratioScore):
 
     if plain:
         loops = []
@@ -130,49 +129,35 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
         if notEmpty(loop):
             write_loops(loop, i=i, compare=compare)
 
-    for i, tad in enumerate(tads):
-        if i > 1:
-            break
-        if notEmpty(tad):
-            if compare and len(tads) == 1:
-                colour = '#000000'
-            else:
-                colour = ['#FF000080', '#0000FF80'][i]
-            writeTADs(tad, colour)
-
-    if notEmpty(changeScore):
-        writeColourBed(
-            changeScore, title='Change Score', minV=-3, maxV=3, cmap='bwr')
-        print('[spacer]')
+    if notEmpty(tads):
+        writeRGBBed(tads, title='TADs', height=2, display='stacked')
 
     miniTrack = False
     for i, cscore in enumerate(CScore):
         if notEmpty(cscore):
             title = setCscoreTitle(i, CScore)
-            writeColourBed(cscore, title=title, minV=-1, maxV=1, cmap='bwr')
+            writeColourBed(
+                cscore, title=title, height=height,
+                minV=-1, maxV=1, cmap='bwr')
             miniTrack = True
-    print('[spacer]')
-
-    if notEmpty(switchScore):
-        writeColourBed(switchScore, title='Switch Score', minV=-3, maxV=3, cmap='bwr')
-        miniTrack = True
-        print('[spacer]')
 
     if notEmpty(SNPdensity):
-        writeColourBed(
-            SNPdensity, title='SNP Density', minV=0, maxV=1, cmap='binary')
-        miniTrack = True
         print('[spacer]')
+        writeColourBed(
+            SNPdensity, title='SNP Density', height=height,
+            minV=0, maxV=1, cmap='binary')
+        miniTrack = True
 
     if notEmpty(ratioScore):
-        writeColourBed(
-            ratioScore, title='Ratio Score', minV=0, maxV=0.5, cmap='binary')
-        miniTrack = True
         print('[spacer]')
+        writeColourBed(
+            ratioScore, title='Ratio Score', height=height,
+            minV=0, maxV=0.5, cmap='binary')
+        miniTrack = True
 
-    for title, file, size in rgbBed:
+    for title, file, customheight in rgbBed:
         if notEmpty(file):
-            writeRGBBed(file, title, size)
+            writeRGBBed(file, title, customheight)
             print('[spacer]')
         miniTrack = True
 
@@ -202,27 +187,23 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
         print('[spacer]')
 
 
-    for title, file, size in bigWig:
+    for title, file, customheight in bigWig:
         if notEmpty(file):
             if file.endswith('.bedgraph'):
                 type='bedgraph'
             else:
                 type='bigwig'
-            write_bigwig(file=file, title=title, type=type, size=size)
+            write_bigwig(file=file, title=title, type=type, height=customheight)
         print('[spacer]')
 
-
-    for title, file in collapsedBed:
+    for i, (title, file, customheight) in enumerate(genes):
         if notEmpty(file):
-            writeCollapsedBed(file, title)
-        print('[spacer]')
-
-    for title, file, size in genes:
-        if notEmpty(file):
-            writeGenes(file=file, title=title, size=size)
+            print('[spacer]')
+            writeGenes(
+                file=file, title=title,
+                fontSize=geneLabelFontSize, height=customheight)
 
     if not removeXAxis:
-        print('[spacer]')
         print('[x-axis]')
 
     if notEmpty(vLines):
@@ -314,7 +295,7 @@ def writeInsulation(insulation):
 
 
 def write_bigwig(
-        file, title, size, alpha=1, colour='#33a02c',
+        file, title, height, alpha=1, colour='#33a02c',
         type='bigwig', overlay='no'):
 
     print(f'[{type} - {title}]',
@@ -322,20 +303,22 @@ def write_bigwig(
           f'title = {title}',
           f'color = {colour}',
           f'alpha = {alpha}',
-          f'height = {size}',
+          f'height = {height}',
           f'nans_to_zeros = True',
           f'show_data_range = true',
           f'file_type = {type}',
           f'overlay_previous = {overlay}', sep = '\n')
 
 
-def writeGenes(file, title, size):
+def writeGenes(file, title, height, fontSize=10):
     print(f'[rgb BED]',
           f'file = {file}',
           f'title = {title}',
           f'color = bed_rgb',
           f'border_color = none',
-          f'height = {size}',
+          f'max_labels = 20',
+          f'fontsize = {fontSize}',
+          f'height = {height}',
           f'file_type = bed',
           f'labels = true', sep='\n')
 
@@ -346,41 +329,44 @@ def writeVlines(bed):
           f'type = vlines', sep='\n')
 
 
-def writeRGBBed(bed, title, size):
+def writeRGBBed(bed, title, height=1.5, display='collapsed'):
+    width = 0 if display == 'stacked' else 0.5
     print(f'[rgb BED]',
           f'file = {bed}',
           f'title = {title}',
           f'labels = false',
           f'color = bed_rgb',
-          f'border_color = none',
-          f'line_width = 0',
+          f'border_color = black',
+          f'line_width = {width}',
           f'fontsize = 0',
-          f'height = {size}',
-          f'display = collapsed', sep='\n')
+          f'height = {height}',
+          f'display = {display}', sep='\n')
 
 
-def writeColourBed(bed, title, minV=-1, maxV=1, cmap='bwr'):
+def writeColourBed(bed, title, height=1.5, minV=-1, maxV=1, cmap='bwr', border_color='none'):
     print(f'[{title}]',
           f'file = {bed}',
           f'title = {title}',
           f'labels = false',
           f'color = {cmap}',
-          f'border_color = none',
+          f'border_color = {border_color}',
           f'min_value = {minV}',
           f'max_value = {maxV}',
           f'line_width = 0',
           f'fontsize = 0',
-          f'height = 1.5',
+          f'height = {height}',
           f'display = collapsed', sep='\n')
 
 
-def writeCollapsedBed(bed, title):
+def writeCollapsedBed(bed, title=''):
     print(f'[Collapsed Bed]',
           f'file = {bed}',
           f'title = {title}',
           f'labels = false',
+          f'color = lightgray',
           f'fontsize = 0',
           f'height = 1.5',
+          f'line_width = 3',
           f'display = collapsed', sep='\n')
 
 def setCscoreTitle(i, cscore):
