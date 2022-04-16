@@ -30,7 +30,7 @@ def reformatOnTAD(ontad: str, scale: int, chrom: str, binSize: int, maxPos: int)
             # Shift coordinates as required
             startMid = str(startMid  + scale)
             endMid = str(endMid + scale)
-            print(chrom, startMid, endMid, '.', score, '.', startMid, endMid, '.', sep='\t')
+            print(chrom, startMid, endMid, '.', score, '.', startMid, endMid, '211,211,211', sep='\t')
 
 
 def parseArgs():
