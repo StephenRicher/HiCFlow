@@ -92,6 +92,7 @@ Genes:
     gff3: ../genome/BDGP6.32.105.gff3.gz # Path to GFF3 gene annotation.
     typeKey: biotype                     # Attribute key describing gene type
     label: Name                          # Attribute key to label on plot
+    geneID: Parent                       # Attribute key identifying gene ID
 
 # Assorted BigWig annotations include with HiC plots
 bigWig :

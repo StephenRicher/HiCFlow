@@ -310,13 +310,17 @@ def write_bigwig(
           f'overlay_previous = {overlay}', sep = '\n')
 
 
-def writeGenes(file, title, height, fontSize=10):
+def writeGenes(file, title, height, style='UCSC', fontSize=10):
     print(f'[rgb BED]',
           f'file = {file}',
           f'title = {title}',
           f'color = bed_rgb',
-          f'border_color = none',
-          f'max_labels = 20',
+          f'color_utr = bed_rgb',
+          f'color_backbone = bed_rgb',
+          f'border_color = bed_rgb',
+          f'style = {style}',
+          f'max_labels = 50',
+          f'arrow_interval = 10',
           f'fontsize = {fontSize}',
           f'height = {height}',
           f'file_type = bed',

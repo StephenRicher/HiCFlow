@@ -98,7 +98,8 @@ default_config = {
     'Genes':
         {'gff3'        :  []        ,
          'typeKey'     : 'gene_type',
-         'label'       : 'gene_id'  ,},
+         'label'       : 'gene_name',
+         'geneID'      : 'gene_id'  ,},
     'bigWig'           : {}        ,
     'bed'              : {}        ,
     'QC':
@@ -382,21 +383,65 @@ rule getChromSizes:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
-rule processGFF3:
+rule gff3ToGenePred:
     input:
         config['Genes']['gff3']
     output:
-        'dat/genome/genes.gff3'
+        genePred = f'annotation/{config["build"]}.unsorted.genePred',
+        attributes = f'annotation/{config["build"]}.attrs'
+    log:
+        'logs/gff3ToGenePred.log'
+    conda:
+        f'{ENVS}/UCSCtools.yaml'
+    shell:
+        'gff3ToGenePred -attrsOut={output.attributes} {input} '
+        '{output.genePred} &> {log}'
+
+
+rule sortGenePred:
+    input:
+        f'annotation/{config["build"]}.unsorted.genePred'
+    output:
+        f'annotation/{config["build"]}.genePred'
+    log:
+        'logs/sortGenePred.log'
+    conda:
+        f'{ENVS}/UCSCtools.yaml'
+    shell:
+        'sort -k2,2 -k4n,4n {input} > {output} 2> {log}'
+
+
+rule genePredToBed:
+    input:
+        rules.sortGenePred.output
+    output:
+        f'annotation/{config["build"]}.bed12'
+    log:
+        'logs/genePredToBed.log'
+    conda:
+        f'{ENVS}/UCSCtools.yaml'
+    shell:
+        'genePredToBed {input} {output} &> {log}'
+
+
+rule processBED12:
+    input:
+        bed12 = rules.genePredToBed.output,
+        attrs = rules.gff3ToGenePred.output.attributes
+    output:
+        f'annotation/{config["build"]}-coloured.bed12'
     params:
         label = config['Genes']['label'],
-        typeKey = config['Genes']['typeKey']
+        typeKey = config['Genes']['typeKey'],
+        geneID = config['Genes']['geneID']
     group:
         'prepareGenome'
     log:
-        'logs/processGFF3.log'
+        'logs/processBED12.log'
     shell:
-        'python {SCRIPTS}/processGFF3.py --label {params.label} '
-        '--typeKey {params.typeKey} {input} > {output} 2> {log}'
+        'python {SCRIPTS}/processBED12.py --label {params.label} '
+        '--typeKey {params.typeKey} --geneID {params.geneID} '
+        '{input.bed12} {input.attrs} > {output} 2> {log}'
 
 
 rule findRestSites:
@@ -1247,7 +1292,7 @@ def getTracks(wc):
     """ Build track command for generate config """
     command = ''
     if config['Genes']['gff3']:
-        command += '--genes Genes,dat/genome/genes.gff3,3 '
+        command += f'--genes Genes,{rules.processBED12.output},3 '
     if isinstance(config['bigWig'], dict):
         for title, track in config['bigWig'].items():
             command += f'--bigWig {title},{track},3 '
@@ -1281,7 +1326,7 @@ def getCscoreParams(wc):
 
 def getGenesInput(wc):
     if config['Genes']['gff3']:
-        return 'dat/genome/genes.gff3'
+        return f'{rules.processBED12.output}'
     else:
         return []
 
