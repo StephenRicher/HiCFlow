@@ -9,6 +9,7 @@ import contextlib
 import numpy as np
 import pandas as pd
 from typing import List
+from pathlib import Path
 from hicmatrix import HiCMatrix as hm
 from sklearn.preprocessing import KBinsDiscretizer
 from utilities import setDefaults, createMainParent
@@ -21,6 +22,11 @@ def scoreLoopDiff(loops: List, matrix: str, maxLineWidth: int,
                   nBins: int, interactOut: str, linksUp: str, linksDown: str):
 
     loops = readLoops(loops)
+    if loops.empty:
+        for file in [interactOut, linksUp, linksDown]:
+            Path(file).touch()
+        return 0
+
     matrix = hm.hiCMatrix(matrix)
     chrom = matrix.getChrNames()[0]
     # Remove non-specific loops
@@ -31,8 +37,11 @@ def scoreLoopDiff(loops: List, matrix: str, maxLineWidth: int,
 
     nBins = min(nBins, len(loops))
     est = KBinsDiscretizer(n_bins=nBins, encode='ordinal', strategy='kmeans')
-    loops['score'] = est.fit_transform(
-        loops['rawScore'].to_numpy().reshape(-1,1)).astype(int)
+    if nBins > 1:
+        loops['score'] = est.fit_transform(
+            loops['rawScore'].to_numpy().reshape(-1,1)).astype(int)
+    else:
+        loops['score'] = 1
     loops['empty'] = '.'
     loops['color'] = 0
     loops['name'] = loops.index
