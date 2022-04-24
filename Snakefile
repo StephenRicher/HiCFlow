@@ -60,6 +60,7 @@ default_config = {
          'obsExpThreshold':           1.5    ,
          'pValue':                    0.025  ,
          'maxLoopDistance':           2000000,
+         'plot':                      False  ,
          'expected':                 'mean'  ,},
     'compareMatrices':
         {'colourmap'    : 'bwr'        ,
@@ -85,7 +86,6 @@ default_config = {
          'bins':         [10000, 20000],},
     'plotParams':
         {'distanceNorm'  : False    ,
-         'plain'         : False    ,
          'raw'           : False    ,
          'colourmap'     : 'Purples',
          'coordinates'   : None     ,
@@ -94,7 +94,9 @@ default_config = {
          'plotRep'       : True     ,
          'vLines'        : []       ,
          'includeRegions': True     ,
-         'filetype'      : 'svg'    ,},
+         'filetype'      : 'svg'    ,
+         'geneLabelFontSize': 12    ,
+         'maxLabels'        : 60    ,},
     'Genes':
         {'gff3'        :  []        ,
          'typeKey'     : 'gene_type',
@@ -181,8 +183,6 @@ if config['phase'] and not ALLELE_SPECIFIC:
 else:
     PHASE_MODE = None
 
-# Set whether to print a plain HiC map in addiion to a custom
-vis = ['plain', 'custom'] if config['plotParams']['plain'] else ['custom']
 # Set whether to print a raw HiC map in addiion to a KR
 norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 # Set plot suffix for allele specific mode
@@ -193,14 +193,14 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-LOESSdiff-{filter}-{pm}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{vis}-{pm}.{type}',
-        region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{pm}.{type}',
+        region=region, coords=COORDS[region], norm=norm, pm=pm, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/HiCsubtract/configs/{compare}-{coords}-LOESSdiff-{filter}-{pm}.ini',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coords}-{bin}-{vis}-{pm}.ini',
-        region=region, coords=COORDS[region], norm=norm, pm=pm, vis=vis, group=HiC.groups(),
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coords}-{bin}-{pm}.ini',
+        region=region, coords=COORDS[region], norm=norm, pm=pm, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], pm=pm, compare=HiC.groupCompares(),
@@ -1160,7 +1160,7 @@ rule detectLoops:
         '--peakInteractionsThreshold {params.peakInteractionsThreshold} '
         '--expected {params.expected} '
         '--threads 1 --threadsPerChromosome {threads} '
-        '&> {log}'
+        '&> {log} || touch {output}'
 
 # Fix to correct loop intervals that extend too far
 rule clampLoops:
@@ -1340,6 +1340,12 @@ def getLoops(wc):
     else:
         return []
 
+def getLoopParams(wc):
+    if config['loops']['plot'] and config['loops']['detectLoops']:
+        return f'--loops {getLoops(wc)}'
+    else:
+        return ''
+
 rule createConfig:
     input:
         matrix = getMatrix,
@@ -1350,29 +1356,32 @@ rule createConfig:
         vLines = config['plotParams']['vLines'],
         genes = getGenesInput
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coord}-{bin}-{vis}-{pm}.ini'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coord}-{bin}-{pm}.ini'
     params:
         tracks = getTracks,
         depth = getDepth,
-        loops = lambda wc: f'--loops {getLoops(wc)}' if config['loops']['detectLoops'] else '',
+        loops = getLoopParams,
         colourmap = config['plotParams']['colourmap'],
+        geneLabelFontSize = config['plotParams']['geneLabelFontSize'],
+        maxLabels = config['plotParams']['maxLabels'],
         vMin = '--vMin 0' if config['plotParams']['distanceNorm'] else '',
         vMax = '--vMax 2' if config['plotParams']['distanceNorm'] else '',
         log = '' if config['plotParams']['distanceNorm'] else '--log',
-        plain = lambda wc: '--plain' if wc.vis == 'plain' else '',
         cscore = getCscoreParams
     group:
         'processHiC'
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{vis}-{pm}.log'
+        'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{pm}.log'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
         '--depth {params.depth} {params.vMin} {params.vMax} '
-        '{params.plain} --insulation {input.insulations} {params.loops} '
-        '{params.cscore} --tads {input.tads} > {output} 2> {log}'
+        '--geneLabelFontSize {params.geneLabelFontSize} '
+        '--maxLabels {params.maxLabels} '
+        '--insulation {input.insulations} {params.loops} '
+        '{params.cscore} --tads {input.tads} | uniq > {output} 2> {log}'
 
 
 def setRegion(wc):
@@ -1404,7 +1413,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{vis}-{pm}.{type}'
+        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{pm}.{type}'
     params:
         region = setRegion,
         title = setMatrixTitle,
@@ -1414,7 +1423,7 @@ rule plotHiC:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{vis}-{pm}-{type}.log'
+        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{pm}-{type}.log'
     threads:
         THREADS
     shell:
@@ -1762,7 +1771,7 @@ rule scoreLoopDiff:
         'python {SCRIPTS}/scoreLoopDiff.py {input.loops} '
         '--maxLineWidth {params.maxLineWidth} --nBins {params.nBins} '
         '--matrix {input.matrix} --interactOut {output.interactOut} '
-        '--linksUp {output.linksUp} --linksDown {output.linksDown} 2> {log}'
+        '--linksUp {output.linksUp} --linksDown {output.linksDown} &> {log}'
 
 
 rule runCompareViewpoint:
@@ -1900,7 +1909,7 @@ def getLinksInput(wc):
 
 def getLinksParams(wc):
     links = getLinksInput(wc)
-    if links == []:
+    if (links == []):
         return ''
     else:
         return f'--links {links[0]} {links[1]}'
@@ -1925,7 +1934,9 @@ rule createSubtractConfig:
         links = getLinksParams,
         cscore = getCscoreParams,
         SNPcoverage = getSNPcommand,
-        colourmap = config['compareMatrices']['colourmap']
+        maxLabels = config['plotParams']['maxLabels'],
+        colourmap = config['compareMatrices']['colourmap'],
+        geneLabelFontSize = config['plotParams']['geneLabelFontSize']
     group:
         'plotHiCsubtract'
     log:
@@ -1937,9 +1948,11 @@ rule createSubtractConfig:
         '--matrix {input.mat} --vMin {params.vMin} --vMax {params.vMax} '
         '--tads {input.tads} {params.SNPcoverage} '
         '{params.links} --tmpLinks {output.tmpLinks} '
+        '--geneLabelFontSize {params.geneLabelFontSize} '
+        '--maxLabels {params.maxLabels} '
         '{params.cscore} '
         '--depth {params.depth} --colourmap {params.colourmap} '
-        '{params.tracks} > {output.ini} 2> {log}'
+        '{params.tracks} | uniq > {output.ini} 2> {log}'
 
 
 def setSubtractTitle(wc):
