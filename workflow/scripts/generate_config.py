@@ -92,6 +92,9 @@ def main():
     parser.add_argument(
         '--geneLabelFontSize', type=int, default=10,
         help='Font size for gene labels.')
+    parser.add_argument(
+        '--maxLabels', type=int, default=60,
+        help='Max labels to write on gene track.')
 
     args = parser.parse_args()
     func = args.function
@@ -112,7 +115,7 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
                 bigWig, compare, rgbBed, height,
                 depth, colourmap, vMin, vMax, geneLabelFontSize,
                 genes, plain, vLines, links, CScore, tmpLinks,
-                removeXAxis, ratioScore):
+                removeXAxis, ratioScore, maxLabels):
 
     if plain:
         loops = []
@@ -200,7 +203,7 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
         if notEmpty(file):
             print('[spacer]')
             writeGenes(
-                file=file, title=title,
+                file=file, title=title, maxLabels=maxLabels,
                 fontSize=geneLabelFontSize, height=customheight)
 
     if not removeXAxis:
@@ -310,7 +313,9 @@ def write_bigwig(
           f'overlay_previous = {overlay}', sep = '\n')
 
 
-def writeGenes(file, title, height, style='UCSC', fontSize=10):
+def writeGenes(file, title, height, style='UCSC', fontSize=10, maxLabels=60):
+    lineWidth = 1 if file.endswith('.bed12') else 0.5
+    title = "" if title == 'Genes' else title
     print(f'[rgb BED]',
           f'file = {file}',
           f'title = {title}',
@@ -318,9 +323,11 @@ def writeGenes(file, title, height, style='UCSC', fontSize=10):
           f'color_utr = bed_rgb',
           f'color_backbone = bed_rgb',
           f'border_color = bed_rgb',
+          f'line_width = {lineWidth}',
           f'style = {style}',
-          f'max_labels = 50',
+          f'max_labels = {maxLabels}',
           f'arrow_interval = 10',
+          f'all_labels_inside = True',
           f'fontsize = {fontSize}',
           f'height = {height}',
           f'file_type = bed',
