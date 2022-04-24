@@ -22,15 +22,16 @@ def scoreLoopDiff(loops: List, matrix: str, maxLineWidth: int,
                   nBins: int, interactOut: str, linksUp: str, linksDown: str):
 
     loops = readLoops(loops)
-    if loops.empty:
-        for file in [interactOut, linksUp, linksDown]:
-            Path(file).touch()
-        return 0
-
     matrix = hm.hiCMatrix(matrix)
     chrom = matrix.getChrNames()[0]
     # Remove non-specific loops
     loops = loops.loc[loops['chrom1'] == chrom]
+
+    if loops.empty:
+        for file in [interactOut, linksUp, linksDown]:
+            Path(file).touch()
+        return 0
+        
     loops[['rawScore', 'direction']] = loops.apply(
         scoreLoops, axis=1, args=(matrix,), result_type='expand')
     loops = loops.dropna()

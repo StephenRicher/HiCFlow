@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from typing import List
+from pathlib import Path
 from matplotlib import cm
 from hicmatrix import HiCMatrix as hm
 from utilities import setDefaults, createMainParent
@@ -22,6 +23,10 @@ def processDiffTAD(
         outPickle: str, threshold: float, name: str):
 
     allTADs = readBED(allTADs)
+    if allTADs.empty:
+        for file in [outDiff, outPickle]:
+            Path(file).touch()
+        return 0
 
     hic = hm.hiCMatrix(subtractionMat)
     chrom = hic.getChrNames()[0]
