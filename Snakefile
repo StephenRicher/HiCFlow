@@ -86,7 +86,6 @@ default_config = {
          'bins':         [10000, 20000],},
     'plotParams':
         {'distanceNorm'  : False    ,
-         'raw'           : False    ,
          'colourmap'     : 'Purples',
          'coordinates'   : None     ,
          'viewpoints'    : None     ,
@@ -151,7 +150,6 @@ wildcard_constraints:
     read = r'R[12]',
     bin = r'\d+',
     mode = r'SNP|INDEL',
-    norm = r'raw|KR',
     pm = r'SNPsplit' if ALLELE_SPECIFIC else r'full',
     set = r'logFC|adjIF1|adjIF2',
     adjIF = r'adjIF1|adjIF2',
@@ -183,8 +181,6 @@ if config['phase'] and not ALLELE_SPECIFIC:
 else:
     PHASE_MODE = None
 
-# Set whether to print a raw HiC map in addiion to a KR
-norm = ['raw', 'KR'] if config['plotParams']['raw'] else ['KR']
 # Set plot suffix for allele specific mode
 pm = 'SNPsplit' if ALLELE_SPECIFIC else 'full'
 
@@ -193,25 +189,25 @@ HiC_mode = ([
     [expand('plots/{region}/{bin}/HiCsubtract/{filter}/{compare}-{region}-{coords}-{bin}-LOESSdiff-{filter}-{pm}.{type}',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coords}-{bin}-{pm}.{type}',
-        region=region, coords=COORDS[region], norm=norm, pm=pm, group=HiC.groups(),
+    [expand('plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coords}-{bin}-{pm}.{type}',
+        region=region, coords=COORDS[region], pm=pm, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/HiCsubtract/configs/{compare}-{coords}-LOESSdiff-{filter}-{pm}.ini',
         region=region, coords=COORDS[region], pm=pm, compare=HiC.groupCompares(), filter=['medianFilter', 'noFilter'],
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coords}-{bin}-{pm}.ini',
-        region=region, coords=COORDS[region], norm=norm, pm=pm, group=HiC.groups(),
+    [expand('plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{coords}-{bin}-{pm}.ini',
+        region=region, coords=COORDS[region], pm=pm, group=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
     [expand('plots/{region}/{bin}/viewpoints/HiCcompare/{compare}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
         region=region, coords=VIEWPOINTS[region], pm=pm, compare=HiC.groupCompares(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('plots/{region}/{bin}/viewpoints/{norm}/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
-        region=region, coords=VIEWPOINTS[region], norm=norm, pm=pm, preGroup=HiC.groups(),
+    [expand('plots/{region}/{bin}/viewpoints/{preGroup}-{region}-{coords}-{bin}-viewpoint-{pm}.{type}',
+        region=region, coords=VIEWPOINTS[region], pm=pm, preGroup=HiC.groups(),
         bin=regionBin[region], type=config['plotParams']['filetype']) for region in regionBin],
-    [expand('plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}',
+    [expand('plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}-{pm}.{type}',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         region=region, bin=regionBin[region], pm=pm,
-        norm=norm, type=config['plotParams']['filetype']) for region in regionBin],
+        type=config['plotParams']['filetype']) for region in regionBin],
      expand('referenceTADs/{all}-{bin}-ontad-{pm}.bed',
         all=(HiC.all() if config['plotParams']['plotRep'] else list(HiC.groups())),
         bin=getValidBins(regionBin), pm=pm),
@@ -1273,15 +1269,15 @@ rule mergeOnTAD:
 
 rule distanceNormalise:
     input:
-        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}.h5'
+        'dat/matrix/{region}/{bin}/KR/{all}-{region}-{bin}-{pm}.h5'
     output:
-        'dat/matrix/{region}/{bin}/{norm}/obs_exp/{all}-{region}-{bin}-{pm}.h5'
+        'dat/matrix/{region}/{bin}/KR/obs_exp/{all}-{region}-{bin}-{pm}.h5'
     params:
         method = 'obs_exp'
     group:
         'processHiC'
     log:
-        'logs/distanceNormalise/{all}-{region}-{bin}-{norm}-{pm}.log'
+        'logs/distanceNormalise/{all}-{region}-{bin}-{pm}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1307,9 +1303,9 @@ def getTracks(wc):
 def getMatrix(wc):
     """ Return either normal or obs_exp matrix """
     if config['plotParams']['distanceNorm']:
-        return 'dat/matrix/{region}/{bin}/{norm}/obs_exp/{group}-{region}-{bin}-{pm}.h5'
+        return 'dat/matrix/{region}/{bin}/KR/obs_exp/{group}-{region}-{bin}-{pm}.h5'
     else:
-        return 'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
+        return 'dat/matrix/{region}/{bin}/KR/{group}-{region}-{bin}-{pm}.h5'
 
 def getCscoreInput(wc):
     if config['HiCParams']['compartmentScore']:
@@ -1356,7 +1352,7 @@ rule createConfig:
         vLines = config['plotParams']['vLines'],
         genes = getGenesInput
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/configs/{group}-{region}-{coord}-{bin}-{pm}.ini'
+        'plots/{region}/{bin}/pyGenomeTracks/configs/{group}-{region}-{coord}-{bin}-{pm}.ini'
     params:
         tracks = getTracks,
         depth = getDepth,
@@ -1373,7 +1369,7 @@ rule createConfig:
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/createConfig/{group}-{region}-{coord}-{bin}-{norm}-{pm}.log'
+        'logs/createConfig/{group}-{region}-{coord}-{bin}-{pm}.log'
     shell:
         'python {SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '{params.log} --colourmap {params.colourmap} {params.tracks} '
@@ -1405,7 +1401,7 @@ def setMatrixTitle(wc):
         name = wc.group
     except AttributeError:
         name = wc.all
-    title = f'"{name} : {wc.region}{build} at {wc.bin} bin size ({wc.norm} - {wc.pm})"',
+    title = f'"{name} : {wc.region}{build} at {wc.bin} bin size (KR - {wc.pm})"',
     return title
 
 
@@ -1413,7 +1409,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/{region}/{bin}/pyGenomeTracks/{norm}/{group}-{region}-{coord}-{bin}-{pm}.{type}'
+        'plots/{region}/{bin}/pyGenomeTracks/{group}-{region}-{coord}-{bin}-{pm}.{type}'
     params:
         region = setRegion,
         title = setMatrixTitle,
@@ -1423,7 +1419,7 @@ rule plotHiC:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     log:
-        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{norm}-{pm}-{type}.log'
+        'logs/plotHiC/{group}-{coord}-{region}-{bin}-{pm}-{type}.log'
     threads:
         THREADS
     shell:
@@ -1450,10 +1446,10 @@ def makeViewRegion(wc):
 
 rule runViewpoint:
     input:
-        'dat/matrix/{region}/{bin}/{norm}/{group}-{region}-{bin}-{pm}.h5'
+        'dat/matrix/{region}/{bin}/KR/{group}-{region}-{bin}-{pm}.h5'
     output:
-        bedgraph = 'dat/viewpoints/{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.bedgraph',
-        plot = temp('dat/viewpoints/{region}/{bin}/{norm}/{group}-{region}-{coord}-{bin}-{pm}.png')
+        bedgraph = 'dat/viewpoints/{region}/{bin}/KR/{group}-{region}-{coord}-{bin}-{pm}.bedgraph',
+        plot = temp('dat/viewpoints/{region}/{bin}/KR/{group}-{region}-{coord}-{bin}-{pm}.png')
     params:
         referencePoint = setRegion,
         region = makeViewRegion,
@@ -1462,7 +1458,7 @@ rule runViewpoint:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     log:
-        'logs/runViewpoint/{group}-{coord}-{region}-{bin}-{norm}-{pm}.log'
+        'logs/runViewpoint/{group}-{coord}-{region}-{bin}-{pm}.log'
     shell:
         '(hicPlotViewpoint --matrix {input} --region {params.region} '
         '--outFileName {output.plot} --referencePoint {params.referencePoint} '
@@ -1474,7 +1470,7 @@ rule plotViewpoint:
     input:
         rules.runViewpoint.output.bedgraph
     output:
-        'plots/{region}/{bin}/viewpoints/{norm}/{group}-{region}-{coord}-{bin}-viewpoint-{pm}.{type}'
+        'plots/{region}/{bin}/viewpoints/{group}-{region}-{coord}-{bin}-viewpoint-{pm}.{type}'
     params:
         dpi = 600,
         build = f'--build {config["build"]}' if config['build'] else ''
@@ -1483,7 +1479,7 @@ rule plotViewpoint:
     conda:
         f'{ENVS}/python3.yaml'
     log:
-        'logs/plotViewpoint/{group}-{coord}-{region}-{bin}-{norm}-{pm}-{type}.log'
+        'logs/plotViewpoint/{group}-{coord}-{region}-{bin}-{pm}-{type}.log'
     shell:
         'python {SCRIPTS}/plotViewpoint.py {input} --out {output} '
         '--dpi {params.dpi} {params.build} &> {log}'
@@ -1493,7 +1489,7 @@ rule plotMatrix:
     input:
         rules.distanceNormalise.output
     output:
-        'plots/{region}/{bin}/obs_exp/{norm}/{all}-{region}-{bin}-{pm}.{type}'
+        'plots/{region}/{bin}/obs_exp/{all}-{region}-{bin}-{pm}.{type}'
     params:
         chr = lambda wc: REGIONS['chr'][wc.region],
         start = lambda wc: REGIONS['start'][wc.region] + 1,
@@ -1502,7 +1498,7 @@ rule plotMatrix:
         dpi = 600,
         colour = 'YlGn'
     log:
-        'logs/plotMatrix/{all}-{region}-{bin}-{norm}-{pm}-{type}.log'
+        'logs/plotMatrix/{all}-{region}-{bin}-{pm}-{type}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -1589,13 +1585,13 @@ rule mergeBamByReplicate:
 
 rule H5_to_SUTM:
     input:
-        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}-raw.h5'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}-raw.h5'
     output:
-        'dat/matrix/{region}/{bin}/{norm}/{all}-{region}-{bin}-{pm}-sutm.txt'
+        'dat/matrix/{region}/{bin}/raw/{all}-{region}-{bin}-{pm}-sutm.txt'
     group:
         'HiCcompare'
     log:
-        'logs/H5_to_SUTM/{all}-{region}-{norm}-{bin}-{pm}.log'
+        'logs/H5_to_SUTM/{all}-{region}-{bin}-{pm}.log'
     conda:
          f'{ENVS}/python3.yaml'
     shell:
