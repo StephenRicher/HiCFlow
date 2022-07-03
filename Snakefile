@@ -126,8 +126,8 @@ ALLELE_SPECIFIC = True if config['phasedVCF'] else False
 HiC = HiCSamples(
     config['data'], config['restrictionSeqs'], ALLELE_SPECIFIC,
     allPairs=config['compareMatrices']['allPairs'])
-REGIONS = load_regions(
-    config['regions'], adjust=max(config['resolution']['bins']))
+adjust = 1 if not config['resolution']['bins'] else max(config['resolution']['bins'])
+REGIONS = load_regions(config['regions'], adjust=adjust)
 
 # Remove region-binSize combinations with too few bins
 regionBin, binRegion = filterRegions(
