@@ -166,7 +166,7 @@ wildcard_constraints:
 # Generate dictionary of plot coordinates, may be multple per region
 COORDS = load_coords(
     REGIONS, config['plotParams']['coordinates'],
-    adjust=max(config['resolution']['bins']),
+    adjust=adjust,
     includeRegions=config['plotParams']['includeRegions'])
 
 # Generate dictionary of plot viewpoints
