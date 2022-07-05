@@ -2196,7 +2196,7 @@ if not ALLELE_SPECIFIC:
 
     rule GatherBQSRReports:
         input:
-            expand('dat/gatk/split/{{cellType}}-{rep}.recal.table',
+            expand('dat/gatk/baseRecalibrator/{{cellType}}-{rep}.recal.table',
                 rep=[str(i).zfill(4) for i in range(config['gatk']['scatterCount'])])
         output:
             'dat/gatk/baseRecalibrator/{cellType}.recal.table'
