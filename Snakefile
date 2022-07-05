@@ -2133,45 +2133,6 @@ if not ALLELE_SPECIFIC:
             'samtools index -@ {threads} {input} &> {log}'
 
 
-    def known_sites(input_known):
-        input_known_string = ""
-        if input_known is not None:
-            for known in input_known:
-                input_known_string += f' --known-sites {known}'
-        return input_known_string
-
-
-    def baseRecalibratorInput(wc):
-        if config['gatk']['downSample'] is not None:
-            return rules.downSampleBam.output
-        else:
-            return rules.addReadGroup.output
-
-
-    rule baseRecalibrator:
-        input:
-            bam = baseRecalibratorInput,
-            ref = rules.bgzipGenome.output,
-            ref_index = rules.indexGenome.output,
-            ref_dict = rules.createSequenceDictionary.output
-        output:
-            'dat/gatk/baseRecalibrator/{cellType}.recal.table'
-        params:
-            known = known_sites(config['gatk']['all_known']),
-            tmp = config['tmpdir'],
-            extra = ''
-        log:
-            'logs/baseRecalibrator/{cellType}.log'
-        conda:
-            f'{ENVS}/gatk.yaml'
-        shell:
-             'gatk BaseRecalibrator {params.known} '
-             '--input {input.bam} --reference {input.ref} '
-             '--output {output} '
-             '--sequence-dictionary {input.ref_dict} '
-             '--tmp-dir {params.tmp} {params.extra} &> {log}'
-
-
     rule splitIntervals:
         input:
             genome = rules.bgzipGenome.output,
@@ -2193,6 +2154,61 @@ if not ALLELE_SPECIFIC:
             '--output dat/gatk/splitIntervals/{wildcards.cellType} &> {log} '
 
 
+    def known_sites(input_known):
+        input_known_string = ""
+        if input_known is not None:
+            for known in input_known:
+                input_known_string += f' --known-sites {known}'
+        return input_known_string
+
+
+    def baseRecalibratorInput(wc):
+        if config['gatk']['downSample'] is not None:
+            return rules.downSampleBam.output
+        else:
+            return rules.addReadGroup.output
+
+
+    rule baseRecalibrator:
+        input:
+            bam = baseRecalibratorInput,
+            ref = rules.bgzipGenome.output,
+            ref_index = rules.indexGenome.output,
+            ref_dict = rules.createSequenceDictionary.output,
+            interval = 'dat/gatk/splitIntervals/{cellType}/{rep}-scattered.interval_list'
+        output:
+            'dat/gatk/baseRecalibrator/{cellType}-{rep}.recal.table'
+        params:
+            known = known_sites(config['gatk']['all_known']),
+            tmp = config['tmpdir'],
+            extra = ''
+        log:
+            'logs/baseRecalibrator/{cellType}-{rep}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+             'gatk BaseRecalibrator {params.known} '
+             '--input {input.bam} --reference {input.ref} '
+             '--output {output} --intervals {input.interval} '
+             '--sequence-dictionary {input.ref_dict} '
+             '--tmp-dir {params.tmp} {params.extra} &> {log}'
+
+
+    rule GatherBQSRReports:
+        input:
+            expand('dat/gatk/split/{{cellType}}-{rep}.recal.table',
+                rep=[str(i).zfill(4) for i in range(config['gatk']['scatterCount'])])
+        output:
+            'dat/gatk/baseRecalibrator/{cellType}.recal.table'
+        log:
+            'logs/GatherBQSRReports/{cellType}.log'
+        conda:
+            f'{ENVS}/gatk.yaml'
+        shell:
+             'gatk GatherBQSRReports --input {input} '
+             '--output {output} &> {log}'
+
+
     rule applyBQSR:
         input:
             bam = rules.addReadGroup.output,
@@ -2200,7 +2216,7 @@ if not ALLELE_SPECIFIC:
             ref = rules.bgzipGenome.output,
             ref_index = rules.indexGenome.output,
             ref_dict = rules.createSequenceDictionary.output,
-            recal_table = rules.baseRecalibrator.output,
+            recal_table = rules.GatherBQSRReports.output,
             interval = 'dat/gatk/splitIntervals/{cellType}/{rep}-scattered.interval_list'
         output:
             bam = 'dat/mapped/mergeByCell/{cellType}-{rep}.recalibrated.bam',
