@@ -2194,18 +2194,32 @@ if not ALLELE_SPECIFIC:
              '--tmp-dir {params.tmp} {params.extra} &> {log}'
 
 
+    def gatherRecal(wc):
+        splitRecal = expand(
+            'dat/gatk/baseRecalibrator/{cellType}-{rep}.recal.table',
+            rep=[str(i).zfill(4) for i in range(config['gatk']['scatterCount'])],
+            cellType=wc.cellType
+        )
+        inputGather = ""
+        for i in splitRecal:
+            inputGather += f' --input {i}'
+        return inputGather
+
+
     rule GatherBQSRReports:
         input:
             expand('dat/gatk/baseRecalibrator/{{cellType}}-{rep}.recal.table',
                 rep=[str(i).zfill(4) for i in range(config['gatk']['scatterCount'])])
         output:
             'dat/gatk/baseRecalibrator/{cellType}.recal.table'
+        params:
+            input = gatherRecal
         log:
             'logs/GatherBQSRReports/{cellType}.log'
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
-             'gatk GatherBQSRReports --input {input} '
+             'gatk GatherBQSRReports --input {params.input} '
              '--output {output} &> {log}'
 
 
