@@ -2219,7 +2219,7 @@ if not ALLELE_SPECIFIC:
         conda:
             f'{ENVS}/gatk.yaml'
         shell:
-             'gatk GatherBQSRReports --input {params.input} '
+             'gatk GatherBQSRReports {params.input} '
              '--output {output} &> {log}'
 
 
