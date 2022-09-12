@@ -24,6 +24,7 @@ def orientCscore(cscore: str, fasta: str) -> None:
     nBases = len(sequence)
     cscore = cscore.loc[(cscore['start'] < nBases) & (cscore['end'] <= nBases)]
     cscore['gc'] = cscore.apply(getGC, args=(sequence, start), axis=1)
+
     rho, p = pearsonr(cscore['gc'], cscore['score'])
     if rho < 0:
         cscore['score'] *= -1
