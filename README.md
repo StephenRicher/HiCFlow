@@ -38,7 +38,7 @@ HiCflow works with python >=3.6 and requires [Snakemake](https://snakemake.readt
 The HiCflow repository can be downloaded from GitHub as follows:
 
 ```bash
-$ git clone https://github.com/StephenRicher/HiCFlow.git
+git clone https://github.com/StephenRicher/HiCFlow.git
 ```
 
 ## Configuring HiCFlow
@@ -194,7 +194,7 @@ Once Snakemake is installed, the example dataset can be processed using the foll
 This command should be run from the HiCFlow base directory containing the Snakefile.
 
 ```bash
-$ snakemake --use-conda --cores 4 --configfile example/config/config.yaml
+snakemake --use-conda --cores 4 --configfile example/config/config.yaml
 ```
 
 This command will first install all relevant Conda environments within the defined working directory (`example/analysis/`); this may take some time.
@@ -203,7 +203,7 @@ Alternatively, you may also want to install the Conda environments in a custom d
 A custom directory is helpful if you perform multiple independent analyses and do not want to install the same Conda environments repeatedly.
 
 ```bash
-$ snakemake --use-conda --conda-prefix /path/envs/ --cores 4 --configfile example/config/config.yaml
+snakemake --use-conda --conda-prefix /path/envs/ --cores 4 --configfile example/config/config.yaml
 ```
 
 ### Cluster Execution
@@ -216,12 +216,12 @@ Consult the official Snakemake documentation [here](https://snakemake.readthedoc
 ### HiC track
 
 HiCflow utilises pyGenomeTracks to plot annotated HiC tracks with nested TAD domains, loops and TAD insulation scores. In addition, custom BED and Bedgraph files can be provided through the configuration file.
-![HiC plot example](./README_files/AS-chr3L-3L_5500000_6000000-3000-custom-full-fm.svg)
+![HiC plot example](./README_files/AS-chr3L-3L_5500000_6000000-3000-custom-full-fm.png)
 
 ### HiCcompare track
 
 HiCflow uses HiCcompare to produce joint normalised log fold-change subtraction matrices between pairs of samples.
-![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC-full-fm.svg)
+![HiCcompare example](./README_files/G1S-vs-AS-chr3L-3L_5500000_6000000-3000-logFC-full-fm.png)
 
 ### Viewpoints
 
