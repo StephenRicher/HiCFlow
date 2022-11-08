@@ -8,10 +8,10 @@ The pipeline utilises the workflow management system Snakemake and automatically
  * [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) - A quality control tool for high throughput sequence data.
  * [FastQ Screen](https://www.bioinformatics.babraham.ac.uk/projects/fastq_screen/) - A tool to screen for species composition in FASTQ sequences.
  * [Cutadapt](https://cutadapt.readthedocs.io/en/stable/) - A tool to remove adapter sequences, primers, poly-A tails and others from high-throughput sequencing reads.
- * [HiCUP](https://www.bioinformatics.babraham.ac.uk/projects/hicup/) - A tool for mapping and performing quality control on Hi-C data.
+ * [HiCUP](https://www.bioinformatics.babraham.ac.uk/projects/hicup/) - A tool for mapping and performing quality control on HiC data.
  * [HiCExplorer](https://hicexplorer.readthedocs.io/en/latest/) - A set of tools for building, normalising and processing HiC matrices.
  * [OnTAD](https://github.com/anlin00007/OnTAD) - An optimised nested TAD caller for identifying hierarchical TADs in HiC data.
- * [HiCRep](https://genome.cshlp.org/content/early/2017/08/30/gr.220640.117) - A tool for assessing the reproducibility of Hi-C data using a stratum-adjusted correlation coefficient.
+ * [HiCRep](https://genome.cshlp.org/content/early/2017/08/30/gr.220640.117) - A tool for assessing the reproducibility of HiC data using a stratum-adjusted correlation coefficient.
  * [HiCcompare](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-018-2288-x) - A tool for joint normalisation and comparison of HI-C datasets
  * [pyGenomeTracks](https://github.com/deeptools/pyGenomeTracks) - A tool for plotting customisable, publication-ready genome tracks including HiC maps.
  * [MultiQC](https://multiqc.info/) - Aggregate results from bioinformatics analyses across many samples into a single report.
@@ -20,6 +20,7 @@ The pipeline utilises the workflow management system Snakemake and automatically
 
   * [Installation](#installation)
   * [Configuration](#configuration)
+    * [Example Configurations](#example-configurations)
   * [Usage](#usage)
   * [Example output](#example-output)
      * [HiC track](#hic-track)
@@ -44,8 +45,8 @@ git clone https://github.com/StephenRicher/HiCFlow.git
 ## Configuring HiCFlow
 
 The HiCFlow pipeline is fully controlled through a single configuration file that describes parameter settings and paths to relevant files in the system.
-HiCFlow is bundled with a fully configured small Hi-C dataset ([Wang et al., 2018](https://www.nature.com/articles/s41467-017-02526-9)) to test and serve as a template for configuring other datasets.
-The configuration file for this example dataset is shown below and can be found at `example/config/config.yaml`.
+HiCFlow is bundled with a fully configured small HiC dataset ([Wang et al., 2018](https://www.nature.com/articles/s41467-017-02526-9)) to test and serve as a template for configuring other datasets.
+The configuration file for the example dataset is provided at at [here](example/config/config.yaml).
 
 **Note:** If relative file paths are provided in the configuration file, then these are **relative to the working directory**.
 The working directory itself (defined by workdir) is relative to the directory ``snakemake`` is executed.
@@ -53,140 +54,20 @@ If not set, the working directory defaults to the directory containing the Snake
 Relative paths can be confusing; they are used here to ensure the example dataset works for all users.
 If in doubt, simply provide absolute paths.
 
-```bash
-# Specify output directory - either an absolute path or relative to Snakefile.
-# If using relative paths for subsequent files, these should be relative to
-# this working directory.
-workdir: example/analysis/
+### Example Configurations
 
-# CSV file with cell type, experimental group, replicate number,
-# read (forward/reverse) and the path of each FASTQ file.
-data:  ../config/samples.csv
-
-# Bed file of genomic regions to perform HiC analysis.
-# These may be whole chromosomes for normal HiC or specific capture regions
-# for region capture HiC.
-regions: ../config/regions.bed
-
-# FASTA references to align data. Must specify a reference for each cell type
-# defined in config['data'].
-genome :
-    S2Rplus : ../genome/BDGP6.28.fa.gz
-
-build: BDGP6
-
-# Set True to perform phasing and haplotype assembly pipeline.
-phase: False
-ASHIC: False
-
-# Phased VCF file for allele-specific analysis. Must specify a VCF for each
-# cell type defined in config['data']. If not set, then run normal HiC mode.
-# The HiCFlow phasing pipeline (see above) outputs a phased VCF for each cell
-# type which is valid input here.
-phased_vcf:
-    #S2Rplus : ../analysis/phasedVCFs/S2Rplus-phased.vcf
-
-# List of bin sizes to analyse HiC data at different resolutions.
-# The first bin size defines the base resolution; all subsequence bin sizes
-# must be whole divisible by the base bin size, e.g. [1000, 1500] is invalid.
-resolution:
-    base : 1000
-    bins : [1000, 3000]
-
-# Parameters for Cutadapt - see https://cutadapt.readthedocs.io/en/stable/guide.html
-cutadapt:
-    forwardAdapter: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
-    reverseAdapter: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
-    overlap: 6
-    errorRate: 0.1
-    minimumLength: 20
-    qualityCutoff: 20
-    GCcontent: 43
-
-
-# List of restriction sequences in order of protocol usage. Cut site is denoted
-# using the '^' symbol. Ensure restriction enzyme names are given as strings.
-restrictionSeqs:
-    A:
-        DpnII : '^GATC'
-
-HiCParams:
-    minBins:              50
-    minDistance:          300
-    maxLibraryInsertSize: 1000
-    minMappingQuality:    15
-    removeSelfLigation:   True
-    keepSelfCircles:      False
-    skipDuplicationCheck: False
-    nofill:               False
-    threads:              4
-    multiplicativeValue:  10000 # HiC counts are normalised to this value
-
-plotParams:
-    distanceNorm:   False # Plot obs/exp matrix instead of log counts.
-    plain:          True # Plot additional figure without TAD/loop annotations
-    colourmap:      Purples
-    # BED file for creating plots of additional viewpoints in addition to those
-    # defined config['protocol']['regions'].
-    coordinates:    ../config/plot_coordinates.bed
-    viewpoints:     ../config/viewpoints.bed
-    viewpointRange: 150_000
-    plotRep:        True
-    vLines:         ../config/vlines.bed
-    runPCA:         True
-
-# Bigwig tracks for plotting below HiC plots.
-bigWig :
-    CP190 : ../genome/CP190-dm6.bw    # GSM762836
-    Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
-    CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
-# BED tracks for plotting with HiC plots.
-bed :
-    Genes : ../genome/BDGP6.28.99.genes.bed
-
-compareMatrices:
-    minZ:  2    # Z-score threshold for defining a HiCcompare 'peak'.
-    vMin: -2 # Mimimum logFC value for colour scale.
-    vMax: 2  # Maximum logFC value for colour scale.
-    size: 3     # Size of median filter to denoise comparison matrix.
-    allPairs: False # If True run '1 vs 2' AND '2 vs 1'
-    simpleSubtract: True
-
-# GATK variant calling best practises for human data
-gatk:
-    hapmap:     #'gatkResourceBundle/hapmap_3.3.hg38.vcf.gz'
-    omni:       #'gatkResourceBundle/1000G_omni2.5.hg38.vcf.gz'
-    G1K:        #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz'
-    dbsnp:      #'gatkResourceBundle/dbsnp_146.hg38.vcf.gz'
-    mills:      #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz'
-    all_known:  #['gatkResourceBundle/dbsnp_146.hg38.vcf.gz',
-                #'gatkResourceBundle/1000G_phase1.snps.high_confidence.hg38.vcf.gz',
-                #'gatkResourceBundle/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz']
-    trustPoly:  True
-    downSample: 42.1 # Optionally downsample reads for baseRecalibrator
-
-# Optional run HiCRep - may take a while for high res datasets.
-runHiCRep: True
-
-# Treat data as microC - ignore restriction digest.
-microC: False
-
-# Skip FASTQ truncation and perform local alignment instead
-localAlignment: False
-
-# Write TAD and HiCcompare status and score to a binned pandas
-rescalePKL: True
-
-# Output a BAM file containing only valid HiC read pairs within defined regions.
-createValidBam: False
-
-# Configuration file for customising multiQC output report.
-multiQCconfig : ../config/multiqc_config.yaml
-
-# Configuration file of paths to genome indexes for FastQ Screen.
-# See template in example/config/fastq_screen.config
-fastq_screen :
-```
+* [Typical HiC Analysis](example/config/config-HiC+CallVariant+Phase.yaml)
+  * Run standard HiC workflow.
+* [HiC Analysis + Variant Calling + Haplotype Assembly](example/config/config-HiC+CallVariant+Phase.yaml)
+  * Run standard HiC workflow and full variant calling and haplotype assembly pipeline.
+  * Phased VCF output compatible with ASHiC workflow.
+* [HiC Analysis + Haplotype Assembly](example/config/config-HiC+Phase.yaml)
+  * Run standard HiC workflow and haplotype assembly pipeline.
+  * Requires a set of pre-called variants.
+  * **If high quality calls from WGS data are available then we recommended using these rather than performing variant calling from the HiC data using HiCFlow.**
+* [Allele Specific HiC](example/config/config-ASHiC.yaml)
+  * Perform allele-specific HiC workflow.
+  * Requires a set of phased variants, either from HiCFlow or another source.
 
 ## Usage
 
