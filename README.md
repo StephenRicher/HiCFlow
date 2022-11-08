@@ -48,12 +48,6 @@ The HiCFlow pipeline is fully controlled through a single configuration file tha
 HiCFlow is bundled with a fully configured small HiC dataset ([Wang et al., 2018](https://www.nature.com/articles/s41467-017-02526-9)) to test and serve as a template for configuring other datasets.
 The configuration file for the example dataset is provided at at [here](example/config/config.yaml).
 
-**Note:** If relative file paths are provided in the configuration file, then these are **relative to the working directory**.
-The working directory itself (defined by workdir) is relative to the directory ``snakemake`` is executed.
-If not set, the working directory defaults to the directory containing the Snakefile.
-Relative paths can be confusing; they are used here to ensure the example dataset works for all users.
-If in doubt, simply provide absolute paths.
-
 ### Example Configurations
 
 * [Typical HiC Analysis](example/config/config-HiC+CallVariant+Phase.yaml)
@@ -64,10 +58,17 @@ If in doubt, simply provide absolute paths.
 * [HiC Analysis + Haplotype Assembly](example/config/config-HiC+Phase.yaml)
   * Run standard HiC workflow and haplotype assembly pipeline.
   * Requires a set of pre-called variants.
-  * **If high quality calls from WGS data are available then we recommended using these rather than performing variant calling from the HiC data using HiCFlow.**
+  * **If high quality calls from WGS data are available then we recommend using these rather than performing variant calling with HiCFlow.**
 * [Allele Specific HiC](example/config/config-ASHiC.yaml)
   * Perform allele-specific HiC workflow.
   * Requires a set of phased variants, either from HiCFlow or another source.
+
+
+**Note:** If relative file paths are provided in the configuration file, then these are **relative to the working directory**.
+The working directory itself (defined by workdir) is relative to the directory ``snakemake`` is executed.
+If not set, the working directory defaults to the directory containing the Snakefile.
+Relative paths can be confusing; they are used here to ensure the example dataset works for all users.
+If in doubt, simply provide absolute paths.
 
 ## Usage
 
