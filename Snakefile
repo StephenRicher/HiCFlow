@@ -26,6 +26,7 @@ default_config = {
     'tmpdir':            tempfile.gettempdir(),
     'data':              ''          ,
     'phasedVCF':         None        ,
+    'unphasedVCF':       None        ,
     'genome':            ''          ,
     'build':             None        ,
     'regions':           ''          ,
@@ -111,7 +112,7 @@ default_config = {
          'multiQCconfig': None    ,
          'runHiCRep'    : True    ,
          'HiCRep_bin'   : 150000  ,},
-    'phase':            False,
+    'phase'             : False,
 
 }
 
@@ -174,7 +175,9 @@ VIEWPOINTS = load_coords(
     REGIONS, config['plotParams']['viewpoints'], includeRegions=False)
 
 if config['phase'] and not ALLELE_SPECIFIC:
-    if config['gatk']['all_known']:
+    if config['unphasedVCF'] is not None:
+        PHASE_MODE = 'PRECALLED'
+    elif config['gatk']['all_known'] is not None:
         PHASE_MODE = 'GATK'
     else:
         PHASE_MODE = 'BCFTOOLS'
@@ -2602,7 +2605,9 @@ if not ALLELE_SPECIFIC:
 
 
     def hapCut2vcf(wc):
-        if PHASE_MODE == 'GATK':
+        if PHASE_MODE == 'PRECALLED':
+            return config['unphasedVCF'][wc.cellType]
+        elif PHASE_MODE == 'GATK':
             return rules.splitVCFS.output
         else:
             return rules.filterVariants.output
