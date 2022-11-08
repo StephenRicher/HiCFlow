@@ -1,7 +1,7 @@
 # Specify output directory - either absolute path or relative to Snakefile.
 # If using relative paths for subsequent files, these should be relative to
 # this working directory.
-workdir: example/analysis/
+workdir: GM12878-ASHiC/
 
 # CSV file with cell type, experimental group, replicate number,
 # read (forward/reverse) and path each FASTQ files.
@@ -15,9 +15,16 @@ regions: ../config/regions.bed
 # FASTA references to align data. Must specify a reference for each cell type
 # defined in config['data'].
 genome :
-    S2Rplus : ../genome/BDGP6.28.fa.gz
+    S2Rplus : ../genome/GRCh38.fa.gz
 
-build: BDGP6
+build: GRCh38
+
+# Phased VCF file for allele specific analysis. Must specify a VCF for each
+# cell type defined in config['data']. If not set then run normal HiC mode.
+# The HiCFlow phasing pipeline (see above) outputs a phased VCF for each cell
+# type which is valid input here.
+phasedVCF:
+    GM12878 : ../genome/GM12878-phased.vcf
 
 # List of binsizes to analyse HiC data at different resolutions.
 # The first binsize defines the base resolution, all subsequence bin sizes
@@ -79,22 +86,20 @@ plotParams:
 
 # Gene annotation to include with HiC plots.
 Genes:
-    gff3: ../genome/BDGP6.32.105.gff3.gz # Path to GFF3 gene annotation.
+    gff3: ../genome/Homo_sapiens.GRCh38.104.gff3.gz # Path to GFF3 gene annotation.
     typeKey: biotype                     # Attribute key describing gene type
     label: Name                          # Attribute key to label on plot
-    geneID: Parent                       # Attribute key identifying gene ID
+    geneID: gene_id                      # Attribute key identifying gene ID
 
 # Assorted BigWig annotations include with HiC plots
-bigWig :
-    CP190 : ../genome/CP190-dm6.bw    # GSM762836
-    Beaf-32 : ../genome/Beaf32-dm6.bw # GSM762845
-    CTCF : ../genome/CTCF-dm6.bw      # GSM1535983
+bigWig:
+    CTCF: ../genome/GRCh38-CTCF.bigWig
 
 QC:
     runQC        : True
     flipSNP      : False
     QCsample     : 100000
-    fastqScreen  : ../config/fastq_screen.config # See template in example/config/fastqScreen.config
+    fastqScreen  : ../config/fastq_screen.config
     multiQCconfig: ../config/multiqc_config.yaml
     runHiCRep    : True # Run HiCRep - May take a while for high res datasets.
     HiCRep_bin   : 3000
