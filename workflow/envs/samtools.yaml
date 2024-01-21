@@ -1,8 +1,10 @@
 channels:
   - conda-forge
   - bioconda
+  - anaconda
   - defaults
 channel_priority:
   - true
 dependencies:
   - samtools = 1.10
+  - gawk

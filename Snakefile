@@ -351,7 +351,7 @@ rule bgzipGenome:
     conda:
         f'{ENVS}/tabix.yaml'
     shell:
-        '(zcat -f {input} | bgzip > {output}) 2> {log}'
+        '(cat {input} | zcat -f | bgzip > {output}) 2> {log}'
 
 
 rule indexGenome:
@@ -544,8 +544,7 @@ if config['QC']['fastqScreen'] is not None:
         input:
             'dat/fastq/{preSample}-{read}.trimmed.fastq.gz'
         output:
-            txt = 'qc/fastqScreen/{preSample}-{read}_screen.txt',
-            png = 'qc/fastqScreen/{preSample}-{read}.fastqScreen.png'
+            'qc/fastqScreen/{preSample}-{read}_screen.txt'
         params:
             config = config['QC']['fastqScreen'],
             subset = 100000,
@@ -558,7 +557,7 @@ if config['QC']['fastqScreen'] is not None:
         shell:
             'python {SCRIPTS}/fastqScreen.py {input} {params.config} '
             '--subset {params.subset} --threads {threads} '
-            '--plotOut {output.png} --dataOut {output.txt} &> {log}'
+            '--dataOut {output} &> {log}'
 
 
 rule cutadapt:
@@ -1000,7 +999,7 @@ rule adjustMatrix:
 
 def nonEmpty(wc, output, input):
     """ Build find command to remove non-empty input files at runtime. """
-    findCmd = '$(find -size +0 \( '
+    findCmd = '$(find . -size +0 \( '
     for i, file in enumerate(input):
         # Skip index files
         if file.endswith('.csi'):

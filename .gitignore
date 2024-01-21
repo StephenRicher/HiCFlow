@@ -3,3 +3,5 @@ analysis/
 __pycache__/
 .ipynb_checkpoints/
 .Rhistory
+.DS_Store
+example/FastQ_Screen_Genomes/

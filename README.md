@@ -50,7 +50,7 @@ The configuration file for the example dataset is provided at at [here](example/
 
 ### Example Configurations
 
-* [Typical HiC Analysis](example/config/config-HiC+CallVariant+Phase.yaml)
+* [Typical HiC Analysis](example/config/config-HiC.yaml)
   * Run standard HiC workflow.
 * [HiC Analysis + Variant Calling + Haplotype Assembly](example/config/config-HiC+CallVariant+Phase.yaml)
   * Run standard HiC workflow and full variant calling and haplotype assembly pipeline.
@@ -87,6 +87,18 @@ A custom directory is helpful if you perform multiple independent analyses and d
 ```bash
 snakemake --use-conda --conda-prefix /path/envs/ --cores 4 --configfile example/config/config.yaml
 ```
+
+### Running FastQ Screen
+By default, the example analysis will not run FastQ Screen as the references genomes are too large to be packaged with GitHub.
+To obtain the reference genomes first [install FastQ Screen](https://anaconda.org/bioconda/fastq-screen).
+Then run the following command from the HiCFlow home directory to install the reference genomes to (`example/`) directory.
+
+```bash
+fastq_screen --get_genomes --outdir example/
+```
+
+Finally, uncomment the `fastqScreen  : ` line in the config file and rerun the workflow.
+Note: if you have downloaded the reference genomes to a different path you will need to update the paths in `example/config/fastq_screen.config`.
 
 ### Cluster Execution
 All Snakemake-based pipelines, including HiCFlow, are compatible with cluster environments.

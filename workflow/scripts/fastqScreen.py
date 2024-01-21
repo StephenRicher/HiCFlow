@@ -23,7 +23,7 @@ def runFastQScreen(fastq, config, subset, threads, plotOut, dataOut):
         subprocess.run(command)
         
         shutil.move(glob.glob(dirname + '/*_screen.txt')[0], dataOut)
-        shutil.move(glob.glob(dirname + '/*_screen.png')[0], plotOut)
+        #shutil.move(glob.glob(dirname + '/*_screen.png')[0], plotOut)
 
 
 def parseArgs():
