@@ -12,7 +12,7 @@ from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
 
-def runFastQScreen(fastq, config, subset, threads, plotOut, dataOut):
+def runFastQScreen(fastq, config, subset, threads, dataOut):
     with tempfile.TemporaryDirectory() as dirname:
         command = ([
             'fastq_screen', '--outdir', dirname,
@@ -23,7 +23,6 @@ def runFastQScreen(fastq, config, subset, threads, plotOut, dataOut):
         subprocess.run(command)
         
         shutil.move(glob.glob(dirname + '/*_screen.txt')[0], dataOut)
-        #shutil.move(glob.glob(dirname + '/*_screen.png')[0], plotOut)
 
 
 def parseArgs():
@@ -41,8 +40,6 @@ def parseArgs():
         '--threads', type=int, default=1,
         help='Threads for multiprocessing (default: %(default)s)')
     requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument(
-        '--plotOut', required=True, help='Path to save outplot plot.')
     requiredNamed.add_argument(
         '--dataOut', required=True, help='Path to save output text results.')
     parser.set_defaults(function=runFastQScreen)
