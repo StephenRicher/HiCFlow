@@ -1,0 +1,62 @@
+name: hicflow
+
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - python=3.8
+  - pip
+
+  # Read processing and alignment
+  - fastqc=0.11.9
+  - cutadapt
+  - bowtie2
+  - samtools
+  - bedtools
+  - pairix
+  - tabix
+
+  # Hi-C processing and plotting
+  - hicexplorer=3.7.3
+  - pygenometracks>=3.8
+  - cooler
+  - hicmatrix
+  - iced
+  - pybigwig
+  - pysam
+
+  # QC and reporting
+  - multiqc
+  - pandoc
+
+  # Python analysis scripts
+  - biopython
+  - matplotlib
+  - numpy
+  - pandas
+  - plotly
+  - scikit-learn
+  - scipy
+  - seaborn
+  - statsmodels
+  - pytables
+  - pyyaml
+
+  # R analysis scripts
+  - r-base=4.0
+  - r-argparse
+  - r-data.table
+  - r-ggplot2
+  - r-pheatmap
+  - r-reshape2
+  - r-rcolorbrewer
+  - bioconductor-hiccompare
+  - bioconductor-hicrep=1.11.0
+
+  # HiCUP and helper-script requirements
+  - perl
+  - coreutils
+  - grep
+  - gawk
+  - sed

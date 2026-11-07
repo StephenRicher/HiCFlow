@@ -1,0 +1,8 @@
+.git
+.nextflow
+.nextflow.log*
+work
+results
+example/analysis
+__pycache__
+*.pyc
