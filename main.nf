@@ -1,6 +1,8 @@
 nextflow.enable.dsl = 2
 
 include { FASTQC_RAW } from './modules/local/fastqc'
+include { CUTADAPT } from './modules/local/cutadapt'
+include { FASTQC_TRIMMED } from './modules/local/fastqc_trimmed'
 
 def createSamplesChannel(samplesheetPath) {
     def samplesheet = file(samplesheetPath, checkIfExists: true)
@@ -46,6 +48,17 @@ workflow {
         error 'Missing required parameter: --samplesheet'
     }
 
+    def cutadaptDefaults = [
+        forwardAdapter : 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA',
+        reverseAdapter : 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT',
+        overlap        : 6,
+        errorRate      : 0.1,
+        minimumLength  : 20,
+        qualityCutoff  : 20
+    ]
+
+    def cutadaptSettings = cutadaptDefaults + (params.cutadapt ?: [:])
+
     log.info """
     HiCFlow Nextflow
     =================
@@ -56,4 +69,11 @@ workflow {
     samples = createSamplesChannel(params.samplesheet)
 
     FASTQC_RAW(samples)
+
+    CUTADAPT(
+        samples,
+        cutadaptSettings
+    )
+
+    FASTQC_TRIMMED(CUTADAPT.out.reads)
 }
