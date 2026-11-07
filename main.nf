@@ -3,6 +3,7 @@ nextflow.enable.dsl = 2
 include { FASTQC_RAW } from './modules/local/fastqc'
 include { CUTADAPT } from './modules/local/cutadapt'
 include { FASTQC_TRIMMED } from './modules/local/fastqc_trimmed'
+include { HICUP_TRUNCATE } from './modules/local/hicup_truncate'
 
 def createSamplesChannel(samplesheetPath) {
     def samplesheet = file(samplesheetPath, checkIfExists: true)
@@ -76,4 +77,16 @@ workflow {
     )
 
     FASTQC_TRIMMED(CUTADAPT.out.reads)
+
+    def hicupDefaults = [
+        restrictionSequence : '^GATC',
+        nofill              : false
+    ]
+
+    def hicupSettings = hicupDefaults + (params.hicup ?: [:])
+
+    HICUP_TRUNCATE(
+        CUTADAPT.out.reads,
+        hicupSettings
+    )
 }

@@ -39,6 +39,8 @@ WORKDIR /opt/hicflow
 
 COPY . /opt/hicflow
 
+RUN chmod +x /opt/hicflow/workflow/scripts/hicup_truncater
+
 RUN fastqc --version \
     && cutadapt --version \
     && bowtie2 --version \
