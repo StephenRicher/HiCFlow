@@ -16,6 +16,7 @@ dependencies:
   - bedtools
   - pairix
   - tabix
+  - samblaster
 
   # Hi-C processing and plotting
   - hicexplorer=3.7.3

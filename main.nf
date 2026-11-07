@@ -4,6 +4,10 @@ include { FASTQC_RAW } from './modules/local/fastqc'
 include { CUTADAPT } from './modules/local/cutadapt'
 include { FASTQC_TRIMMED } from './modules/local/fastqc_trimmed'
 include { HICUP_TRUNCATE } from './modules/local/hicup_truncate'
+include { BOWTIE2_BUILD } from './modules/local/bowtie2_build'
+include { BOWTIE2_ALIGN } from './modules/local/bowtie2_align'
+include { PREPARE_BAM } from './modules/local/prepare_bam'
+include { SAMTOOLS_STATS } from './modules/local/samtools_stats'
 
 def createSamplesChannel(samplesheetPath) {
     def samplesheet = file(samplesheetPath, checkIfExists: true)
@@ -49,16 +53,9 @@ workflow {
         error 'Missing required parameter: --samplesheet'
     }
 
-    def cutadaptDefaults = [
-        forwardAdapter : 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA',
-        reverseAdapter : 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT',
-        overlap        : 6,
-        errorRate      : 0.1,
-        minimumLength  : 20,
-        qualityCutoff  : 20
-    ]
-
-    def cutadaptSettings = cutadaptDefaults + (params.cutadapt ?: [:])
+    if (!params.genome) {
+        error 'Missing required genome configuration'
+    }
 
     log.info """
     HiCFlow Nextflow
@@ -69,24 +66,44 @@ workflow {
 
     samples = createSamplesChannel(params.samplesheet)
 
+    genomes = Channel.fromList(
+        params.genome.collect { cellType, referencePath ->
+            tuple(
+                cellType,
+                file(referencePath, checkIfExists: true)
+            )
+        }
+    )
+
+    BOWTIE2_BUILD(genomes)
+
     FASTQC_RAW(samples)
 
     CUTADAPT(
         samples,
-        cutadaptSettings
+        params.cutadapt
     )
 
     FASTQC_TRIMMED(CUTADAPT.out.reads)
 
-    def hicupDefaults = [
-        restrictionSequence : '^GATC',
-        nofill              : false
-    ]
-
-    def hicupSettings = hicupDefaults + (params.hicup ?: [:])
-
     HICUP_TRUNCATE(
         CUTADAPT.out.reads,
-        hicupSettings
+        params.hicup
     )
+
+    readsByCellType = HICUP_TRUNCATE.out.reads.map { meta, read1, read2 ->
+        tuple(meta.cell_type, meta, read1, read2)
+    }
+
+    alignmentInputs = readsByCellType
+        .combine(BOWTIE2_BUILD.out.index, by: 0)
+        .map { cellType, meta, read1, read2, indexFiles ->
+            tuple(cellType, meta, read1, read2, indexFiles)
+        }
+
+    BOWTIE2_ALIGN(alignmentInputs)
+
+    PREPARE_BAM(BOWTIE2_ALIGN.out.alignments)
+
+    SAMTOOLS_STATS(PREPARE_BAM.out.bam)
 }
