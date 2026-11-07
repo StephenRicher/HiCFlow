@@ -1,7 +1,5 @@
 nextflow.enable.dsl = 2
 
-params.outdir = 'results'
-
 workflow {
     log.info """
     HiCFlow Nextflow

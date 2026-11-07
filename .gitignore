@@ -5,3 +5,9 @@ __pycache__/
 .Rhistory
 .DS_Store
 example/FastQ_Screen_Genomes/
+
+# Nextflow
+.nextflow/
+.nextflow.log*
+work/
+results/
