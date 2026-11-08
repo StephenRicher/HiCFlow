@@ -75,7 +75,7 @@ docker build \
 
 ## Configuration
 
-The workflow is configured through `nextflow.config`.
+The workflow is configured through a nextflow config file.
 
 The bundled example uses:
 
@@ -290,7 +290,7 @@ docker run --rm \
     --outdir "$PWD/results"
 ```
 
-The workflow reads `nextflow.config` and processes the bundled example dataset.
+The workflow reads `example/example.config` and processes the bundled example dataset.
 
 ## Resuming an interrupted run
 
