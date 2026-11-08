@@ -1,4 +1,7 @@
-analysis/
+analysis/*
+!analysis/config/
+!analysis/config/**
+!analysis/analysis.config
 .snakemake/
 __pycache__/
 .ipynb_checkpoints/

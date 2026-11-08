@@ -1,0 +1,7 @@
+experiment	cell_type	group	rep	R1	R2
+HB2	Human	HB2_WT	1	../data/HB2_WT-rep1-R1.fastq.gz	../data/HB2_WT-rep1-R2.fastq.gz
+HB2	Human	HB2_WT	2	../data/HB2_WT-rep2-R1.fastq.gz	../data/HB2_WT-rep2-R2.fastq.gz
+HB2	Human	HB2_B1_KO	1	../data/HB2_B1_KO-rep1-R1.fastq.gz	../data/HB2_B1_KO-rep1-R2.fastq.gz
+HB2	Human	HB2_B1_KO	2	../data/HB2_B1_KO-rep2-R1.fastq.gz	../data/HB2_B1_KO-rep2-R2.fastq.gz
+HB2	Human	HB2_lncRNA_TSS_KO	1	../data/HB2_lncRNA_TSS_KO-rep1-R1.fastq.gz	../data/HB2_lncRNA_TSS_KO-rep1-R2.fastq.gz
+HB2	Human	HB2_lncRNA_TSS_KO	2	../data/HB2_lncRNA_TSS_KO-rep2-R1.fastq.gz	../data/HB2_lncRNA_TSS_KO-rep2-R2.fastq.gz
