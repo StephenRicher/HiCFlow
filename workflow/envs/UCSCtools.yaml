@@ -1,5 +1,0 @@
-channels :
-  - bioconda
-dependencies :
-  - ucsc-gff3togenepred
-  - ucsc-genepredtobed

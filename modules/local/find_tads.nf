@@ -5,7 +5,23 @@ process FIND_TADS {
 
     publishDir "${params.outdir}/tads/${region.name}/${resolution}",
         mode: 'copy',
-        pattern: '*_boundaries.bed|*_boundaries.gff|*_domains.bed|*_score.bedgraph|*_zscore_matrix.h5'
+        pattern: '*_boundaries.bed'
+
+    publishDir "${params.outdir}/tads/${region.name}/${resolution}",
+        mode: 'copy',
+        pattern: '*_boundaries.gff'
+
+    publishDir "${params.outdir}/tads/${region.name}/${resolution}",
+        mode: 'copy',
+        pattern: '*_domains.bed'
+
+    publishDir "${params.outdir}/tads/${region.name}/${resolution}",
+        mode: 'copy',
+        pattern: '*_score.bedgraph'
+
+    publishDir "${params.outdir}/tads/${region.name}/${resolution}",
+        mode: 'copy',
+        pattern: '*_zscore_matrix.h5'
 
     publishDir "${params.outdir}/logs/find_tads",
         mode: 'copy',

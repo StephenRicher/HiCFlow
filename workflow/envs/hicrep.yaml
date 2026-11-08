@@ -1,8 +1,0 @@
-channels:
-  - r
-  - bioconda
-  - conda-forge
-dependencies:
-  - r
-  - r-base
-  - bioconductor-hicrep
