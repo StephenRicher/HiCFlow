@@ -26,6 +26,8 @@ dependencies:
   - iced
   - pybigwig
   - pysam
+  - ucsc-gff3togenepred
+  - ucsc-genepredtobed
 
   # QC and reporting
   - multiqc

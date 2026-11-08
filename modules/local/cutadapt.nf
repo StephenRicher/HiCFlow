@@ -30,7 +30,8 @@ process CUTADAPT {
         --error-rate ${settings.errorRate} \
         --minimum-length ${settings.minimumLength} \
         --quality-cutoff ${settings.qualityCutoff} \
-        --output ${meta.id}-R1.trimmed.fastq.gz\
+        --gc-content ${settings.GCcontent} \
+        --output ${meta.id}-R1.trimmed.fastq.gz \
         --paired-output ${meta.id}-R2.trimmed.fastq.gz \
         ${read1} \
         ${read2} \

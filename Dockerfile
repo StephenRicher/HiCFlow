@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     NXF_HOME=/opt/nextflow \
+    NXF_VER=${NEXTFLOW_VERSION} \
     PATH=/opt/conda/envs/hicflow/bin:/opt/conda/bin:${PATH}
 
 RUN apt-get update \
@@ -21,6 +22,19 @@ RUN apt-get update \
         unzip \
     && rm -rf /var/lib/apt/lists/*
 
+RUN cd /usr/local/bin \
+    && curl \
+        --fail \
+        --location \
+        --retry 10 \
+        --retry-delay 10 \
+        --silent \
+        --show-error \
+        https://get.nextflow.io \
+        --output nextflow \
+    && chmod +x nextflow \
+    && nextflow -version
+
 COPY environment.yml /tmp/environment.yml
 
 RUN /opt/conda/bin/mamba env create \
@@ -29,17 +43,14 @@ RUN /opt/conda/bin/mamba env create \
     && /opt/conda/bin/conda clean --all --yes \
     && rm /tmp/environment.yml
 
-RUN curl --fail --location --silent --show-error \
-        "https://github.com/nextflow-io/nextflow/releases/download/v${NEXTFLOW_VERSION}/nextflow" \
-        --output /usr/local/bin/nextflow \
-    && chmod +x /usr/local/bin/nextflow \
-    && nextflow -version
-
 WORKDIR /opt/hicflow
 
 COPY . /opt/hicflow
 
-RUN chmod +x /opt/hicflow/workflow/scripts/hicup_truncater
+RUN chmod +x \
+        /opt/hicflow/workflow/scripts/hicup_truncater \
+        /opt/hicflow/workflow/scripts/OnTAD \
+        /opt/hicflow/workflow/scripts/CscoreTool1.1
 
 RUN fastqc --version \
     && cutadapt --version \
@@ -49,7 +60,7 @@ RUN fastqc --version \
     && hicCorrectMatrix --version \
     && pyGenomeTracks --version \
     && multiqc --version \
-    && Rscript --version
+    && Rscript -e "library(HiCcompare); library(hicrep)"
 
 ENTRYPOINT ["/usr/bin/tini", "--", "nextflow"]
 

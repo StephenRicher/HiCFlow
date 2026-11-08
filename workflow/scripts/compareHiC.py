@@ -36,7 +36,11 @@ def simpleSubtract(
     newMatrix = (hic2.matrix - hic1.matrix).todense()
 
     # On occasion the raw may have excess rows - remove these
-    mask = mask[np.indices(newMatrix.shape, sparse=True)]
+    aligned_mask = np.full(newMatrix.shape, minSum > 0, dtype=bool)
+    rows = min(mask.shape[0], newMatrix.shape[0])
+    columns = min(mask.shape[1], newMatrix.shape[1])
+    aligned_mask[:rows, :columns] = np.asarray(mask[:rows, :columns])
+    mask = aligned_mask
 
     for i, out in enumerate([outMatrixFilter, outMatrix]):
         if i == 0:

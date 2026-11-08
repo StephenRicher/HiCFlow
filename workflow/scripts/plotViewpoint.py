@@ -17,7 +17,7 @@ from utilities import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def plotCompareViewpoint(bedgraphs: List, out: str, build: str, title: str, dpi: int):
+def plotCompareViewpoint(bedgraphs: List, out: str, build: str, title: str, dpi: int, viewpoint=None):
     allData = []
     names=['viewRef', 'viewStart', 'viewEnd', 'chrom', 'start', 'end', 'score']
     for i, file in enumerate(bedgraphs):
@@ -33,7 +33,7 @@ def plotCompareViewpoint(bedgraphs: List, out: str, build: str, title: str, dpi:
     allData['mid'] = (allData['end'] + allData['start']) / 2
     allData['viewMid'] = (allData['viewEnd'] + allData['viewStart']) / 2
     allData['distance'] = allData['mid'] - allData['viewMid']
-    viewpoint = reformatCoordinates(pathInfo['viewpoint'])
+    viewpoint = viewpoint or reformatCoordinates(pathInfo['viewpoint'])
 
     fig, ax = plt.subplots()
     alpha = 1 if len(bedgraphs) == 1 else 0.5
@@ -89,6 +89,10 @@ def parseArgs():
         'bedgraphs', nargs='+', help='Viewpoint bedgraphs.')
     parser.add_argument(
         '--build', help='Reference build label (default: %(default)s)')
+    parser.add_argument(
+        '--viewpoint',
+        help='Viewpoint coordinates in chromosome:start-end format.',
+    )
     parser.add_argument(
         '--dpi', type=int, default=300,
         help='Resolution for plot (default: %(default)s)')
