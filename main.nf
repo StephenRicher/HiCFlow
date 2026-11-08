@@ -20,6 +20,8 @@ include { MATRIX_COVERAGE } from './modules/local/matrix_coverage'
 include { HICREP } from './modules/local/hicrep'
 include { PLOT_HICREP } from './modules/local/plot_hicrep'
 include { NORMALISE_MATRIX } from './modules/local/normalise_matrix'
+include { DETECT_LOOPS } from './modules/local/detect_loops'
+include { SCORE_LOOP_DIFFERENCES } from './modules/local/score_loop_differences'
 include { FIND_TADS } from './modules/local/find_tads'
 include { ONTAD } from './modules/local/ontad'
 include { CSCORE } from './modules/local/cscore'
@@ -560,6 +562,13 @@ workflow {
         params.hic.multiplicativeValue
     )
 
+    if (params.loops.detectLoops) {
+        DETECT_LOOPS(
+            NORMALISE_MATRIX.out.corrected,
+            params.loops
+        )
+    }
+
     viewpointMatrices = NORMALISE_MATRIX.out.corrected.map {
         meta,
         region,
@@ -808,6 +817,88 @@ workflow {
         comparisonInputs,
         params.compareMatrices
     )
+
+    if (params.loops.detectLoops) {
+        groupLoops = DETECT_LOOPS.out.loops
+            .filter { meta, region, resolution, loops ->
+                !meta.containsKey('replicate')
+            }
+            .map { meta, region, resolution, loops ->
+                tuple(
+                    "${meta.id}|${region.name}|${resolution}",
+                    loops
+                )
+            }
+
+        loopComparisonMatrices = COMPARE_MATRICES.out.differences.map {
+            group1,
+            group2,
+            region,
+            resolution,
+            unfilteredMatrix,
+            filteredMatrix,
+            subtractionMetadata ->
+
+            tuple(
+                "${group1.id}|${region.name}|${resolution}",
+                group1,
+                group2,
+                region,
+                resolution,
+                filteredMatrix
+            )
+        }
+
+        loopInputsWithGroup1 = loopComparisonMatrices
+            .join(groupLoops)
+
+        loopInputs = loopInputsWithGroup1
+            .map {
+                group1Key,
+                group1,
+                group2,
+                region,
+                resolution,
+                subtractionMatrix,
+                group1Loops ->
+
+                tuple(
+                    "${group2.id}|${region.name}|${resolution}",
+                    group1,
+                    group2,
+                    region,
+                    resolution,
+                    subtractionMatrix,
+                    group1Loops
+                )
+            }
+            .join(groupLoops)
+            .map {
+                group2Key,
+                group1,
+                group2,
+                region,
+                resolution,
+                subtractionMatrix,
+                group1Loops,
+                group2Loops ->
+
+                tuple(
+                    group1,
+                    group2,
+                    region,
+                    resolution,
+                    subtractionMatrix,
+                    group1Loops,
+                    group2Loops
+                )
+            }
+
+        SCORE_LOOP_DIFFERENCES(
+            loopInputs,
+            params.loops
+        )
+    }
 
     adjustedMatricesForViewpoints = COMPARE_MATRICES.out.adjusted.flatMap {
         group1,
