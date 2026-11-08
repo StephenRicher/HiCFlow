@@ -35,13 +35,14 @@ RUN cd /usr/local/bin \
     && chmod +x nextflow \
     && nextflow -version
 
-COPY environment.yml /tmp/environment.yml
+COPY environment-linux-64.lock /tmp/environment-linux-64.lock
 
-RUN /opt/conda/bin/mamba env create \
-        --file /tmp/environment.yml \
+RUN /opt/conda/bin/mamba create \
+        --yes \
         --prefix /opt/conda/envs/hicflow \
+        --file /tmp/environment-linux-64.lock \
     && /opt/conda/bin/conda clean --all --yes \
-    && rm /tmp/environment.yml
+    && rm /tmp/environment-linux-64.lock
 
 WORKDIR /opt/hicflow
 
