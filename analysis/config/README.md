@@ -41,6 +41,61 @@ chr1	66299999	70699997	chr1_capture
 
 Configured plot windows cover the full capture interval and focused locus views. The viewpoints represent the `GNG12-AS1` TSS, B1 boundary, and `DIRAS3` deletion intervals.
 
+## Download the reference files
+
+This analysis uses GRCh37/hg19 with UCSC chromosome names such as `chr1`.
+
+From the repository root:
+
+```bash
+mkdir -p analysis/genome
+
+curl \
+    --fail \
+    --location \
+    --retry 5 \
+    --output analysis/genome/hg19.fa.gz \
+    https://hgdownload.cse.ucsc.edu/goldenpath/hg19/bigZips/latest/hg19.fa.gz
+
+curl \
+    --fail \
+    --location \
+    --retry 5 \
+    --output analysis/genome/Homo_sapiens.GRCh37.75.gff3.gz \
+    https://ftp.ensembl.org/pub/grch37/release-75/gff3/homo_sapiens/Homo_sapiens.GRCh37.75.gff3.gz
+```
+
+The UCSC FASTA uses chromosome names such as `chr1`, but the Ensembl GFF3 uses names such as `1`. Create a chromosome-prefixed annotation:
+
+```bash
+gzip -dc analysis/genome/Homo_sapiens.GRCh37.75.gff3.gz \
+    | awk 'BEGIN {OFS="\t"}
+        /^#/ {
+            print
+            next
+        }
+        $1 ~ /^[0-9]+$/ || $1 == "X" || $1 == "Y" || $1 == "MT" {
+            $1 = "chr" $1
+        }
+        {
+            print
+        }' \
+    | gzip \
+    > analysis/genome/Homo_sapiens.GRCh37.75.chr.gff3.gz
+```
+
+Verify that both files use `chr1`:
+
+```bash
+gzip -dc analysis/genome/hg19.fa.gz \
+    | grep -m 1 '^>chr1'
+
+gzip -dc analysis/genome/Homo_sapiens.GRCh37.75.chr.gff3.gz \
+    | awk '$1 == "chr1" {print; exit}'
+```
+
+Every row in `samples.tsv` must use `Human` in the `cell_type` column so it matches the genome configuration key.
+
 ## Build
 
 From the repository root:
