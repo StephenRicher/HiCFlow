@@ -61,27 +61,8 @@ curl \
     --fail \
     --location \
     --retry 5 \
-    --output analysis/genome/Homo_sapiens.GRCh37.75.gff3.gz \
-    https://ftp.ensembl.org/pub/grch37/release-75/gff3/homo_sapiens/Homo_sapiens.GRCh37.75.gff3.gz
-```
-
-The UCSC FASTA uses chromosome names such as `chr1`, but the Ensembl GFF3 uses names such as `1`. Create a chromosome-prefixed annotation:
-
-```bash
-gzip -dc analysis/genome/Homo_sapiens.GRCh37.75.gff3.gz \
-    | awk 'BEGIN {OFS="\t"}
-        /^#/ {
-            print
-            next
-        }
-        $1 ~ /^[0-9]+$/ || $1 == "X" || $1 == "Y" || $1 == "MT" {
-            $1 = "chr" $1
-        }
-        {
-            print
-        }' \
-    | gzip \
-    > analysis/genome/Homo_sapiens.GRCh37.75.chr.gff3.gz
+    --output analysis/genome/gencode.v19.annotation.gff3.gz \
+    https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_19/gencode.v19.annotation.gff3.gz
 ```
 
 Verify that both files use `chr1`:
@@ -90,7 +71,7 @@ Verify that both files use `chr1`:
 gzip -dc analysis/genome/hg19.fa.gz \
     | grep -m 1 '^>chr1'
 
-gzip -dc analysis/genome/Homo_sapiens.GRCh37.75.chr.gff3.gz \
+gzip -dc analysis/genome/gencode.v19.annotation.gff3.gz \
     | awk '$1 == "chr1" {print; exit}'
 ```
 
