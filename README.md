@@ -305,6 +305,7 @@ docker run --rm \
     --workdir "$PWD" \
     hicflow-nextflow:latest \
     run /opt/hicflow/main.nf \
+    -c /opt/hicflow/example/example.config \
     -profile container \
     --outdir "$PWD/results" \
     -resume

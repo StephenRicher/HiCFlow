@@ -201,8 +201,8 @@ workflow {
     geneAnnotation = PREPARE_GENES.out.annotation
 
     bigWigFiles = Channel.value(
-        params.bigWig.collect { title, path ->
-            file(path, checkIfExists: true)
+        (params.bigWig ?: [:]).collect { bigWigTitle, bigWigPath ->
+            file(bigWigPath, checkIfExists: true)
         }
     )
 
@@ -1216,7 +1216,7 @@ workflow {
         dpi              : params.plot.dpi,
         geneLabelFontSize: params.plot.geneLabelFontSize,
         maxLabels        : params.plot.maxLabels,
-        bigWigTitles     : params.bigWig.keySet() as List,
+        bigWigTitles     : (params.bigWig ?: [:]).keySet() as List,
         vlines           : params.plot.vlines
             ? file(params.plot.vlines, checkIfExists: true).toString()
             : null
@@ -1236,7 +1236,7 @@ workflow {
         dpi              : params.plot.dpi,
         geneLabelFontSize: params.plot.geneLabelFontSize,
         maxLabels        : params.plot.maxLabels,
-        bigWigTitles     : params.bigWig.keySet() as List,
+        bigWigTitles     : (params.bigWig ?: [:]).keySet() as List,
         vlines           : params.plot.vlines
             ? file(params.plot.vlines, checkIfExists: true).toString()
             : null
