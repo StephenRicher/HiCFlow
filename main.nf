@@ -8,6 +8,8 @@ include { PREPARE_GENOME } from './modules/local/prepare_genome'
 include { BOWTIE2_BUILD } from './modules/local/bowtie2_build'
 include { BOWTIE2_ALIGN } from './modules/local/bowtie2_align'
 include { PREPARE_BAM } from './modules/local/prepare_bam'
+include { PROCESS_HIC_QC } from './modules/local/process_hic_qc'
+include { PLOT_HIC_QC } from './modules/local/plot_hic_qc'
 include { SAMTOOLS_STATS } from './modules/local/samtools_stats'
 include { SPLIT_PAIRED_READS } from './modules/local/split_paired_reads'
 include { BUILD_BASE_MATRIX } from './modules/local/build_base_matrix'
@@ -16,6 +18,7 @@ include { SUM_REPLICATES } from './modules/local/sum_replicates'
 include { MERGE_MATRIX_BINS } from './modules/local/merge_matrix_bins'
 include { MATRIX_COVERAGE } from './modules/local/matrix_coverage'
 include { HICREP } from './modules/local/hicrep'
+include { PLOT_HICREP } from './modules/local/plot_hicrep'
 include { NORMALISE_MATRIX } from './modules/local/normalise_matrix'
 include { FIND_TADS } from './modules/local/find_tads'
 include { ONTAD } from './modules/local/ontad'
@@ -23,11 +26,13 @@ include { CSCORE } from './modules/local/cscore'
 include { DISTANCE_NORMALISE } from './modules/local/distance_normalise'
 include { PLOT_OBS_EXP_MATRIX } from './modules/local/plot_obs_exp_matrix'
 include { COMPARE_MATRICES } from './modules/local/compare_matrices'
+include { PLOT_COMPARE_VIEWPOINT } from './modules/local/plot_compare_viewpoint'
 include { PREPARE_GENES } from './modules/local/prepare_genes'
 include { PLOT_HIC } from './modules/local/plot_hic'
 include { PROCESS_DIFF_TADS } from './modules/local/process_diff_tads'
 include { PLOT_SUBTRACTION } from './modules/local/plot_subtraction'
 include { PLOT_VIEWPOINT } from './modules/local/plot_viewpoint'
+include { MULTIQC } from './modules/local/multiqc'
 
 
 def createSamplesChannel(samplesheetPath) {
@@ -191,7 +196,7 @@ workflow {
         geneSettings
     )
 
-    geneAnnotation = PREPARE_GENES.out.annotation.first()
+    geneAnnotation = PREPARE_GENES.out.annotation
 
     bigWigFiles = Channel.value(
         params.bigWig.collect { title, path ->
@@ -228,6 +233,27 @@ workflow {
     BOWTIE2_ALIGN(alignmentInputs)
 
     PREPARE_BAM(BOWTIE2_ALIGN.out.alignments)
+
+    PROCESS_HIC_QC(
+        PREPARE_BAM.out.bam,
+        params.qc.samplePairs
+    )
+
+    processedQcFiles = PROCESS_HIC_QC.out.processed
+        .map { meta, processedFile ->
+            processedFile
+        }
+        .collect()
+
+    plotQcSettings = [
+        filetype: params.plot.filetype,
+        dpi     : params.plot.dpi
+    ]
+
+    PLOT_HIC_QC(
+        processedQcFiles,
+        plotQcSettings
+    )
 
     SPLIT_PAIRED_READS(PREPARE_BAM.out.bam)
 
@@ -499,6 +525,34 @@ workflow {
         }
 
         HICREP(hicRepInputs)
+
+        hicRepPlotInputs = HICREP.out.scores
+            .map { meta1, meta2, region, resolution, scoreFile ->
+                tuple(
+                    "${region.name}|${resolution}",
+                    region,
+                    resolution,
+                    scoreFile
+                )
+            }
+            .groupTuple(by: 0)
+            .map { key, regions, resolutions, scoreFiles ->
+                tuple(
+                    regions[0],
+                    resolutions[0] as Integer,
+                    scoreFiles
+                )
+            }
+
+        hicRepPlotSettings = [
+            filetype: params.plot.filetype,
+            dpi     : params.plot.dpi
+        ]
+
+        PLOT_HICREP(
+            hicRepPlotInputs,
+            hicRepPlotSettings
+        )
     }
 
     NORMALISE_MATRIX(
@@ -753,6 +807,73 @@ workflow {
     COMPARE_MATRICES(
         comparisonInputs,
         params.compareMatrices
+    )
+
+    adjustedMatricesForViewpoints = COMPARE_MATRICES.out.adjusted.flatMap {
+        group1,
+        group2,
+        region,
+        resolution,
+        adjustedMatrix1,
+        adjustedMatrix2 ->
+
+        def comparison = [
+            id    : "${group1.id}-vs-${group2.id}",
+            group1: group1.id,
+            group2: group2.id
+        ]
+
+        [
+            tuple(
+                region.name,
+                comparison,
+                'adjIF1',
+                region,
+                resolution,
+                adjustedMatrix1
+            ),
+            tuple(
+                region.name,
+                comparison,
+                'adjIF2',
+                region,
+                resolution,
+                adjustedMatrix2
+            )
+        ]
+    }
+
+    compareViewpointInputs = adjustedMatricesForViewpoints
+        .combine(viewpoints, by: 0)
+        .map {
+            regionName,
+            comparison,
+            adjustedSet,
+            region,
+            resolution,
+            matrix,
+            viewpoint ->
+
+            tuple(
+                comparison,
+                adjustedSet,
+                region,
+                resolution,
+                matrix,
+                viewpoint
+            )
+        }
+
+    compareViewpointSettings = [
+        viewpointRange: params.plot.viewpointRange,
+        genomeBuild   : params.genomeBuild,
+        filetype      : params.plot.filetype,
+        dpi           : params.plot.dpi
+    ]
+
+    PLOT_COMPARE_VIEWPOINT(
+        compareViewpointInputs,
+        compareViewpointSettings
     )
 
     comparisonDifferences = COMPARE_MATRICES.out.differences.map {
@@ -1038,4 +1159,51 @@ workflow {
     )
 
     SAMTOOLS_STATS(PREPARE_BAM.out.bam)
+
+    rawFastQcFiles = FASTQC_RAW.out.reports.flatMap { meta, htmlFiles, zipFiles ->
+        [htmlFiles, zipFiles].flatten()
+    }
+
+    trimmedFastQcFiles = FASTQC_TRIMMED.out.reports.flatMap { meta, htmlFiles, zipFiles ->
+        [htmlFiles, zipFiles].flatten()
+    }
+
+    cutadaptFiles = CUTADAPT.out.reports.flatMap { meta, reports ->
+        [reports].flatten()
+    }
+
+    bowtieFiles = BOWTIE2_ALIGN.out.reports.flatMap { meta, read1Report, read2Report ->
+        [read1Report, read2Report].flatten()
+    }
+
+    hicupFiles = HICUP_TRUNCATE.out.reports.flatMap { meta, reports ->
+        [reports].flatten()
+    }
+
+    deduplicationFiles = PREPARE_BAM.out.reports.flatMap { meta, reports ->
+        [reports].flatten()
+    }
+
+    samtoolsFiles = SAMTOOLS_STATS.out.reports.flatMap { meta, reports ->
+        [reports].flatten()
+    }
+
+    hicExplorerQcDirectories = BUILD_BASE_MATRIX.out.qc.map { meta, qcDirectory ->
+        qcDirectory
+    }
+
+    multiqcInputs = rawFastQcFiles
+        .mix(trimmedFastQcFiles)
+        .mix(cutadaptFiles)
+        .mix(bowtieFiles)
+        .mix(hicupFiles)
+        .mix(deduplicationFiles)
+        .mix(samtoolsFiles)
+        .mix(hicExplorerQcDirectories)
+        .collect()
+
+    MULTIQC(
+        multiqcInputs,
+        file(params.qc.multiqcConfig, checkIfExists: true)
+    )
 }

@@ -4,7 +4,7 @@
 
 import argparse
 import sys
-from collections.abc import Sequence
+from typing import List
 
 import matplotlib.pyplot as plt
 from hicmatrix import HiCMatrix as hm
@@ -15,8 +15,8 @@ __version__ = "2.0.0"
 
 
 def plot_coverage(
-    matrices: Sequence[str],
-    resolutions: Sequence[int],
+    matrices: List[str],
+    resolutions: List[int],
     sample: str,
     out: str,
     n_bins: int,
@@ -38,7 +38,7 @@ def plot_coverage(
 
     x_limit = 0.0
 
-    for matrix, resolution in zip(matrices, resolutions, strict=True):
+    for matrix, resolution in zip(matrices, resolutions):
         contacts_per_bin = hm.hiCMatrix(matrix).matrix.sum(axis=1).A1
 
         cumulative_counts, bin_edges, _ = axis.hist(
