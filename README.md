@@ -24,6 +24,7 @@ HiCFlow includes:
 - Direction-explicit matrix subtraction
 - Median-filtered comparison matrices
 - Differential TAD scoring
+- Optional loop detection and differential-loop scoring
 - Standard and comparison pyGenomeTracks plots
 - Standard and HiCcompare-adjusted viewpoints
 - HiCRep reproducibility analysis
@@ -43,7 +44,7 @@ The workflow deliberately excludes:
 
 ## Requirements
 
-The only runtime requirements are:
+The runtime requirements are:
 
 - Git
 - Docker Desktop or Docker Engine
@@ -224,17 +225,19 @@ Each comparison includes a metadata file recording the operation and its interpr
 results/matrix/compare/<region>/<resolution>/*-subtraction.tsv
 ```
 
-For example:*
+For example:
+
 ```text
 minuend	G1S
-subtrahend	AS*operation	G1S - AS
-positive_values*Higher in G1S
-negative_values	High*r in AS
+subtrahend	AS
+operation	G1S - AS
+positive_values	Higher in G1S
+negative_values	Higher in AS
 ```
 
-### Optional compartm*nt scoring
+### Optional compartment scoring
 
-Cscore support is cont*olled by:
+Cscore support is controlled by:
 
 ```groovy
 hic = [
@@ -242,7 +245,35 @@ hic = [
 ]
 ```
 
-Cscor* is disabled for the bundled examp*e because it analyses a 500 kb Cap*ure Hi-C interval. Compartment ana*ysis is intended for substantially*larger, usually chromosome-scale r*gions.
+Cscore is disabled for the bundled example because it analyses a 500 kb Capture Hi-C interval. Compartment analysis is intended for substantially larger, usually chromosome-scale regions.
+
+### Optional loop detection
+
+Loop detection and differential-loop scoring are controlled through the `loops` configuration:
+
+```groovy
+loops = [
+    detectLoops              : false,
+    plot                     : true,
+    peakWidth                : 2,
+    windowSize               : 5,
+    pValuePreselection       : 0.05,
+    peakInteractionsThreshold: 5,
+    obsExpThreshold          : 1.5,
+    pValue                   : 0.05,
+    maxLoopDistance          : 2000000,
+    expected                 : null,
+    differenceBins           : 20,
+    maximumLineWidth         : 3
+]
+```
+
+When enabled, HiCFlow detects loops in each corrected matrix and scores group loop candidates against the direction-explicit subtraction matrix.
+
+For a `G1S-minus-AS` comparison:
+
+- Positive loop scores are written as loops higher in `G1S`.
+- Negative loop scores are written as loops higher in `AS`.
 
 ## Running the example
 
@@ -283,9 +314,9 @@ Do not delete `work/` if you intend to resume.
 
 ## Running a custom analysis
 
-Create a Nextflow configuration containing dataset-specific paths and parameter overrides.
+Users do not need to rebuild the image when changing datasets or analysis parameters.
 
-For example:
+Create a Nextflow configuration containing dataset-specific paths and parameter overrides:
 
 ```groovy
 params {
@@ -328,7 +359,7 @@ params {
 }
 ```
 
-Run with the additional configuration:
+Mount the analysis directory and pass the configuration at runtime:
 
 ```bash
 docker run --rm \
@@ -345,6 +376,18 @@ docker run --rm \
 Use absolute paths in external configuration files so that host and container paths are unambiguous.
 
 Every referenced path must be available inside the container through a Docker volume mount.
+
+The image only needs to be rebuilt when changing packaged workflow code or dependencies, including:
+
+- `main.nf`
+- Files under `modules/`
+- Files under `workflow/scripts/`
+- `environment-linux-64.lock`
+- `Dockerfile`
+- Bundled binaries
+- The default `nextflow.config`
+
+Changing input paths, resolutions, plotting options, QC settings, loop parameters, or Cscore enablement does not require rebuilding the image.
 
 ## Useful runtime options
 
@@ -433,6 +476,7 @@ results/
 ├── fastq/
 ├── genome/
 ├── logs/
+├── loops/
 ├── matrix/
 │   ├── base/
 │   ├── regions/
@@ -520,6 +564,26 @@ Differential TAD annotations are written to:
 results/tads/<region>/<resolution>/differential/
 ```
 
+### Loop outputs
+
+When loop detection is enabled, individual loop calls are written to:
+
+```text
+results/loops/<region>/<resolution>/
+```
+
+Differential-loop outputs are written to:
+
+```text
+results/loops/<region>/<resolution>/differential/
+```
+
+These include:
+
+- UCSC Interact files
+- Links files for loops higher in the minuend group
+- Links files for loops higher in the subtrahend group
+
 ### Standard plots
 
 Standard pyGenomeTracks plots are written to:
@@ -536,6 +600,7 @@ These plots combine:
 - Gene annotations
 - Configured BigWig tracks
 - Optional vertical lines
+- Optional loop tracks
 
 ### Subtraction plots
 
@@ -663,7 +728,7 @@ docker build \
     .
 ```
 
-Run the current workflow and reuse cached tasks:
+Run the workflow and reuse cached tasks:
 
 ```bash
 docker run --rm \
