@@ -1,5 +1,5 @@
 experiment	cell_type	group	rep	R1	R2
-HB2	Human	HB2_WT	1	/analysis/data/HB2_WT_1-lane6_NoIndex_L006_R1.fastq.gz	/analysis/data/HB2_WT_1-lane6_NoIndex_L006_R1.fastq.gz
+HB2	Human	HB2_WT	1	/analysis/data/HB2_WT_1-lane6_NoIndex_L006_R1.fastq.gz	/analysis/data/HB2_WT_1-lane6_NoIndex_L006_R4.fastq.gz
 HB2	Human	HB2_WT	2	/analysis/data/HB2_WT_2-lane1_NoIndex_L001_R1.fastq.gz	/analysis/data/HB2_WT_2-lane1_NoIndex_L001_R4.fastq.gz
 HB2	Human	HB2_TSS_KO	1	/analysis/data/HB2_TSS_KO_1-lane8_NoIndex_L008_R1.fastq.gz	/analysis/data/HB2_TSS_KO_1-lane8_NoIndex_L008_R4.fastq.gz
 HB2	Human	HB2_TSS_KO	2	/analysis/data/HB2_TSS_KO_2-lane3_NoIndex_L003_R1.fastq.gz	/analysis/data/HB2_TSS_KO_2-lane3_NoIndex_L003_R4.fastq.gz
