@@ -1,19 +1,16 @@
-.git
-.gitignore
+# Ignore everything by default.
+**
 
-.nextflow
-.nextflow.*
-.nextflow.log*
-
-work
-work-*
-results
-results-*
-
-README_files
-
-.DS_Store
-**/.DS_Store
-__pycache__
-**/__pycache__
-*.pyc
+# Include only files required to build the image.
+!Dockerfile
+!environment.yml
+!nextflow.config
+!main.nf
+!modules/
+!modules/**
+!bin/
+!bin/**
+!assets/
+!assets/**
+!conf/
+!conf/**
