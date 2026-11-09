@@ -136,6 +136,19 @@ def createPlotCoordinatesChannel(coordinatesPath) {
         .unique { coordinate -> coordinate.id }
 }
 
+def filenameSafe(value) {
+    def safe = value
+        .toString()
+        .replaceAll(/[^A-Za-z0-9._-]+/, '_')
+        .replaceAll(/^_+|_+$/, '')
+
+    if (!safe) {
+        error "Could not derive a filename-safe identifier from: ${value}"
+    }
+
+    safe
+}
+
 workflow {
     if (!params.samplesheet) {
         error 'Missing required parameter: --samplesheet'
@@ -188,6 +201,7 @@ workflow {
 
     geneSettings = [
         genomeBuild: params.genomeBuild,
+        genomeId   : filenameSafe(params.genomeBuild),
         typeKey    : params.genes.typeKey,
         label      : params.genes.label,
         geneID     : params.genes.geneID
@@ -195,6 +209,7 @@ workflow {
 
     PREPARE_GENES(
         file(params.genes.gff3, checkIfExists: true),
+        file(params.regions, checkIfExists: true),
         geneSettings
     )
 

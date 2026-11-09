@@ -1,7 +1,7 @@
 process PREPARE_GENES {
     tag "${settings.genomeBuild}"
 
-    label 'process_medium'
+    label 'process_low'
 
     publishDir "${params.outdir}/annotation",
         mode: 'copy',
@@ -13,42 +13,25 @@ process PREPARE_GENES {
 
     input:
     path gff3
+    path regions
     val settings
 
     output:
-    path "${settings.genomeBuild}-coloured.bed12",
+    path "${settings.genomeId}-coloured.bed12",
         emit: annotation
 
-    path "${settings.genomeBuild}.prepare_genes.log",
+    path "${settings.genomeId}.prepare_genes.log",
         emit: logs
 
     script:
     """
     set -euo pipefail
 
-    exec > ${settings.genomeBuild}.prepare_genes.log 2>&1
-
-    gff3ToGenePred \
-        -attrsOut=${settings.genomeBuild}.attrs \
+    python /opt/hicflow/workflow/scripts/gff3_to_bed12.py \
         ${gff3} \
-        ${settings.genomeBuild}.unsorted.genePred
-
-    sort \
-        -k2,2 \
-        -k4n,4n \
-        ${settings.genomeBuild}.unsorted.genePred \
-        > ${settings.genomeBuild}.genePred
-
-    genePredToBed \
-        ${settings.genomeBuild}.genePred \
-        ${settings.genomeBuild}.bed12
-
-    python /opt/hicflow/workflow/scripts/processBED12.py \
-        --label '${settings.label}' \
-        --typeKey '${settings.typeKey}' \
-        --geneID '${settings.geneID}' \
-        ${settings.genomeBuild}.bed12 \
-        ${settings.genomeBuild}.attrs \
-        > ${settings.genomeBuild}-coloured.bed12
+        ${regions} \
+        ${settings.genomeId}-coloured.bed12 \
+        > ${settings.genomeId}.prepare_genes.log \
+        2>&1
     """
 }
