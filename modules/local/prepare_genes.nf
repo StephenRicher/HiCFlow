@@ -1,7 +1,7 @@
 process PREPARE_GENES {
     tag "${settings.genomeBuild}"
 
-    label 'process_low'
+    label 'process_medium'
 
     publishDir "${params.outdir}/annotation",
         mode: 'copy',
