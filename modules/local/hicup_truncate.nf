@@ -3,7 +3,6 @@ process HICUP_TRUNCATE {
 
     label 'process_low'
 
-    publishDir "${params.outdir}/fastq/truncated", mode: 'copy', pattern: '*.fastq.gz'
     publishDir "${params.outdir}/qc/hicup", mode: 'copy', pattern: 'HiCUP_summary_report-*.txt'
     publishDir "${params.outdir}/logs/hicup_truncate", mode: 'copy', pattern: '*.log'
 

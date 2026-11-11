@@ -3,7 +3,6 @@ process BUILD_BASE_MATRIX {
 
     label 'process_medium'
 
-    publishDir "${params.outdir}/matrix/base/raw", mode: 'copy', pattern: '*.h5'
     publishDir "${params.outdir}/qc/hicexplorer", mode: 'copy', pattern: '*_QC'
     publishDir "${params.outdir}/logs/build_base_matrix", mode: 'copy', pattern: '*.log'
 

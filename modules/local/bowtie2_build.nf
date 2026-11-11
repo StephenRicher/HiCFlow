@@ -3,8 +3,6 @@ process BOWTIE2_BUILD {
 
     label 'process_medium'
 
-    publishDir "${params.outdir}/genome/index/${cellType}", mode: 'copy'
-
     input:
     tuple val(cellType), path(reference)
 

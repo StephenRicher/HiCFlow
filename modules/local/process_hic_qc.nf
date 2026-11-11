@@ -3,10 +3,6 @@ process PROCESS_HIC_QC {
 
     label 'process_low'
 
-    publishDir "${params.outdir}/qc/filter_qc/data",
-        mode: 'copy',
-        pattern: '*.processed.pkl'
-
     publishDir "${params.outdir}/logs/process_hic_qc",
         mode: 'copy',
         pattern: '*.log'

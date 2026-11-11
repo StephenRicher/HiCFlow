@@ -3,7 +3,6 @@ process CUTADAPT {
 
     label 'process_low'
 
-    publishDir "${params.outdir}/fastq/trimmed", mode: 'copy', pattern: '*.fastq.gz'
     publishDir "${params.outdir}/qc/cutadapt", mode: 'copy', pattern: '*.cutadapt.txt'
 
     input:

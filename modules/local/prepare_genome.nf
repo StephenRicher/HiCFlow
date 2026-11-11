@@ -3,7 +3,17 @@ process PREPARE_GENOME {
 
     label 'process_medium'
 
-    publishDir "${params.outdir}/genome", mode: 'copy'
+    publishDir "${params.outdir}/genome",
+        mode: 'copy',
+        pattern: '*.chrom.sizes'
+
+    publishDir "${params.outdir}/genome",
+        mode: 'copy',
+        pattern: '*-restSites.bed'
+
+    publishDir "${params.outdir}/logs/prepare_genome",
+        mode: 'copy',
+        pattern: '*.log'
 
     input:
     tuple val(cellType), path(reference)

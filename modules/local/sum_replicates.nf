@@ -3,7 +3,6 @@ process SUM_REPLICATES {
 
     label 'process_low'
 
-    publishDir "${params.outdir}/matrix/regions/base/raw", mode: 'copy', pattern: '*.h5'
     publishDir "${params.outdir}/logs/sum_replicates", mode: 'copy', pattern: '*.log'
 
     input:

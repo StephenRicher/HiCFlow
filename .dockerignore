@@ -1,13 +1,32 @@
 # Ignore everything by default.
 **
 
-# Include only files required to build the image.
+# Files required to build and run HiCFlow.
 !Dockerfile
 !environment.yml
-!nextflow.config
+!environment-linux-64.lock
 !main.nf
+!README.md
+
+# Bundled example configuration and inputs.
+!example/
+!example/**
+
+# Nextflow modules.
 !modules/
 !modules/**
+
+# Workflow scripts and bundled executables.
+!workflow/
+!workflow/**
+
+# Validation and utility scripts.
+!tests/
+!tests/**
+!tools/
+!tools/**
+
+# Include these only if they actually exist and are used.
 !bin/
 !bin/**
 !assets/

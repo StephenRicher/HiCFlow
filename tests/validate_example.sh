@@ -39,7 +39,6 @@ require_count 12 "${results_dir}/viewpoints/chr3L/3000" '*.bedgraph'
 require_count 4 "${results_dir}/plots/chr3L/3000/viewpoints/hiccompare" '*.svg'
 require_count 2 "${results_dir}/qc/hicrep/data" '*.csv'
 require_count 6 "${results_dir}/qc/matrix_coverage/chr3L" '*.svg'
-require_count 4 "${results_dir}/qc/filter_qc/data" '*.processed.pkl'
 
 require_file "${results_dir}/annotation/BDGP6-coloured.bed12"
 require_file "${results_dir}/qc/filter_qc/insertSizeFrequency.svg"

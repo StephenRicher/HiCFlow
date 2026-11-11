@@ -313,6 +313,21 @@ docker run --rm \
 
 Do not delete `work/` if you intend to resume.
 
+### Reclaiming work-directory space
+
+Nextflow retains intermediate files under `work/` to support `-resume`. Large trimmed and truncated FASTQs can be replaced with sparse placeholders after all mapping and BAM preparation tasks have completed:
+
+```bash
+python3 tools/sparsify_work_files.py \
+    trimmed.fastq.gz \
+    truncated.fastq.gz \
+    --work-dir analysis/work
+```
+
+Stop Nextflow before running this command. The placeholders retain their logical size and timestamps but no longer contain valid FASTQ data.
+
+This allows an unchanged workflow to resume from completed downstream tasks, but invalidated mapping tasks cannot reuse the sparsified inputs. Retain the raw FASTQs so the intermediates can be regenerated if required.
+
 ## Running a custom analysis
 
 Users do not need to rebuild the image when changing datasets or analysis parameters.
