@@ -319,9 +319,18 @@ Nextflow retains intermediate files under `work/` to support `-resume`. Large tr
 
 ```bash
 python3 tools/sparsify_work_files.py \
-    trimmed.fastq.gz \
-    truncated.fastq.gz \
-    --work-dir analysis/work
+    --work-dir analysis/work \
+    -- \
+    .trimmed.fastq.gz \
+    .truncated.fastq.gz \
+    -R1-addFlag.sam \
+    -R2-addFlag.sam \
+    -R1-addFlag.bam \
+    -R2-addFlag.bam \
+    -merged.bam \
+    .fixed.sam \
+    -dedup.sam \
+    -dedup.bam
 ```
 
 Stop Nextflow before running this command. The placeholders retain their logical size and timestamps but no longer contain valid FASTQ data.

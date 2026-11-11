@@ -49,10 +49,12 @@ def main() -> None:
         and not path.is_symlink()
         and path.name.endswith(suffixes)
         and path.stat().st_size > 0
+        and getattr(path.stat(), "st_blocks", 1) > 0
     )
 
     if not files:
-        raise SystemExit(f"No non-empty files matched: {', '.join(suffixes)}")
+        print(f"No allocated, non-empty files matched: {', '.join(suffixes)}")
+        return
 
     total_size = sum(path.stat().st_size for path in files)
 
