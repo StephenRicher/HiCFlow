@@ -33,6 +33,13 @@ process PREPARE_BAM {
         ${read1Sam} \
         > ${meta.id}-R1-addFlag.sam
 
+    samtools view \
+        -u \
+        ${meta.id}-R1-addFlag.sam \
+        > ${meta.id}-R1-addFlag.bam
+
+    rm -f ${meta.id}-R1-addFlag.sam
+
     gawk \
         -f /opt/hicflow/workflow/scripts/addReadFlag.awk \
         -v flag=0x81 \
@@ -41,18 +48,19 @@ process PREPARE_BAM {
 
     samtools view \
         -u \
-        ${meta.id}-R1-addFlag.sam \
-        > ${meta.id}-R1-addFlag.bam
-
-    samtools view \
-        -u \
         ${meta.id}-R2-addFlag.sam \
         > ${meta.id}-R2-addFlag.bam
+
+    rm -f ${meta.id}-R2-addFlag.sam
 
     samtools merge \
         -@ ${task.cpus} \
         -n \
         ${meta.id}-merged.bam \
+        ${meta.id}-R1-addFlag.bam \
+        ${meta.id}-R2-addFlag.bam
+
+    rm -f \
         ${meta.id}-R1-addFlag.bam \
         ${meta.id}-R2-addFlag.bam
 
@@ -62,22 +70,23 @@ process PREPARE_BAM {
         ${meta.id}-merged.bam \
         ${meta.id}.fixed.sam
 
+    rm -f ${meta.id}-merged.bam
+
     samblaster \
         --removeDups \
         --input ${meta.id}.fixed.sam \
         > ${meta.id}-dedup.sam \
         2> ${meta.id}.deduplicate.txt
 
-    samtools view \
-        -b \
-        ${meta.id}-dedup.sam \
-        > ${meta.id}-dedup.bam
+    rm -f ${meta.id}.fixed.sam
 
     samtools view \
         -b \
         -@ ${task.cpus} \
         -F 2316 \
-        ${meta.id}-dedup.bam \
+        ${meta.id}-dedup.sam \
         > ${meta.id}.hic.bam
+
+    rm -f ${meta.id}-dedup.sam
     """
 }
