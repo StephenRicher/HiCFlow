@@ -7,7 +7,6 @@ include { HICUP_TRUNCATE } from './modules/local/hicup_truncate'
 include { PREPARE_GENOME } from './modules/local/prepare_genome'
 include { BOWTIE2_BUILD } from './modules/local/bowtie2_build'
 include { BOWTIE2_ALIGN } from './modules/local/bowtie2_align'
-include { PREPARE_BAM } from './modules/local/prepare_bam'
 include { PROCESS_HIC_QC } from './modules/local/process_hic_qc'
 include { PLOT_HIC_QC } from './modules/local/plot_hic_qc'
 include { SAMTOOLS_STATS } from './modules/local/samtools_stats'
@@ -249,10 +248,8 @@ workflow {
 
     BOWTIE2_ALIGN(alignmentInputs)
 
-    PREPARE_BAM(BOWTIE2_ALIGN.out.alignments)
-
     PROCESS_HIC_QC(
-        PREPARE_BAM.out.bam,
+        BOWTIE2_ALIGN.out.bam,
         params.qc.samplePairs
     )
 
@@ -272,7 +269,7 @@ workflow {
         plotQcSettings
     )
 
-    SPLIT_PAIRED_READS(PREPARE_BAM.out.bam)
+    SPLIT_PAIRED_READS(BOWTIE2_ALIGN.out.bam)
 
     splitReadsByCellType = SPLIT_PAIRED_READS.out.reads.map {
         meta,
@@ -1264,7 +1261,7 @@ workflow {
         plotHiCSettings
     )
 
-    SAMTOOLS_STATS(PREPARE_BAM.out.bam)
+    SAMTOOLS_STATS(BOWTIE2_ALIGN.out.bam)
 
     rawFastQcFiles = FASTQC_RAW.out.reports.flatMap { meta, htmlFiles, zipFiles ->
         [htmlFiles, zipFiles].flatten()
@@ -1278,7 +1275,7 @@ workflow {
         [reports].flatten()
     }
 
-    bowtieFiles = BOWTIE2_ALIGN.out.reports.flatMap { meta, read1Report, read2Report ->
+    bowtieFiles = BOWTIE2_ALIGN.out.bowtieReports.flatMap { meta, read1Report, read2Report ->
         [read1Report, read2Report].flatten()
     }
 
@@ -1286,7 +1283,7 @@ workflow {
         [reports].flatten()
     }
 
-    deduplicationFiles = PREPARE_BAM.out.reports.flatMap { meta, reports ->
+    deduplicationFiles = BOWTIE2_ALIGN.out.deduplicationReports.flatMap { meta, reports ->
         [reports].flatten()
     }
 
