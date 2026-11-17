@@ -12,7 +12,6 @@ include { PLOT_HIC_QC } from './modules/local/plot_hic_qc'
 include { SAMTOOLS_STATS } from './modules/local/samtools_stats'
 include { SPLIT_PAIRED_READS } from './modules/local/split_paired_reads'
 include { BUILD_BASE_MATRIX } from './modules/local/build_base_matrix'
-include { ADJUST_MATRIX } from './modules/local/adjust_matrix'
 include { SUM_REPLICATES } from './modules/local/sum_replicates'
 include { MERGE_MATRIX_BINS } from './modules/local/merge_matrix_bins'
 include { MATRIX_COVERAGE } from './modules/local/matrix_coverage'
@@ -317,34 +316,46 @@ workflow {
             )
         }
 
+    regions = createRegionsChannel(params.regions)
+
+    regionalMatrixInputs = matrixInputs
+        .combine(regions)
+        .map {
+            meta,
+            read1Bam,
+            read2Bam,
+            chromSizes,
+            restrictionSites,
+            region ->
+
+            tuple(
+                meta,
+                region,
+                read1Bam,
+                read2Bam,
+                chromSizes,
+                restrictionSites
+            )
+        }
+
     matrixSettings = [
-        baseResolution       : params.resolution.base,
-        restrictionSequence  : params.hicup.restrictionSequence.replace('^', ''),
-        danglingSequence     : params.hicup.restrictionSequence.replace('^', ''),
-        maxLibraryInsertSize : params.hic.maxLibraryInsertSize,
-        minDistance          : params.hic.minDistance,
-        minMappingQuality    : params.hic.minMappingQuality,
-        keepSelfLigation     : params.hic.keepSelfLigation,
-        keepSelfCircles      : params.hic.keepSelfCircles,
-        inputBufferSize      : 400000
+        baseResolution      : params.resolution.base,
+        restrictionSequence : params.hicup.restrictionSequence.replace('^', ''),
+        danglingSequence    : params.hicup.restrictionSequence.replace('^', ''),
+        maxLibraryInsertSize: params.hic.maxLibraryInsertSize,
+        minDistance         : params.hic.minDistance,
+        minMappingQuality   : params.hic.minMappingQuality,
+        keepSelfLigation    : params.hic.keepSelfLigation,
+        keepSelfCircles     : params.hic.keepSelfCircles,
+        inputBufferSize     : 100000
     ]
 
     BUILD_BASE_MATRIX(
-        matrixInputs,
+        regionalMatrixInputs,
         matrixSettings
     )
 
-    regions = createRegionsChannel(params.regions)
-
-    regionMatrixInputs = BUILD_BASE_MATRIX.out.matrices
-        .combine(regions)
-        .map { meta, matrix, region ->
-            tuple(meta, matrix, region)
-        }
-
-    ADJUST_MATRIX(regionMatrixInputs)
-
-    replicateMatricesByGroup = ADJUST_MATRIX.out.matrices
+    replicateMatricesByGroup = BUILD_BASE_MATRIX.out.matrices
         .map { meta, region, matrix ->
             def groupMeta = [
                 id        : meta.group,
@@ -415,7 +426,7 @@ workflow {
         CSCORE(cscoreInputs)
     }
 
-    allBaseMatrices = ADJUST_MATRIX.out.matrices.mix(
+    allBaseMatrices = BUILD_BASE_MATRIX.out.matrices.mix(
         SUM_REPLICATES.out.matrices
     )
 
@@ -1291,7 +1302,11 @@ workflow {
         [reports].flatten()
     }
 
-    hicExplorerQcDirectories = BUILD_BASE_MATRIX.out.qc.map { meta, qcDirectory ->
+    hicExplorerQcDirectories = BUILD_BASE_MATRIX.out.qc.map {
+        meta,
+        region,
+        qcDirectory ->
+
         qcDirectory
     }
 
