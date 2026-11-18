@@ -32,6 +32,7 @@ include { PLOT_HIC } from './modules/local/plot_hic'
 include { PROCESS_DIFF_TADS } from './modules/local/process_diff_tads'
 include { PLOT_SUBTRACTION } from './modules/local/plot_subtraction'
 include { PLOT_VIEWPOINT } from './modules/local/plot_viewpoint'
+include { PLOT_COMPARE_VIEWPOINT_DIFFERENCE } from './modules/local/plot_compare_viewpoint_difference'
 include { MULTIQC } from './modules/local/multiqc'
 
 
@@ -988,6 +989,92 @@ workflow {
     PLOT_COMPARE_VIEWPOINT(
         compareViewpointInputs,
         compareViewpointSettings
+    )
+
+    group1AdjustedViewpoints = PLOT_COMPARE_VIEWPOINT.out.bedgraphs
+        .filter {
+            comparison,
+            adjustedSet,
+            region,
+            resolution,
+            viewpoint,
+            bedgraph ->
+
+            adjustedSet == 'adjIF1'
+        }
+        .map {
+            comparison,
+            adjustedSet,
+            region,
+            resolution,
+            viewpoint,
+            bedgraph ->
+
+            tuple(
+                "${comparison.id}|${region.name}|${resolution}|${viewpoint.id}",
+                comparison,
+                region,
+                resolution,
+                viewpoint,
+                bedgraph
+            )
+        }
+
+    group2AdjustedViewpoints = PLOT_COMPARE_VIEWPOINT.out.bedgraphs
+        .filter {
+            comparison,
+            adjustedSet,
+            region,
+            resolution,
+            viewpoint,
+            bedgraph ->
+
+            adjustedSet == 'adjIF2'
+        }
+        .map {
+            comparison,
+            adjustedSet,
+            region,
+            resolution,
+            viewpoint,
+            bedgraph ->
+
+            tuple(
+                "${comparison.id}|${region.name}|${resolution}|${viewpoint.id}",
+                bedgraph
+            )
+        }
+
+    compareViewpointDifferenceInputs = group1AdjustedViewpoints
+        .join(group2AdjustedViewpoints)
+        .map {
+            key,
+            comparison,
+            region,
+            resolution,
+            viewpoint,
+            group1Bedgraph,
+            group2Bedgraph ->
+
+            tuple(
+                comparison,
+                region,
+                resolution,
+                viewpoint,
+                group1Bedgraph,
+                group2Bedgraph
+            )
+        }
+
+    compareViewpointDifferenceSettings = [
+        genomeBuild: params.genomeBuild,
+        filetype   : params.plot.filetype,
+        dpi        : params.plot.dpi
+    ]
+
+    PLOT_COMPARE_VIEWPOINT_DIFFERENCE(
+        compareViewpointDifferenceInputs,
+        compareViewpointDifferenceSettings
     )
 
     comparisonDifferences = COMPARE_MATRICES.out.differences.map {

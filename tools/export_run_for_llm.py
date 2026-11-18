@@ -8,14 +8,13 @@ import datetime
 import gzip
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 TEXT_SUFFIXES = {
@@ -53,27 +52,6 @@ PLOT_SUFFIXES = {
     ".webp",
 }
 
-LARGE_DATA_SUFFIXES = {
-    ".bam",
-    ".bai",
-    ".bt2",
-    ".bw",
-    ".fastq",
-    ".fq",
-    ".h5",
-    ".hic",
-    ".pkl",
-    ".sam",
-}
-
-COMPRESSED_SUFFIXES = {
-    ".gz",
-    ".bgz",
-    ".bz2",
-    ".xz",
-    ".zip",
-}
-
 SOURCE_PATTERNS = (
     "main.nf",
     "Dockerfile",
@@ -99,13 +77,10 @@ CONFIG_PATTERNS = (
 
 OPTIONAL_SECTIONS = {
     "cscore": (
-        "results/cscore",
-        "results/Cscore",
         "cscore",
         "Cscore",
     ),
     "loops": (
-        "results/loops",
         "loops",
     ),
 }
@@ -437,6 +412,7 @@ def export_configs(
     candidates = [
         run_root / "analysis.config",
         run_root / "nextflow.config",
+        run_root / "example" / "example.config",
     ]
 
     for pattern in CONFIG_PATTERNS:
@@ -701,7 +677,13 @@ def copy_tabular_outputs(
 
 
 def parse_delimited_counts(path: Path) -> Optional[Dict[str, Any]]:
-    if path.suffix.lower() not in {".bed", ".bedgraph", ".csv", ".tsv", ".links"}:
+    if path.suffix.lower() not in {
+        ".bed",
+        ".bedgraph",
+        ".csv",
+        ".tsv",
+        ".links",
+    }:
         return None
 
     line_count = 0
@@ -730,7 +712,6 @@ def parse_delimited_counts(path: Path) -> Optional[Dict[str, Any]]:
         "data_line_count": data_line_count,
         "chromosome_counts": dict(sorted(chromosome_counts.items())),
     }
-
 
 def summarise_structural_outputs(
     results: Path,
@@ -1096,7 +1077,6 @@ def collect_qc_files(results: Path, output: Path) -> Dict[str, Any]:
 
 
 def detect_optional_sections(
-    run_root: Path,
     results: Path,
     output: Path,
 ) -> Dict[str, Any]:
@@ -1106,22 +1086,23 @@ def detect_optional_sections(
         found = []
 
         for candidate in candidates:
-            result_candidate = results / candidate
-            run_candidate = run_root / candidate
+            path = results / candidate
 
-            for path in (result_candidate, run_candidate):
-                if path.exists():
-                    found.append(
-                        {
-                            "path": relative_to_or_absolute(path, run_root),
-                            "file_count": len(sorted_files(path)),
-                            "non_empty_file_count": sum(
-                                1
-                                for file_path in sorted_files(path)
-                                if file_path.stat().st_size > 0
-                            ),
-                        }
-                    )
+            if not path.exists():
+                continue
+
+            files = sorted_files(path)
+
+            found.append(
+                {
+                    "path": str(path.relative_to(results)),
+                    "file_count": len(files),
+                    "non_empty_file_count": sum(
+                        1 for file_path in files
+                        if file_path.stat().st_size > 0
+                    ),
+                }
+            )
 
         status[name] = {
             "present": bool(found),
@@ -1140,9 +1121,9 @@ def detect_optional_sections(
     for name, value in sorted(status.items()):
         lines.extend(
             [
-                "## {}".format(name),
+                f"## {name}",
                 "",
-                "Present: {}".format(value["present"]),
+                f"Present: {value['present']}",
                 value["note"],
                 "",
             ]
@@ -1307,6 +1288,10 @@ def write_run_overview(
     describe = git.get("describe", {}).get("value", "")
     status = git.get("status", {}).get("value", "")
 
+    viewpoint_comparison_tables = len(
+        list(results.glob("viewpoints/**/comparisons/*.tsv"))
+    )
+
     lines = [
         "# HiCFlow run overview",
         "",
@@ -1342,6 +1327,9 @@ def write_run_overview(
         ),
         "Viewpoint files: {}".format(
             structural_summary.get("viewpoints", {}).get("file_count", 0)
+        ),
+        "Viewpoint comparison tables: {}".format(
+            viewpoint_comparison_tables
         ),
         "",
         "## Log scan",
@@ -1439,7 +1427,6 @@ def main() -> int:
         args.log_tail_lines,
     )
     optional_status = detect_optional_sections(
-        run_root,
         results,
         output,
     )
