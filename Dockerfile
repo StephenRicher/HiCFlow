@@ -56,8 +56,7 @@ COPY . /opt/hicflow
 RUN chmod +x \
         /opt/hicflow/workflow/scripts/hicup_truncater \
         /opt/hicflow/workflow/scripts/OnTAD \
-        /opt/hicflow/workflow/scripts/CscoreTool1.1 \
-        /opt/hicflow/tools/download_histone_peaks.sh
+        /opt/hicflow/workflow/scripts/CscoreTool1.1
 
 RUN bash --version | head -n 1 \
     && bedtools --version \
