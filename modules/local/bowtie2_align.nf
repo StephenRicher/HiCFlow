@@ -50,6 +50,8 @@ process BOWTIE2_ALIGN {
         emit: prepareBamLogs
 
     script:
+    def alignContig = params.align_contig ?: ''
+
     """
     set -euo pipefail
 
@@ -65,8 +67,11 @@ process BOWTIE2_ALIGN {
         | gawk \
             -f /opt/hicflow/workflow/scripts/addReadFlag.awk \
             -v flag=0x41 \
+        | gawk \
+            -v target='${alignContig}' \
+            'BEGIN { FS = OFS = "\\t" } /^@/ || target == "" || \$3 == target' \
         | samtools view \
-            -u \
+            -1 \
             -o ${meta.id}-R1-addFlag.bam \
             - \
             2>> ${meta.id}.prepare_bam.log
@@ -85,8 +90,11 @@ process BOWTIE2_ALIGN {
         | gawk \
             -f /opt/hicflow/workflow/scripts/addReadFlag.awk \
             -v flag=0x81 \
+        | gawk \
+            -v target='${alignContig}' \
+            'BEGIN { FS = OFS = "\\t" } /^@/ || target == "" || \$3 == target' \
         | samtools view \
-            -u \
+            -1 \
             -o ${meta.id}-R2-addFlag.bam \
             - \
             2>> ${meta.id}.prepare_bam.log
@@ -107,12 +115,60 @@ process BOWTIE2_ALIGN {
         ${meta.id}-R1-addFlag.bam \
         ${meta.id}-R2-addFlag.bam
 
-    samtools fixmate \
-        -p \
-        -O SAM \
+    samtools view \
+        -h \
         ${meta.id}-merged.bam \
-        - \
         2>> ${meta.id}.prepare_bam.log \
+        | gawk '
+            BEGIN {
+                FS = OFS = "\t"
+            }
+
+            /^@/ {
+                print
+                next
+            }
+
+            function flush_group(    i) {
+                if (has_r1 && has_r2) {
+                    for (i = 1; i <= count; i++) {
+                        print records[i]
+                    }
+                }
+
+                delete records
+                count = 0
+                has_r1 = 0
+                has_r2 = 0
+            }
+
+            current_name != "" && \$1 != current_name {
+                flush_group()
+            }
+
+            {
+                current_name = \$1
+                records[++count] = \$0
+
+                if (and(\$2, 64)) {
+                    has_r1 = 1
+                }
+
+                if (and(\$2, 128)) {
+                    has_r2 = 1
+                }
+            }
+
+            END {
+                flush_group()
+            }
+        ' \
+        | samtools fixmate \
+            -p \
+            -O SAM \
+            - \
+            - \
+            2>> ${meta.id}.prepare_bam.log \
         | samblaster \
             --removeDups \
             --input /dev/stdin \
