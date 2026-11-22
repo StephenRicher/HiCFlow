@@ -55,6 +55,17 @@ def main():
         help='Add title and rgb BED files as comma seperated pairs.'
         'Call multiple times to add more files.')
     parser.add_argument(
+        '--bed',
+        metavar='TITLE,FILE,SIZE',
+        default=[],
+        type=commaPair,
+        action='append',
+        help=(
+            'Add a title and BED file as a comma-separated triple. '
+            'Call multiple times to add more files.'
+        ),
+    )
+    parser.add_argument(
         '--genes', metavar='TITLE,FILE,SIZE', default=[],
         type=commaPair, action='append',
         help='Add title and bed files as comma seperated pairs.'
@@ -112,7 +123,7 @@ def commaPair(value):
 
 
 def make_config(insulation, matrix, log, tads, loops, SNPdensity,
-                bigWig, compare, rgbBed, height,
+                bigWig, compare, rgbBed, bed, height,
                 depth, colourmap, vMin, vMax, geneLabelFontSize,
                 genes, plain, vLines, links, CScore, tmpLinks,
                 removeXAxis, ratioScore, maxLabels):
@@ -161,6 +172,16 @@ def make_config(insulation, matrix, log, tads, loops, SNPdensity,
     for title, file, customheight in rgbBed:
         if notEmpty(file):
             writeRGBBed(file, title, customheight)
+            print('[spacer]')
+        miniTrack = True
+
+    for title, file, customheight in bed:
+        if notEmpty(file):
+            writeCollapsedBed(
+                file,
+                title=title,
+                height=customheight,
+            )
             print('[spacer]')
         miniTrack = True
 
@@ -369,16 +390,21 @@ def writeColourBed(bed, title, height=1.5, minV=-1, maxV=1, cmap='bwr', border_c
           f'display = collapsed', sep='\n')
 
 
-def writeCollapsedBed(bed, title=''):
-    print(f'[Collapsed Bed]',
-          f'file = {bed}',
-          f'title = {title}',
-          f'labels = false',
-          f'color = lightgray',
-          f'fontsize = 0',
-          f'height = 1.5',
-          f'line_width = 3',
-          f'display = collapsed', sep='\n')
+def writeCollapsedBed(bed, title='', height=1.5):
+    print(
+        f'[BED - {title}]',
+        f'file = {bed}',
+        f'title = {title}',
+        'labels = false',
+        'color = darkgray',
+        'border_color = darkgray',
+        'fontsize = 0',
+        f'height = {height}',
+        'line_width = 0.5',
+        'display = collapsed',
+        'file_type = bed',
+        sep='\n',
+    )
 
 def setCscoreTitle(i, cscore):
     if len(cscore) == 1:

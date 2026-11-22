@@ -12,10 +12,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         bash \
+        bedtools \
         ca-certificates \
+        coreutils \
         curl \
+        findutils \
         fontconfig \
+        gawk \
         git \
+        gzip \
         openjdk-17-jre-headless \
         procps \
         tini \
@@ -51,9 +56,15 @@ COPY . /opt/hicflow
 RUN chmod +x \
         /opt/hicflow/workflow/scripts/hicup_truncater \
         /opt/hicflow/workflow/scripts/OnTAD \
-        /opt/hicflow/workflow/scripts/CscoreTool1.1
+        /opt/hicflow/workflow/scripts/CscoreTool1.1 \
+        /opt/hicflow/tools/download_histone_peaks.sh
 
-RUN fastqc --version \
+RUN bash --version | head -n 1 \
+    && bedtools --version \
+    && curl --version | head -n 1 \
+    && gawk --version | head -n 1 \
+    && gzip --version | head -n 1 \
+    && fastqc --version \
     && cutadapt --version \
     && bowtie2 --version \
     && samtools --version | head -n 1 \

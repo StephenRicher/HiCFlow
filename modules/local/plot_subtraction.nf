@@ -26,6 +26,7 @@ process PLOT_SUBTRACTION {
 
     path genes
     path bigWigs
+    path bedTracks
     val settings
 
     output:
@@ -56,6 +57,13 @@ process PLOT_SUBTRACTION {
         }
         .join(' ')
 
+    def bedTrackArguments = settings.bedTrackTitles
+        .withIndex()
+        .collect { bedTrackTitle, index ->
+            "--bed '${bedTrackTitle},${bedTracks[index]},1'"
+        }
+        .join(' ')
+
     def vLinesArgument = settings.vlines
         ? "--vLines '${settings.vlines}'"
         : ''
@@ -80,6 +88,7 @@ process PLOT_SUBTRACTION {
         --maxLabels ${settings.maxLabels} \
         --genes 'Genes,${genes},3' \
         ${bigWigArguments} \
+        ${bedTrackArguments} \
         ${vLinesArgument} \
         > ${prefix}-medianFilter.ini \
         2> ${prefix}.plot_subtraction.log

@@ -26,6 +26,7 @@ process PLOT_HIC {
 
     path genes
     path bigWigs
+    path bedTracks
     val settings
 
     output:
@@ -54,6 +55,13 @@ process PLOT_HIC {
         }
         .join(' ')
 
+    def bedTrackArguments = settings.bedTrackTitles
+        .withIndex()
+        .collect { bedTrackTitle, index ->
+            "--bed '${bedTrackTitle},${bedTracks[index]},1'"
+        }
+        .join(' ')
+
     def vLinesArgument = settings.vlines
         ? "--vLines '${settings.vlines}'"
         : ''
@@ -74,6 +82,7 @@ process PLOT_HIC {
         --tads ${tads} \
         --genes 'Genes,${genes},3' \
         ${bigWigArguments} \
+        ${bedTrackArguments} \
         ${vLinesArgument} \
         > ${prefix}-full.ini \
         2> ${prefix}.plot_hic.log

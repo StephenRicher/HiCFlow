@@ -1,0 +1,8 @@
+# Ignore everything by default.
+**
+
+# Files required to build and run the workflow.
+!Dockerfile
+!main.nf
+!samples.tsv
+!README.md

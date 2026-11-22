@@ -220,6 +220,12 @@ workflow {
         }
     )
 
+    bedTrackFiles = Channel.value(
+        (params.bedTracks ?: []).collect { bedTrackTitle, bedTrackPath ->
+            file(bedTrackPath, checkIfExists: true)
+        }
+    )
+
     BOWTIE2_BUILD(genomesForIndex)
 
     FASTQC_RAW(samples)
@@ -1327,6 +1333,7 @@ workflow {
         geneLabelFontSize: params.plot.geneLabelFontSize,
         maxLabels        : params.plot.maxLabels,
         bigWigTitles     : (params.bigWig ?: [:]).keySet() as List,
+        bedTrackTitles   : (params.bedTracks ?: [:]).keySet() as List,
         vlines           : params.plot.vlines
             ? file(params.plot.vlines, checkIfExists: true).toString()
             : null
@@ -1336,6 +1343,7 @@ workflow {
         subtractionPlotInputs,
         geneAnnotation,
         bigWigFiles,
+        bedTrackFiles,
         subtractionPlotSettings
     )
 
@@ -1347,6 +1355,7 @@ workflow {
         geneLabelFontSize: params.plot.geneLabelFontSize,
         maxLabels        : params.plot.maxLabels,
         bigWigTitles     : (params.bigWig ?: [:]).keySet() as List,
+        bedTrackTitles   : (params.bedTracks ?: [:]).keySet() as List,
         vlines           : params.plot.vlines
             ? file(params.plot.vlines, checkIfExists: true).toString()
             : null
@@ -1356,6 +1365,7 @@ workflow {
         plotInputs,
         geneAnnotation,
         bigWigFiles,
+        bedTrackFiles,
         plotHiCSettings
     )
 
