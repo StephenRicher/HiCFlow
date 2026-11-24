@@ -214,15 +214,19 @@ workflow {
 
     geneAnnotation = PREPARE_GENES.out.annotation
 
-    bigWigFiles = Channel.value(
-        (params.bigWig ?: [:]).collect { bigWigTitle, bigWigPath ->
-            file(bigWigPath, checkIfExists: true)
-        }
-    )
+    genomicTrackDefinitions = params.genomicTracks ?: []
 
-    bedTrackFiles = Channel.value(
-        (params.bedTracks ?: []).collect { bedTrackTitle, bedTrackPath ->
-            file(bedTrackPath, checkIfExists: true)
+    genomicTrackFiles = Channel.value(
+        genomicTrackDefinitions.collect { track ->
+            if (!(track.type in ['bigwig', 'bed'])) {
+                error "Unsupported genomic track type: ${track.type}"
+            }
+
+            if (!track.title || !track.path) {
+                error "Genomic track requires title and path: ${track}"
+            }
+
+            file(track.path, checkIfExists: true)
         }
     )
 
@@ -1327,13 +1331,21 @@ workflow {
     subtractionPlotSettings = [
         genomeBuild      : params.genomeBuild,
         colourmap        : params.compareMatrices.colourmap,
+        vMin             : params.compareMatrices.vMin,
         vMax             : params.compareMatrices.vMax,
         filetype         : params.plot.filetype,
         dpi              : params.plot.dpi,
         geneLabelFontSize: params.plot.geneLabelFontSize,
         maxLabels        : params.plot.maxLabels,
-        bigWigTitles     : (params.bigWig ?: [:]).keySet() as List,
-        bedTrackTitles   : (params.bedTracks ?: [:]).keySet() as List,
+        genomicTracks    : genomicTrackDefinitions.collect { track ->
+            [
+                title : track.title,
+                type  : track.type,
+                height: track.height != null
+                    ? track.height
+                    : (track.type == 'bigwig' ? 3 : 0.6)
+            ]
+        },
         vlines           : params.plot.vlines
             ? file(params.plot.vlines, checkIfExists: true).toString()
             : null
@@ -1342,8 +1354,7 @@ workflow {
     PLOT_SUBTRACTION(
         subtractionPlotInputs,
         geneAnnotation,
-        bigWigFiles,
-        bedTrackFiles,
+        genomicTrackFiles,
         subtractionPlotSettings
     )
 
@@ -1354,8 +1365,15 @@ workflow {
         dpi              : params.plot.dpi,
         geneLabelFontSize: params.plot.geneLabelFontSize,
         maxLabels        : params.plot.maxLabels,
-        bigWigTitles     : (params.bigWig ?: [:]).keySet() as List,
-        bedTrackTitles   : (params.bedTracks ?: [:]).keySet() as List,
+        genomicTracks    : genomicTrackDefinitions.collect { track ->
+            [
+                title : track.title,
+                type  : track.type,
+                height: track.height != null
+                    ? track.height
+                    : (track.type == 'bigwig' ? 3 : 0.6)
+            ]
+        },
         vlines           : params.plot.vlines
             ? file(params.plot.vlines, checkIfExists: true).toString()
             : null
@@ -1364,8 +1382,7 @@ workflow {
     PLOT_HIC(
         plotInputs,
         geneAnnotation,
-        bigWigFiles,
-        bedTrackFiles,
+        genomicTrackFiles,
         plotHiCSettings
     )
 

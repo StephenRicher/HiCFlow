@@ -25,8 +25,7 @@ process PLOT_SUBTRACTION {
         val(coordinate)
 
     path genes
-    path bigWigs
-    path bedTracks
+    path genomicTrackFiles
     val settings
 
     output:
@@ -47,20 +46,19 @@ process PLOT_SUBTRACTION {
     script:
     def prefix = "${group2.id}-minus-${group1.id}-${region.name}-${coordinate.id}-${resolution}"
     def depth = coordinate.end - coordinate.start
-    def vMax = settings.vMax * 0.75
-    def vMin = -vMax
+    def vMin = settings.vMin
+    def vMax = settings.vMax
 
-    def bigWigArguments = settings.bigWigTitles
+    def genomicTrackArguments = settings.genomicTracks
         .withIndex()
-        .collect { bigWigTitle, index ->
-            "--bigWig '${bigWigTitle},${bigWigs[index]},3'"
-        }
-        .join(' ')
+        .collect { track, index ->
+            def file = genomicTrackFiles[index]
 
-    def bedTrackArguments = settings.bedTrackTitles
-        .withIndex()
-        .collect { bedTrackTitle, index ->
-            "--bed '${bedTrackTitle},${bedTracks[index]},1'"
+            if (track.type == 'bigwig') {
+                return "--bigWig '${track.title},${file},${track.height}'"
+            }
+
+            return "--bed '${track.title},${file},${track.height}'"
         }
         .join(' ')
 
@@ -87,8 +85,7 @@ process PLOT_SUBTRACTION {
         --geneLabelFontSize ${settings.geneLabelFontSize} \
         --maxLabels ${settings.maxLabels} \
         --genes 'Genes,${genes},3' \
-        ${bigWigArguments} \
-        ${bedTrackArguments} \
+        ${genomicTrackArguments} \
         ${vLinesArgument} \
         > ${prefix}-medianFilter.ini \
         2> ${prefix}.plot_subtraction.log

@@ -25,8 +25,7 @@ process PLOT_HIC {
         val(coordinate)
 
     path genes
-    path bigWigs
-    path bedTracks
+    path genomicTrackFiles
     val settings
 
     output:
@@ -48,17 +47,16 @@ process PLOT_HIC {
     def depth = coordinate.end - coordinate.start
     def title = "${meta.id} : ${region.name} (${settings.genomeBuild}) at ${resolution} bin size (KR - full)"
 
-    def bigWigArguments = settings.bigWigTitles
+    def genomicTrackArguments = settings.genomicTracks
         .withIndex()
-        .collect { bigWigTitle, index ->
-            "--bigWig '${bigWigTitle},${bigWigs[index]},3'"
-        }
-        .join(' ')
+        .collect { track, index ->
+            def file = genomicTrackFiles[index]
 
-    def bedTrackArguments = settings.bedTrackTitles
-        .withIndex()
-        .collect { bedTrackTitle, index ->
-            "--bed '${bedTrackTitle},${bedTracks[index]},1'"
+            if (track.type == 'bigwig') {
+                return "--bigWig '${track.title},${file},${track.height}'"
+            }
+
+            return "--bed '${track.title},${file},${track.height}'"
         }
         .join(' ')
 
@@ -81,8 +79,7 @@ process PLOT_HIC {
         --insulation ${insulation} \
         --tads ${tads} \
         --genes 'Genes,${genes},3' \
-        ${bigWigArguments} \
-        ${bedTrackArguments} \
+        ${genomicTrackArguments} \
         ${vLinesArgument} \
         > ${prefix}-full.ini \
         2> ${prefix}.plot_hic.log
