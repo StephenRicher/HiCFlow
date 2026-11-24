@@ -41,9 +41,10 @@ The workflow uses the supplied pretrained human C.Origami checkpoint:
 corigami_data/model_weights/corigami_base.ckpt
 ```
 
-The model was trained using IMR-90 data on the hg38 assembly. Predictions for MCF7 and MCF10A combine this pretrained model with cell-type-specific CTCF and ATAC-seq profiles.
-
-The resulting maps should therefore be described as **cross-cell-type predictions conditioned on the supplied MCF7 or MCF10A regulatory data**.
+The model was trained using IMR-90 data on the hg38 assembly.
+The C.Origami authors explicitly support applying the pretrained model to other human cell types by supplying the corresponding cell-type-specific CTCF ChIP-seq and ATAC-seq BigWigs, and demonstrate this approach using GM12878.
+The pretrained model is therefore appropriate for MCF7 and MCF10A inference, with the supplied CTCF and ATAC-seq profiles providing the cell-type-specific regulatory context.
+The resulting maps are described as MCF7-conditioned or MCF10A-conditioned C.Origami predictions.
 
 C.Origami uses a fixed prediction window of:
 
