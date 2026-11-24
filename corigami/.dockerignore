@@ -1,0 +1,13 @@
+**
+
+!Dockerfile
+!main.nf
+!nextflow.config
+!samples_*.tsv
+!deletions_*.tsv
+!deletions_*.tsv.example
+!README.md
+!modules/
+!modules/**
+!scripts/
+!scripts/**
